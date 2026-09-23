@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: kudaibergen-postgres
+    environment:
+      POSTGRES_DB: kudaibergen
+      POSTGRES_USER: kudaibergen
+      POSTGRES_PASSWORD: kudaibergen
+    ports:
+      # порт наружу можно переопределить: DB_PORT=55432 docker compose up -d
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - kudaibergen-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kudaibergen -d kudaibergen"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  kudaibergen-pgdata:
