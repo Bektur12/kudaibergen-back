@@ -73,8 +73,10 @@ public class ChatController {
                                           message = "Тип: PHOTO, VOICE или VIDEO") String type,
                                     @RequestParam(required = false) String caption,
                                     @Parameter(description = "Для VOICE/VIDEO, в секундах")
-                                    @RequestParam(required = false) Integer durationSeconds) {
-      return chatService.sendMedia(id, principal.userId(), file, type, caption, durationSeconds);
+                                    @RequestParam(required = false) Integer durationSeconds,
+                                    @Parameter(description = "Только для VOICE: JSON-массив пиков громкости 0..1, до 100 значений")
+                                    @RequestParam(required = false) String waveform) {
+      return chatService.sendMedia(id, principal.userId(), file, type, caption, durationSeconds, waveform);
    }
 
    @PostMapping("/{id}/read")

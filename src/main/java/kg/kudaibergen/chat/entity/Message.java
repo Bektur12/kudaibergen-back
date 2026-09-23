@@ -38,6 +38,10 @@ public class Message {
    @Column(name = "duration_seconds")
    private Integer durationSeconds;
 
+   /** JSON-массив пиков громкости 0..1, только для VOICE. */
+   @Column(columnDefinition = "text")
+   private String waveform;
+
    @Column(name = "read_at")
    private Instant readAt;
 
@@ -60,6 +64,14 @@ public class Message {
       this.mediaUrl = mediaUrl;
       this.mimeType = mimeType;
       this.durationSeconds = durationSeconds;
+   }
+
+   public void setWaveform(String waveform) {
+      this.waveform = waveform;
+   }
+
+   public String getWaveform() {
+      return waveform;
    }
 
    public Long getId() {

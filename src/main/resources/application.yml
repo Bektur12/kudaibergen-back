@@ -90,7 +90,7 @@ app:
       secret-key: ${AWS_SECRET_ACCESS_KEY:}
       bucket: ${AWS_S3_BUCKET_NAME:}
       region: ${AWS_DEFAULT_REGION:auto}
-      presign-ttl: 1h
+      presign-ttl: 24h
     max-photo-size: 10MB
     max-voice-size: 15MB
     max-video-size: 100MB
