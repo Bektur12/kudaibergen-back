@@ -134,7 +134,7 @@ public class ChatService implements DealAccess {
    public PageResponse<MessageResponse> messages(Long chatId, Long userId, int page, int size) {
       requireParticipant(chatId, userId);
       return PageResponse.of(messages.findByChatIdOrderByCreatedAtDesc(chatId, PageRequest.of(page, size)),
-            MessageResponse::of);
+            message -> MessageResponse.of(message, mediaStorage::urlFor));
    }
 
    @Transactional
@@ -143,7 +143,7 @@ public class ChatService implements DealAccess {
       Message message = messages.save(new Message(chatId, userId, request.body().trim(), "TEXT"));
       chat.touch(message.getBody(), message.getCreatedAt());
       notifyRecipient(chat, userId, message.getBody());
-      MessageResponse response = MessageResponse.of(message);
+      MessageResponse response = MessageResponse.of(message, mediaStorage::urlFor);
       broadcast(chatId, response);
       broadcastInboxUpdate(chat);
       return response;
@@ -155,10 +155,10 @@ public class ChatService implements DealAccess {
       Chat chat = requireParticipant(chatId, userId);
       ChatMediaStorage.Stored stored = mediaStorage.store(file, type);
       Message message = messages.save(new Message(chatId, userId, caption == null ? "" : caption.trim(), type,
-            stored.url(), stored.mimeType(), durationSeconds));
+            stored.key(), stored.mimeType(), durationSeconds));
       chat.touch(previewOf(type), message.getCreatedAt());
       notifyRecipient(chat, userId, previewOf(type));
-      MessageResponse response = MessageResponse.of(message);
+      MessageResponse response = MessageResponse.of(message, mediaStorage::urlFor);
       broadcast(chatId, response);
       broadcastInboxUpdate(chat);
       return response;

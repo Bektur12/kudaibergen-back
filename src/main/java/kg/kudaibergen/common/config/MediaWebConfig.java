@@ -2,12 +2,14 @@ package kg.kudaibergen.common.config;
 
 import java.nio.file.Path;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 /** Отдаёт загруженные медиа-сообщения чата по /media/**. */
 @Configuration
+@ConditionalOnProperty(name = "app.media.storage", havingValue = "local", matchIfMissing = true)
 public class MediaWebConfig implements WebMvcConfigurer {
 
    private final AppProperties properties;

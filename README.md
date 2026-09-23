@@ -47,7 +47,7 @@ curl -s -X POST localhost:8080/api/v1/auth/register-role -H "Authorization: Bear
 | `SMS_PROVIDER` | `log` или `nikita` | `log` |
 | `SMS_EXPOSE_CODE` | отдавать код в ответе API | `true` (в проде `false`) |
 | `SMS_URL`, `SMS_LOGIN`, `SMS_PASSWORD`, `SMS_SENDER` | шлюз nikita.kg | — |
-| `FCM_ENABLED`, `FCM_CREDENTIALS` | пуши через Firebase | `false` |
+| `FCM_ENABLED`, `FCM_CREDENTIALS` (путь к файлу) или `FCM_CREDENTIALS_JSON` (содержимое JSON, приоритетнее) | пуши через Firebase | `false` |
 
 Доменные настройки (TTL запросов, лимиты, окно батчинга пушей) — блок `app.*` в
 `src/main/resources/application.yml`.
