@@ -14,7 +14,7 @@ public record AppProperties(Jwt jwt, Sms sms, RequestLimits request, Notificatio
    }
 
    public record Sms(String provider, Duration codeTtl, int maxAttempts, Duration resendInterval,
-                     boolean exposeCode, Nikita nikita) {
+                     boolean exposeCode, String fixedCode, Nikita nikita) {
 
       public record Nikita(String url, String login, String password, String sender) {
       }

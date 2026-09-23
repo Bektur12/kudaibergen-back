@@ -58,6 +58,8 @@ app:
     resend-interval: 1m
     # в dev-режиме код возвращается в ответе /auth/request-code
     expose-code: ${SMS_EXPOSE_CODE:true}
+    # тестовый стенд: если задан, все коды входа равны ему (SMS_FIXED_CODE=1111). В проде оставить пустым
+    fixed-code: ${SMS_FIXED_CODE:}
     nikita:
       url: ${SMS_URL:https://smspro.nikita.kg/api/message}
       login: ${SMS_LOGIN:}

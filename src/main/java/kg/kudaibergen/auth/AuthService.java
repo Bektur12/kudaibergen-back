@@ -70,7 +70,9 @@ public class AuthService {
          }
       });
 
-      String code = String.format("%04d", RANDOM.nextInt(10_000));
+      String code = config.fixedCode() != null && !config.fixedCode().isBlank()
+            ? config.fixedCode()
+            : String.format("%04d", RANDOM.nextInt(10_000));
       smsCodes.save(new SmsCode(phone, passwordEncoder.encode(code), now.plus(config.codeTtl())));
       smsSender.send(phone, "Код входа Kudaibergen: " + code);
 

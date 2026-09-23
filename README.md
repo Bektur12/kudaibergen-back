@@ -45,6 +45,7 @@ curl -s -X POST localhost:8080/api/v1/auth/register-role -H "Authorization: Bear
 | `DB_URL`, `DB_USER`, `DB_PASSWORD` | подключение к Postgres | localhost:5432/kudaibergen |
 | `JWT_SECRET` | ключ подписи HS256 (≥32 байта) | dev-значение, **в проде обязателен** |
 | `SMS_PROVIDER` | `log` или `nikita` | `log` |
+| `SMS_FIXED_CODE` | фиксированный код для всех входов (тест, напр. `1111`) | пусто (в проде пусто) |
 | `SMS_EXPOSE_CODE` | отдавать код в ответе API | `true` (в проде `false`) |
 | `SMS_URL`, `SMS_LOGIN`, `SMS_PASSWORD`, `SMS_SENDER` | шлюз nikita.kg | — |
 | `FCM_ENABLED`, `FCM_CREDENTIALS` (путь к файлу) или `FCM_CREDENTIALS_JSON` (содержимое JSON, приоритетнее) | пуши через Firebase | `false` |
