@@ -1,8 +1,10 @@
 package kg.kudaibergen.notification.push;
 
+import java.io.ByteArrayInputStream;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 import com.google.auth.oauth2.GoogleCredentials;
@@ -39,7 +41,10 @@ public class FcmPushSender implements PushSender {
          return;
       }
       GoogleCredentials credentials;
-      if (config.credentialsPath() == null || config.credentialsPath().isBlank()) {
+      if (config.credentialsJson() != null && !config.credentialsJson().isBlank()) {
+         credentials = GoogleCredentials.fromStream(
+               new ByteArrayInputStream(config.credentialsJson().getBytes(StandardCharsets.UTF_8)));
+      } else if (config.credentialsPath() == null || config.credentialsPath().isBlank()) {
          credentials = GoogleCredentials.getApplicationDefault();
       } else {
          try (InputStream stream = new FileInputStream(config.credentialsPath())) {

@@ -1,30 +1,32 @@
 package kg.kudaibergen.chat;
 
-import java.io.IOException;
-import java.io.UncheckedIOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.UUID;
-
 import kg.kudaibergen.common.config.AppProperties;
 import kg.kudaibergen.common.error.BadRequestException;
-import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.util.unit.DataSize;
 import org.springframework.web.multipart.MultipartFile;
 
-/** Сохраняет медиа-вложения чата на диск (dev). В проде заменяется на S3/GCS без изменения ChatService. */
-@Service
-public class ChatMediaStorage {
+/**
+ * Хранилище медиа-вложений чата. В БД лежит только ссылка-ключ ({@link Stored#key()}),
+ * клиенту она превращается в URL через {@link #urlFor(String)} при каждой выдаче сообщения.
+ * Реализации: локальный диск (dev, app.media.storage=local) и S3-бакет (app.media.storage=s3).
+ */
+public abstract class ChatMediaStorage {
 
-   private final AppProperties properties;
+   protected final AppProperties properties;
 
-   public ChatMediaStorage(AppProperties properties) {
+   protected ChatMediaStorage(AppProperties properties) {
       this.properties = properties;
    }
 
-   public record Stored(String url, String mimeType) {
+   public record Stored(String key, String mimeType) {
    }
+
+   /** Клиентский URL для ключа из БД; null-безопасно. */
+   public abstract String urlFor(String key);
+
+   /** Кладёт файл в хранилище и возвращает ключ. Файл уже провалидирован. */
+   protected abstract String save(MultipartFile file, String type, String extension);
 
    public Stored store(MultipartFile file, String type) {
       if (file == null || file.isEmpty()) {
@@ -41,17 +43,7 @@ public class ChatMediaStorage {
          throw new BadRequestException("FILE_TOO_LARGE",
                "Файл больше допустимого размера (%s)".formatted(limit), "file");
       }
-
-      Path uploadDir = Path.of(properties.media().uploadDir()).toAbsolutePath().normalize();
-      try {
-         Files.createDirectories(uploadDir);
-         String filename = UUID.randomUUID() + extensionOf(file.getOriginalFilename());
-         Path target = uploadDir.resolve(filename);
-         file.transferTo(target);
-         return new Stored("/media/" + filename, mimeType);
-      } catch (IOException e) {
-         throw new UncheckedIOException("Не удалось сохранить файл", e);
-      }
+      return new Stored(save(file, type, extensionOf(file.getOriginalFilename())), mimeType);
    }
 
    private AppProperties.Media requirePrefix(String mimeType, String prefix, String message) {

@@ -1,5 +1,8 @@
 package kg.kudaibergen.chat;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -34,6 +37,7 @@ import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.socket.messaging.SessionConnectedEvent;
 import org.springframework.web.socket.messaging.SessionDisconnectEvent;
@@ -52,6 +56,8 @@ public class ChatService implements DealAccess {
    private final OutboxService outbox;
    private final ChatMediaStorage mediaStorage;
    private final SimpMessagingTemplate ws;
+   private final TransactionTemplate tx;
+   private final ObjectMapper objectMapper;
 
    /** Активные WS-сессии на пользователя — несколько вкладок/устройств это нормально,
     * офлайн только когда сессий не осталось совсем. In-memory: один инстанс бэкенда. */
@@ -63,7 +69,7 @@ public class ChatService implements DealAccess {
 
    public ChatService(ChatRepository chats, MessageRepository messages, StoreRepository stores,
                       UserService userService, OutboxService outbox, ChatMediaStorage mediaStorage,
-                      SimpMessagingTemplate ws) {
+                      SimpMessagingTemplate ws, TransactionTemplate tx, ObjectMapper objectMapper) {
       this.chats = chats;
       this.messages = messages;
       this.stores = stores;
@@ -71,6 +77,8 @@ public class ChatService implements DealAccess {
       this.outbox = outbox;
       this.mediaStorage = mediaStorage;
       this.ws = ws;
+      this.tx = tx;
+      this.objectMapper = objectMapper;
    }
 
    /** Чат либо уже есть, либо создаётся — создание чата и есть заключение сделки. */
@@ -134,7 +142,7 @@ public class ChatService implements DealAccess {
    public PageResponse<MessageResponse> messages(Long chatId, Long userId, int page, int size) {
       requireParticipant(chatId, userId);
       return PageResponse.of(messages.findByChatIdOrderByCreatedAtDesc(chatId, PageRequest.of(page, size)),
-            MessageResponse::of);
+            message -> MessageResponse.of(message, mediaStorage::urlFor));
    }
 
    @Transactional
@@ -143,25 +151,61 @@ public class ChatService implements DealAccess {
       Message message = messages.save(new Message(chatId, userId, request.body().trim(), "TEXT"));
       chat.touch(message.getBody(), message.getCreatedAt());
       notifyRecipient(chat, userId, message.getBody());
-      MessageResponse response = MessageResponse.of(message);
+      MessageResponse response = MessageResponse.of(message, mediaStorage::urlFor);
       broadcast(chatId, response);
       broadcastInboxUpdate(chat);
       return response;
    }
 
-   @Transactional
+   /** Загрузка в хранилище идёт вне транзакции: пока файл летит в S3, соединение с БД не занято. */
    public MessageResponse sendMedia(Long chatId, Long userId, MultipartFile file, String type, String caption,
-                                    Integer durationSeconds) {
-      Chat chat = requireParticipant(chatId, userId);
+                                    Integer durationSeconds, String waveformJson) {
+      requireParticipant(chatId, userId);
+      String waveform = "VOICE".equals(type) ? normalizeWaveform(waveformJson) : null;
       ChatMediaStorage.Stored stored = mediaStorage.store(file, type);
-      Message message = messages.save(new Message(chatId, userId, caption == null ? "" : caption.trim(), type,
-            stored.url(), stored.mimeType(), durationSeconds));
-      chat.touch(previewOf(type), message.getCreatedAt());
-      notifyRecipient(chat, userId, previewOf(type));
-      MessageResponse response = MessageResponse.of(message);
-      broadcast(chatId, response);
-      broadcastInboxUpdate(chat);
-      return response;
+      return tx.execute(status -> {
+         Chat chat = requireParticipant(chatId, userId);
+         Message message = messages.save(new Message(chatId, userId, caption == null ? "" : caption.trim(), type,
+               stored.key(), stored.mimeType(), durationSeconds));
+         message.setWaveform(waveform);
+         chat.touch(previewOf(type), message.getCreatedAt());
+         notifyRecipient(chat, userId, previewOf(type));
+         MessageResponse response = MessageResponse.of(message, mediaStorage::urlFor);
+         broadcast(chatId, response);
+         broadcastInboxUpdate(chat);
+         return response;
+      });
+   }
+
+   private static final int MAX_WAVEFORM_POINTS = 100;
+
+   /** Проверяет JSON-массив пиков (<= 100 чисел в диапазоне 0..1) и возвращает его в нормализованном виде. */
+   private String normalizeWaveform(String json) {
+      if (json == null || json.isBlank()) {
+         return null;
+      }
+      List<Double> peaks;
+      try {
+         peaks = objectMapper.readValue(json, new TypeReference<List<Double>>() {
+         });
+      } catch (Exception e) {
+         throw new BadRequestException("BAD_WAVEFORM", "waveform должен быть JSON-массивом чисел", "waveform");
+      }
+      if (peaks.isEmpty() || peaks.size() > MAX_WAVEFORM_POINTS) {
+         throw new BadRequestException("BAD_WAVEFORM",
+               "waveform: от 1 до %d значений".formatted(MAX_WAVEFORM_POINTS), "waveform");
+      }
+      for (Double peak : peaks) {
+         if (peak == null || peak.isNaN() || peak < 0 || peak > 1) {
+            throw new BadRequestException("BAD_WAVEFORM", "Значения waveform должны быть в диапазоне 0..1",
+                  "waveform");
+         }
+      }
+      try {
+         return objectMapper.writeValueAsString(peaks);
+      } catch (Exception e) {
+         throw new BadRequestException("BAD_WAVEFORM", "Некорректный waveform", "waveform");
+      }
    }
 
    /** Пуш уже сохранённого сообщения всем, кто сейчас подписан на этот чат по WebSocket. */

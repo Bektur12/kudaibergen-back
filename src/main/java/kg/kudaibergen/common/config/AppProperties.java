@@ -14,7 +14,7 @@ public record AppProperties(Jwt jwt, Sms sms, RequestLimits request, Notificatio
    }
 
    public record Sms(String provider, Duration codeTtl, int maxAttempts, Duration resendInterval,
-                     boolean exposeCode, Nikita nikita) {
+                     boolean exposeCode, String fixedCode, Nikita nikita) {
 
       public record Nikita(String url, String login, String password, String sender) {
       }
@@ -26,10 +26,15 @@ public record AppProperties(Jwt jwt, Sms sms, RequestLimits request, Notificatio
    public record Notification(int dispatchBatchSize, int maxAttempts, Duration batchingWindow, int batchingThreshold) {
    }
 
-   public record Fcm(boolean enabled, String credentialsPath) {
+   public record Fcm(boolean enabled, String credentialsPath, String credentialsJson) {
    }
 
-   /** Медиа-сообщения в чате (фото/голосовые/видео): локальный диск в dev, позже — S3/GCS. */
-   public record Media(String uploadDir, DataSize maxPhotoSize, DataSize maxVoiceSize, DataSize maxVideoSize) {
+   /** Медиа-сообщения в чате (фото/голосовые/видео): storage = local (диск, dev) или s3 (бакет). */
+   public record Media(String storage, String uploadDir, S3 s3, DataSize maxPhotoSize, DataSize maxVoiceSize,
+                       DataSize maxVideoSize) {
+
+      public record S3(String endpoint, String accessKey, String secretKey, String bucket, String region,
+                       Duration presignTtl) {
+      }
    }
 }
