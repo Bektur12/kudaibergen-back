@@ -24,6 +24,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/api/v1/requests")
@@ -60,6 +61,13 @@ public class RequestController {
    @Operation(summary = "Запрос вместе со списком предложений")
    public RequestResponse details(@AuthenticationPrincipal AuthPrincipal principal, @PathVariable Long id) {
       return requestService.details(id, principal.userId());
+   }
+
+   @PostMapping(value = "/{id}/photo", consumes = "multipart/form-data")
+   @Operation(summary = "Загрузить фото детали (одно на запрос, повтор заменяет предыдущее)")
+   public RequestResponse uploadPhoto(@AuthenticationPrincipal AuthPrincipal principal,
+                                      @PathVariable Long id, @RequestParam MultipartFile file) {
+      return requestService.uploadPhoto(id, principal.userId(), file);
    }
 
    @PostMapping("/{id}/extend")

@@ -11,5 +11,5 @@ import kg.kudaibergen.common.PartCategory;
 public record SellerRequestRow(Long requestId, PartCategory category, String description, String car,
                                Integer budgetMin, Integer budgetMax, String currency, String city,
                                boolean isUrgent, int offerCount, Instant createdAt, Instant expiresAt,
-                               Instant seenAt, Instant repliedAt) {
+                               Instant seenAt, Instant repliedAt, String photoUrl) {
 }

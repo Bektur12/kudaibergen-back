@@ -113,6 +113,16 @@ Swagger UI (`/swagger-ui.html`) или `/v3/api-docs`, он генерирует
 ## Запросы (покупатель) и лента (продавец)
 
 - `POST /api/v1/requests` — создать и разослать.
+- `POST /api/v1/requests/{id}/photo` (`multipart/form-data`, поле `file`, только
+  изображения) — фото детали, одно на запрос, повторный вызов заменяет предыдущее.
+  Отдельный эндпоинт, не поле в `POST /requests`: специально, чтобы неудачная загрузка фото
+  не роняла создание самого запроса. Доступ — только автор запроса (иначе 404, не 403 — как
+  и у `extend`/`cancel`). Переиспользует то же медиа-хранилище, что и фото в чате — формат
+  `photoUrl` в ответе ровно такой же, как `mediaUrl` у сообщений, гоняется через тот же
+  `resolveMediaUrl` на клиенте.
+- `photoUrl: string | null` отдаётся в `GET /api/v1/requests/{id}`, `GET
+  /api/v1/requests/my` и в `GET /api/v1/my-store/requests` (`SellerRequestRow.photoUrl`) —
+  это самое важное: продавец видит фото прямо в ленте, до того как отвечать.
 - `GET /api/v1/requests/my`, `GET /api/v1/requests/{id}` (с офферами),
   `POST /api/v1/requests/{id}/extend` (+24ч), `POST /api/v1/requests/{id}/cancel`.
 - `GET /api/v1/my-store/requests?filter=` — лента продавца, `POST

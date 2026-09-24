@@ -9,6 +9,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 
@@ -59,6 +60,19 @@ class FanOutRequestIT extends AbstractIntegrationTest {
       long requestId = created.get("id").asLong();
       assertThat(created.get("sellersMatched").asInt()).isEqualTo(1);
 
+      // ── фото детали: переиспользует медиа-хранилище чата, доступно только автору запроса
+      var photo = new org.springframework.mock.web.MockMultipartFile(
+            "file", "part.jpg", "image/jpeg", new byte[] { 1, 2, 3, 4 });
+      JsonNode withPhoto = call(authed(multipart("/api/v1/requests/" + requestId + "/photo")
+            .file(photo), buyer), 200);
+      assertThat(withPhoto.get("photoUrl").asText()).isNotBlank();
+
+      // чужой покупатель не может загрузить фото в не свой запрос
+      String otherBuyer = register("+996700200299", "BUYER", "Чужой");
+      var otherPhoto = new org.springframework.mock.web.MockMultipartFile(
+            "file", "part.jpg", "image/jpeg", new byte[] { 1, 2, 3, 4 });
+      call(authed(multipart("/api/v1/requests/" + requestId + "/photo").file(otherPhoto), otherBuyer), 404);
+
       // ── лента продавца: запрос виден, машина подставлена, ответа ещё нет
       JsonNode feed = call(authed(get("/api/v1/my-store/requests?filter=UNANSWERED"), seller), 200);
       assertThat(feed.get("totalElements").asLong()).isEqualTo(1);
@@ -66,6 +80,8 @@ class FanOutRequestIT extends AbstractIntegrationTest {
       assertThat(row.get("requestId").asLong()).isEqualTo(requestId);
       assertThat(row.get("car").asText()).isEqualTo("Toyota Camry 2018, 2.5 бензин");
       assertThat(row.get("repliedAt").isNull()).isTrue();
+      // фото видно и в ленте продавца — это и есть смысл фичи, экономит время на переписку
+      assertThat(row.get("photoUrl").asText()).isEqualTo(withPhoto.get("photoUrl").asText());
 
       JsonNode otherFeed = call(authed(get("/api/v1/my-store/requests"), otherSeller), 200);
       assertThat(otherFeed.get("totalElements").asLong()).isZero();
@@ -112,6 +128,7 @@ class FanOutRequestIT extends AbstractIntegrationTest {
       // ── структурные данные предложения по-прежнему доступны (список/сравнение по цене)
       JsonNode details = call(authed(get("/api/v1/requests/" + requestId), buyer), 200);
       assertThat(details.get("offerCount").asInt()).isEqualTo(1);
+      assertThat(details.get("photoUrl").asText()).isEqualTo(withPhoto.get("photoUrl").asText());
       JsonNode offer = details.get("offers").get(0);
       assertThat(offer.get("storeName").asText()).isEqualTo("АвтоПрофи");
       assertThat(offer.get("comment").asText()).isEqualTo("Есть в наличии, приходите сегодня");

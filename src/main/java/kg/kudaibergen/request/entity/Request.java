@@ -75,6 +75,10 @@ public class Request {
    @Column(name = "expires_at", nullable = false)
    private Instant expiresAt;
 
+   /** Ключ в медиа-хранилище (как Message.mediaUrl), не URL — резолвится при выдаче наружу. */
+   @Column(name = "photo_url")
+   private String photoUrl;
+
    protected Request() {
    }
 
@@ -183,5 +187,13 @@ public class Request {
 
    public void setExpiresAt(Instant expiresAt) {
       this.expiresAt = expiresAt;
+   }
+
+   public String getPhotoUrl() {
+      return photoUrl;
+   }
+
+   public void setPhotoUrl(String photoUrl) {
+      this.photoUrl = photoUrl;
    }
 }

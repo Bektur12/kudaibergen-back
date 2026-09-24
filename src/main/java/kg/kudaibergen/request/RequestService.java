@@ -4,6 +4,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 
+import kg.kudaibergen.chat.ChatMediaStorage;
 import kg.kudaibergen.common.config.AppProperties;
 import kg.kudaibergen.common.error.BadRequestException;
 import kg.kudaibergen.common.error.ConflictException;
@@ -29,6 +30,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 @Service
 public class RequestService {
@@ -43,10 +45,12 @@ public class RequestService {
    private final OutboxService outbox;
    private final RequestOffersView offersView;
    private final AppProperties.RequestLimits limits;
+   private final ChatMediaStorage mediaStorage;
 
    public RequestService(RequestRepository requests, RequestRecipientRepository recipients,
                          StoreRepository stores, UserService userService, VehicleService vehicleService,
-                         OutboxService outbox, RequestOffersView offersView, AppProperties properties) {
+                         OutboxService outbox, RequestOffersView offersView, AppProperties properties,
+                         ChatMediaStorage mediaStorage) {
       this.requests = requests;
       this.recipients = recipients;
       this.stores = stores;
@@ -55,6 +59,7 @@ public class RequestService {
       this.outbox = outbox;
       this.offersView = offersView;
       this.limits = properties.request();
+      this.mediaStorage = mediaStorage;
    }
 
    /**
@@ -102,13 +107,13 @@ public class RequestService {
    @Transactional(readOnly = true)
    public PageResponse<RequestResponse> my(Long buyerId, int page, int size) {
       return PageResponse.of(requests.findByBuyerIdOrderByCreatedAtDesc(buyerId, PageRequest.of(page, size)),
-            request -> RequestResponse.of(request, List.of()));
+            request -> RequestResponse.of(request, List.of(), mediaStorage.urlFor(request.getPhotoUrl())));
    }
 
    @Transactional(readOnly = true)
    public RequestResponse details(Long requestId, Long buyerId) {
       Request request = getOwned(requestId, buyerId);
-      return RequestResponse.of(request, offersView.byRequest(requestId));
+      return RequestResponse.of(request, offersView.byRequest(requestId), mediaStorage.urlFor(request.getPhotoUrl()));
    }
 
    /** Продлить на сутки: и активный, и уже истёкший запрос снова становится активным. */
@@ -121,7 +126,7 @@ public class RequestService {
       Instant base = request.getExpiresAt().isAfter(Instant.now()) ? request.getExpiresAt() : Instant.now();
       request.setExpiresAt(base.plus(limits.extendBy()));
       request.setStatus(RequestStatus.ACTIVE);
-      return RequestResponse.of(request, offersView.byRequest(requestId));
+      return RequestResponse.of(request, offersView.byRequest(requestId), mediaStorage.urlFor(request.getPhotoUrl()));
    }
 
    @Transactional
@@ -131,7 +136,16 @@ public class RequestService {
          throw new ConflictException("REQUEST_NOT_ACTIVE", "Запрос уже не активен");
       }
       request.setStatus(RequestStatus.CANCELLED);
-      return RequestResponse.of(request, offersView.byRequest(requestId));
+      return RequestResponse.of(request, offersView.byRequest(requestId), mediaStorage.urlFor(request.getPhotoUrl()));
+   }
+
+   /** Заменяет фото детали (одно на запрос) — валидация типа/размера уже внутри mediaStorage. */
+   @Transactional
+   public RequestResponse uploadPhoto(Long requestId, Long buyerId, MultipartFile file) {
+      Request request = getOwned(requestId, buyerId);
+      ChatMediaStorage.Stored stored = mediaStorage.store(file, "PHOTO");
+      request.setPhotoUrl(stored.key());
+      return RequestResponse.of(request, offersView.byRequest(requestId), mediaStorage.urlFor(stored.key()));
    }
 
    // ─────────────────────── сторона продавца ───────────────────────
@@ -142,7 +156,14 @@ public class RequestService {
       return PageResponse.of(requests.findForStore(storeId,
             effective == SellerRequestFilter.URGENT,
             effective == SellerRequestFilter.UNANSWERED,
-            PageRequest.of(page, size)));
+            PageRequest.of(page, size)), this::resolvePhoto);
+   }
+
+   /** JPQL-конструктор кладёт в photoUrl сырой ключ хранилища — здесь резолвим в клиентский URL. */
+   private SellerRequestRow resolvePhoto(SellerRequestRow row) {
+      return new SellerRequestRow(row.requestId(), row.category(), row.description(), row.car(),
+            row.budgetMin(), row.budgetMax(), row.currency(), row.city(), row.isUrgent(), row.offerCount(),
+            row.createdAt(), row.expiresAt(), row.seenAt(), row.repliedAt(), mediaStorage.urlFor(row.photoUrl()));
    }
 
    @Transactional

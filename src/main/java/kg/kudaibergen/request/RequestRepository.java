@@ -51,7 +51,7 @@ public interface RequestRepository extends JpaRepository<Request, Long> {
    @Query(value = """
          select new kg.kudaibergen.request.dto.SellerRequestRow(
                r.id, r.category, r.description, r.carText, r.budgetMin, r.budgetMax, r.currency,
-               r.city, r.urgent, r.offerCount, r.createdAt, r.expiresAt, rr.seenAt, rr.repliedAt)
+               r.city, r.urgent, r.offerCount, r.createdAt, r.expiresAt, rr.seenAt, rr.repliedAt, r.photoUrl)
          from Request r
          join RequestRecipient rr on rr.id.requestId = r.id
          where rr.id.storeId = :storeId
