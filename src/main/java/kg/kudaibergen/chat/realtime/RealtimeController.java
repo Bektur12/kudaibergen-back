@@ -14,9 +14,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class RealtimeController {
 
    private final CentrifugoTokenService tokens;
+   private final CentrifugoClient centrifugo;
 
-   public RealtimeController(CentrifugoTokenService tokens) {
+   public RealtimeController(CentrifugoTokenService tokens, CentrifugoClient centrifugo) {
       this.tokens = tokens;
+      this.centrifugo = centrifugo;
    }
 
    @GetMapping("/token")
@@ -25,5 +27,14 @@ public class RealtimeController {
                + "истечении текущего токена")
    public CentrifugoTokenService.ConnectionToken token(@AuthenticationPrincipal AuthPrincipal principal) {
       return tokens.issue(principal.userId());
+   }
+
+   /** Временный эндпоинт для отладки деплоя: publish/presence в ChatService гасят ошибки
+    * молча (это правильно для прода), из-за чего "не работает realtime" не видно без логов.
+    * Тут — наоборот, реальный результат вызова Server API как есть. Убрать после отладки. */
+   @GetMapping("/diagnostics")
+   @Operation(summary = "Проверка связи бэкенда с Centrifugo (временный debug-эндпоинт)")
+   public String diagnostics() {
+      return centrifugo.ping();
    }
 }

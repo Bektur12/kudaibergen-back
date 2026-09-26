@@ -41,6 +41,18 @@ public class CentrifugoClient {
             .build();
    }
 
+   /** Диагностика: реально ли бэкенд достучался до Centrifugo (URL/API-key верные), в отличие
+    * от publish/presence — тут ошибка не гасится, а возвращается как есть, чтобы её было видно
+    * через GET /realtime/diagnostics, а не только по логам. */
+   public String ping() {
+      try {
+         String body = restClient.post().uri("/info").body(Map.of()).retrieve().body(String.class);
+         return "OK: " + body;
+      } catch (RestClientException ex) {
+         return "FAIL: " + ex.getMessage();
+      }
+   }
+
    /** Публикация уже сохранённого события — не должна ронять бизнес-транзакцию. */
    @Async("appTaskExecutor")
    public void publish(String channel, Object data) {

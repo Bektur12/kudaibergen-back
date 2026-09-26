@@ -9,14 +9,16 @@
         "presence": true,
         "join_leave": true,
         "allow_subscribe_for_client": false,
-        "allow_publish_for_subscriber": true
+        "allow_publish_for_subscriber": true,
+        "allow_user_limited_channels": true
       },
       {
         "name": "inbox",
         "presence": true,
         "join_leave": false,
         "allow_subscribe_for_client": false,
-        "allow_publish_for_subscriber": false
+        "allow_publish_for_subscriber": false,
+        "allow_user_limited_channels": true
       }
     ]
   }
