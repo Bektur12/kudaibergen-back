@@ -1,3 +1,3 @@
-FROM centrifugal/centrifugo:latest
+FROM centrifugo/centrifugo:latest
 COPY config.json /centrifugo/config.json
 CMD ["centrifugo", "-c", "/centrifugo/config.json"]

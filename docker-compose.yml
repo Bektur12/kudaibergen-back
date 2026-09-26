@@ -18,7 +18,7 @@ services:
       retries: 10
 
   centrifugo:
-    image: centrifugal/centrifugo:latest
+    image: centrifugo/centrifugo:latest
     container_name: kudaibergen-centrifugo
     command: centrifugo -c /centrifugo/config.json
     volumes:
