@@ -17,5 +17,19 @@ services:
       timeout: 3s
       retries: 10
 
+  centrifugo:
+    image: centrifugal/centrifugo:latest
+    container_name: kudaibergen-centrifugo
+    command: centrifugo -c /centrifugo/config.json
+    volumes:
+      - ./centrifugo/config.json:/centrifugo/config.json:ro
+    environment:
+      # секреты — только через env, config.json в репозитории их не содержит
+      CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY: ${CENTRIFUGO_TOKEN_SECRET:-change-me-centrifugo-secret-32-bytes-min}
+      CENTRIFUGO_HTTP_API_KEY: ${CENTRIFUGO_API_KEY:-change-me-centrifugo-api-key}
+    ports:
+      # 8000: клиентские WS/HTTP-подключения (/connection/websocket) и server API (/api)
+      - "${CENTRIFUGO_PORT:-8000}:8000"
+
 volumes:
   kudaibergen-pgdata:

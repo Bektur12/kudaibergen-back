@@ -8,7 +8,7 @@ import org.springframework.util.unit.DataSize;
 /** Все настройки домена в одном месте (префикс app.*). */
 @ConfigurationProperties(prefix = "app")
 public record AppProperties(Jwt jwt, Sms sms, RequestLimits request, Notification notification, Fcm fcm,
-                            Media media) {
+                            Media media, Centrifugo centrifugo) {
 
    public record Jwt(String secret, Duration accessTtl, Duration refreshTtl) {
    }
@@ -36,5 +36,11 @@ public record AppProperties(Jwt jwt, Sms sms, RequestLimits request, Notificatio
       public record S3(String endpoint, String accessKey, String secretKey, String bucket, String region,
                        Duration presignTtl) {
       }
+   }
+
+   /** Живой чат живёт в Centrifugo, а не в самом бэкенде — apiUrl/apiKey это Server API
+    * (публикация и presence), tokenSecret — отдельный от app.jwt.secret HMAC-ключ, которым
+    * подписывается connection-токен клиента (см. CentrifugoTokenService). */
+   public record Centrifugo(String apiUrl, String apiKey, String tokenSecret, Duration tokenTtl) {
    }
 }

@@ -94,6 +94,13 @@ app:
     max-photo-size: 10MB
     max-voice-size: 15MB
     max-video-size: 100MB
+  centrifugo:
+    # Server API (публикация и presence), см. CentrifugoClient
+    api-url: ${CENTRIFUGO_API_URL:http://localhost:8000/api}
+    api-key: ${CENTRIFUGO_API_KEY:change-me-centrifugo-api-key}
+    # HMAC-секрет connection-токена клиента — не путать с app.jwt.secret, это разные ключи
+    token-secret: ${CENTRIFUGO_TOKEN_SECRET:change-me-centrifugo-secret-32-bytes-minimum}
+    token-ttl: 1h
 
 logging:
   level:

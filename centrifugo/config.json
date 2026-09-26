@@ -1,0 +1,23 @@
+{
+  "client": {
+    "allowed_origins": ["*"]
+  },
+  "channel": {
+    "namespaces": [
+      {
+        "name": "chat",
+        "presence": true,
+        "join_leave": true,
+        "allow_subscribe_for_client": false,
+        "allow_publish_for_subscriber": true
+      },
+      {
+        "name": "inbox",
+        "presence": true,
+        "join_leave": false,
+        "allow_subscribe_for_client": false,
+        "allow_publish_for_subscriber": false
+      }
+    ]
+  }
+}

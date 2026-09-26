@@ -51,9 +51,6 @@ public class SecurityConfig {
                   .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html",
                         "/actuator/health", "/actuator/health/**").permitAll()
                   .requestMatchers(HttpMethod.GET, "/media/**").permitAll()
-                  // WebSocket handshake: браузер не может выставить Authorization на CONNECT,
-                  // токен проверяется внутри STOMP-фрейма — см. ChatWebSocketInterceptor
-                  .requestMatchers("/ws/**").permitAll()
                   // весь кабинет продавца — только роль SELLER
                   .requestMatchers("/api/v1/my-store/**").hasRole("SELLER")
                   .anyRequest().authenticated())

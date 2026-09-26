@@ -8,6 +8,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import kg.kudaibergen.common.security.AuthPrincipal;
+import kg.kudaibergen.user.LastSeenTracker;
 import org.springframework.lang.NonNull;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -22,9 +23,11 @@ public class JwtAuthFilter extends OncePerRequestFilter {
    private static final String PREFIX = "Bearer ";
 
    private final JwtService jwtService;
+   private final LastSeenTracker lastSeenTracker;
 
-   public JwtAuthFilter(JwtService jwtService) {
+   public JwtAuthFilter(JwtService jwtService, LastSeenTracker lastSeenTracker) {
       this.jwtService = jwtService;
+      this.lastSeenTracker = lastSeenTracker;
    }
 
    @Override
@@ -40,6 +43,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                   List.of(new SimpleGrantedAuthority("ROLE_" + parsed.role().name())));
             authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
             SecurityContextHolder.getContext().setAuthentication(authentication);
+            lastSeenTracker.touch(principal.userId());
          } catch (Exception invalidToken) {
             SecurityContextHolder.clearContext();
          }
