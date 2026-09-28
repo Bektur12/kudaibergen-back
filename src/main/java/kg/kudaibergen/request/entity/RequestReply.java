@@ -42,6 +42,9 @@ public class RequestReply {
 
    private Integer price;
 
+   @Column(name = "part_id")
+   private Long partId;
+
    @Column(name = "created_at", nullable = false, updatable = false)
    private Instant createdAt;
 
@@ -60,12 +63,14 @@ public class RequestReply {
    }
 
    /** «Нет» — детали ответа не нужны. */
-   public void fill(ReplyAnswer answer, PartCondition condition, String message, Integer price, Instant now) {
+   public void fill(ReplyAnswer answer, PartCondition condition, String message, Integer price, Long partId,
+                    Instant now) {
       this.answer = answer;
       boolean have = answer == ReplyAnswer.HAVE;
       this.condition = have ? condition : null;
       this.message = have ? message : null;
       this.price = have ? price : null;
+      this.partId = have ? partId : null;
       this.updatedAt = now;
    }
 
@@ -103,6 +108,10 @@ public class RequestReply {
 
    public Integer getPrice() {
       return price;
+   }
+
+   public Long getPartId() {
+      return partId;
    }
 
    public Instant getCreatedAt() {

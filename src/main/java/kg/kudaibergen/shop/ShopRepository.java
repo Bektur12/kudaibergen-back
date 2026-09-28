@@ -40,5 +40,8 @@ public interface ShopRepository extends JpaRepository<Shop, Long> {
    @Query("select s from Shop s where s.status = :status and s.open = true and :brandId member of s.brandIds")
    List<Shop> findReceiving(@Param("status") ShopStatus status, @Param("brandId") Long brandId);
 
+   /** Действующие магазины — для сортировки выдачи «Ближе ко мне». */
+   List<Shop> findByStatus(ShopStatus status);
+
    List<Shop> findByStatusOrderByCreatedAtAsc(ShopStatus status, Pageable page);
 }

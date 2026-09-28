@@ -114,6 +114,14 @@ public class Message {
       return message;
    }
 
+   /** Карточка запчасти от покупателя: «Написать» с карточки (ТЗ 5.3). text — название товара. */
+   public static Message part(Long chatId, Long senderId, String title, Map<String, Object> payload, Instant now) {
+      Message message = new Message(chatId, ChatSide.BUYER, senderId, MessageType.PART, null, now);
+      message.text = title;
+      message.payload = payload;
+      return message;
+   }
+
    public static Message system(Long chatId, SystemEvent event, Map<String, Object> payload, Instant now) {
       Message message = new Message(chatId, ChatSide.SYSTEM, null, MessageType.SYSTEM, null, now);
       message.code = event.name();

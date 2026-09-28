@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -17,10 +18,11 @@ import kg.kudaibergen.chat.dto.MessageDto;
 import kg.kudaibergen.chat.entity.Chat;
 import kg.kudaibergen.chat.entity.ChatSide;
 import kg.kudaibergen.chat.entity.Message;
-import kg.kudaibergen.chat.media.ChatMediaStorage;
+import kg.kudaibergen.chat.entity.MessageType;
 import kg.kudaibergen.chat.realtime.CentrifugoClient;
 import kg.kudaibergen.chat.realtime.ChatChannels;
 import kg.kudaibergen.market.dto.LocationDto;
+import kg.kudaibergen.media.MediaService;
 import kg.kudaibergen.request.PartRequestRepository;
 import kg.kudaibergen.request.RequestMapper;
 import kg.kudaibergen.request.entity.PartRequest;
@@ -49,13 +51,14 @@ public class ChatView {
    private final UserRepository users;
    private final PartRequestRepository requests;
    private final RequestMapper requestMapper;
-   private final ChatMediaStorage media;
+   private final ChatAttachments media;
    private final CentrifugoClient centrifugo;
+   private final MediaService photos;
 
    public ChatView(ChatRepository chats, MessageRepository messages, ShopRepository shops,
                    ShopMemberRepository members, ShopMapper shopMapper, UserRepository users,
-                   PartRequestRepository requests, RequestMapper requestMapper, ChatMediaStorage media,
-                   CentrifugoClient centrifugo) {
+                   PartRequestRepository requests, RequestMapper requestMapper, ChatAttachments media,
+                   CentrifugoClient centrifugo, MediaService photos) {
       this.chats = chats;
       this.messages = messages;
       this.shops = shops;
@@ -66,6 +69,7 @@ public class ChatView {
       this.requestMapper = requestMapper;
       this.media = media;
       this.centrifugo = centrifugo;
+      this.photos = photos;
    }
 
    /** read — противоположная сторона дочитала до этого сообщения. */
@@ -73,9 +77,20 @@ public class ChatView {
       boolean read = message.getSide() != ChatSide.SYSTEM
             && chat.readMessageId(message.getSide().other()) >= message.getId();
       return new MessageDto(message.getId(), message.getChatId(), message.getSide(), message.getSenderId(),
-            message.getType(), message.getText(), message.getCode(), message.getPayload(),
+            message.getType(), message.getText(), message.getCode(), payload(message),
             media.urlFor(message.getMediaKey()), message.getMimeType(), message.getDurationSeconds(),
             message.getWaveform(), message.getClientId(), read, message.getCreatedAt());
+   }
+
+   /** Карточке товара — свежая ссылка на фото: presigned-ссылки в базе не хранятся, они истекают. */
+   private Map<String, Object> payload(Message message) {
+      if (message.getType() != MessageType.PART || message.getPayload() == null
+            || !(message.getPayload().get("mediaId") instanceof Number mediaId)) {
+         return message.getPayload();
+      }
+      Map<String, Object> payload = new LinkedHashMap<>(message.getPayload());
+      payload.put("photo", photos.photos(List.of(mediaId.longValue())).get(mediaId.longValue()));
+      return payload;
    }
 
    // ─────────────────────── шапка ───────────────────────

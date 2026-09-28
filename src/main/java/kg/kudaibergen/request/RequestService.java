@@ -9,10 +9,13 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import kg.kudaibergen.catalog.CatalogView;
+import kg.kudaibergen.catalog.dto.PartCardDto;
 import kg.kudaibergen.category.CategoryService;
 import kg.kudaibergen.chat.ChatRepository;
 import kg.kudaibergen.chat.entity.Chat;
@@ -69,6 +72,7 @@ public class RequestService {
    private final RequestReplyRepository replies;
    private final ReviewRepository reviews;
    private final ChatRepository chats;
+   private final CatalogView catalogView;
    private final RecipientFinder finder;
    private final RequestMapper mapper;
    private final GarageService garage;
@@ -83,7 +87,7 @@ public class RequestService {
 
    public RequestService(PartRequestRepository requests, RequestRecipientRepository recipients,
                          RequestReplyRepository replies, ReviewRepository reviews, ChatRepository chats,
-                         RecipientFinder finder,
+                         CatalogView catalogView, RecipientFinder finder,
                          RequestMapper mapper, GarageService garage, VehicleDirectory directory,
                          CategoryService categories, MarketMapService market, ShopRepository shops,
                          ShopMapper shopMapper, ApplicationEventPublisher events, AppProperties properties,
@@ -93,6 +97,7 @@ public class RequestService {
       this.replies = replies;
       this.reviews = reviews;
       this.chats = chats;
+      this.catalogView = catalogView;
       this.finder = finder;
       this.mapper = mapper;
       this.garage = garage;
@@ -237,15 +242,18 @@ public class RequestService {
     */
    @Transactional(readOnly = true)
    public List<ReplyDto> replies(AuthPrincipal principal, Long requestId, Long afterId) {
-      visible(principal, requestId);
+      PartRequest request = visible(principal, requestId);
       List<RequestReply> have = replies.findHave(requestId, ReplyAnswer.HAVE, afterId == null ? 0 : afterId);
       Map<Long, Shop> byId = shops.findAllById(have.stream().map(RequestReply::getShopId).toList()).stream()
             .collect(Collectors.toMap(Shop::getId, Function.identity()));
       Map<Long, Long> chatOfShop = chats.findByRequestId(requestId).stream()
             .collect(Collectors.toMap(Chat::getShopId, Chat::getId, (a, b) -> a));
+      Map<Long, PartCardDto> partCards = catalogView.cards(have.stream().map(RequestReply::getPartId)
+                  .filter(Objects::nonNull).distinct().toList(), mapper.carFilter(request), principal.userId())
+            .stream().collect(Collectors.toMap(PartCardDto::id, Function.identity()));
       return have.stream()
             .map(reply -> mapper.reply(reply, shopMapper.card(byId.get(reply.getShopId())),
-                  chatOfShop.get(reply.getShopId())))
+                  chatOfShop.get(reply.getShopId()), reply.getPartId() == null ? null : partCards.get(reply.getPartId())))
             .toList();
    }
 

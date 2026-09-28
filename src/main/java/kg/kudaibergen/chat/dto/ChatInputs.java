@@ -13,9 +13,10 @@ public final class ChatInputs {
 
    /**
     * «Написать» (07, 29, 30): чат покупателя с магазином. requestId — чат по запросу (он уже создан
-    * ответом «Есть»), без него — прямой чат из профиля магазина.
+    * ответом «Есть»), без него — прямой чат из профиля магазина. partId — с карточки запчасти (29):
+    * прямой чат, в который уходит карточка товара.
     */
-   public record OpenChat(@NotNull(message = "Выберите магазин") Long shopId, Long requestId) {
+   public record OpenChat(@NotNull(message = "Выберите магазин") Long shopId, Long requestId, Long partId) {
    }
 
    /**

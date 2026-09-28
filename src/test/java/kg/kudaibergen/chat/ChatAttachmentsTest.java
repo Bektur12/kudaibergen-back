@@ -1,22 +1,25 @@
-package kg.kudaibergen.chat.media;
+package kg.kudaibergen.chat;
 
+import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.List;
 
 import kg.kudaibergen.chat.entity.MessageType;
 import kg.kudaibergen.common.config.AppProperties;
 import kg.kudaibergen.common.error.BadRequestException;
+import kg.kudaibergen.media.storage.MediaStorage;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.util.unit.DataSize;
-import org.springframework.web.multipart.MultipartFile;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-class ChatMediaStorageTest {
+class ChatAttachmentsTest {
 
-   private final ChatMediaStorage storage = new ChatMediaStorage(new AppProperties(null, null, null, null, null, null,
-         null, new AppProperties.Media("local", "uploads", null, DataSize.ofBytes(10), DataSize.ofMegabytes(15),
-         DataSize.ofMegabytes(100), 60))) {
+   private final List<String> saved = new ArrayList<>();
+
+   private final ChatAttachments storage = new ChatAttachments(new MediaStorage() {
 
       @Override
       public String urlFor(String key) {
@@ -24,24 +27,26 @@ class ChatMediaStorageTest {
       }
 
       @Override
-      protected String save(MultipartFile file, MessageType type, String extension) {
-         return "chat/" + type.name().toLowerCase() + "/x" + extension;
+      public void put(String key, InputStream content, long size, String contentType) {
+         saved.add(key);
       }
-   };
+   }, new AppProperties(null, null, null, null, null, null, null, new AppProperties.Media("local", "uploads", null,
+         DataSize.ofBytes(10), DataSize.ofMegabytes(15), DataSize.ofMegabytes(100), 60)));
 
    @Test
    void расширениеТолькоКороткоеИБезПутей() {
-      assertThat(ChatMediaStorage.extensionOf("photo.JPG")).isEqualTo(".jpg");
-      assertThat(ChatMediaStorage.extensionOf("voice.m4a")).isEqualTo(".m4a");
-      assertThat(ChatMediaStorage.extensionOf("../../etc/passwd")).isEmpty();
-      assertThat(ChatMediaStorage.extensionOf("a.tar.gz/../x")).isEmpty();
-      assertThat(ChatMediaStorage.extensionOf(null)).isEmpty();
+      assertThat(ChatAttachments.extensionOf("photo.JPG")).isEqualTo(".jpg");
+      assertThat(ChatAttachments.extensionOf("voice.m4a")).isEqualTo(".m4a");
+      assertThat(ChatAttachments.extensionOf("../../etc/passwd")).isEmpty();
+      assertThat(ChatAttachments.extensionOf("a.tar.gz/../x")).isEmpty();
+      assertThat(ChatAttachments.extensionOf(null)).isEmpty();
    }
 
    @Test
    void типФайлаИРазмерПроверяются() {
       MockMultipartFile photo = new MockMultipartFile("file", "p.jpg", "image/jpeg", new byte[5]);
-      assertThat(storage.store(photo, MessageType.PHOTO).key()).isEqualTo("chat/photo/x.jpg");
+      assertThat(storage.store(photo, MessageType.PHOTO).key()).startsWith("chat/photo/").endsWith(".jpg");
+      assertThat(saved).hasSize(1);
 
       MockMultipartFile big = new MockMultipartFile("file", "p.jpg", "image/jpeg", new byte[11]);
       assertThatThrownBy(() -> storage.store(big, MessageType.PHOTO))

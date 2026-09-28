@@ -1,7 +1,7 @@
-package kg.kudaibergen.chat.media;
+package kg.kudaibergen.media.storage;
 
+import java.io.InputStream;
 import java.util.Map;
-import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
@@ -9,13 +9,11 @@ import io.minio.GetPresignedObjectUrlArgs;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
 import io.minio.http.Method;
-import kg.kudaibergen.chat.entity.MessageType;
 import kg.kudaibergen.common.config.AppProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
-import org.springframework.web.multipart.MultipartFile;
 
 /**
  * Приватный бакет MinIO/S3: в базе ключ объекта, клиенту — presigned GET-ссылка. Ссылки кэшируются
@@ -23,9 +21,9 @@ import org.springframework.web.multipart.MultipartFile;
  */
 @Service
 @ConditionalOnProperty(name = "app.media.storage", havingValue = "s3")
-public class S3ChatMediaStorage extends ChatMediaStorage {
+public class S3MediaStorage implements MediaStorage {
 
-   private static final Logger log = LoggerFactory.getLogger(S3ChatMediaStorage.class);
+   private static final Logger log = LoggerFactory.getLogger(S3MediaStorage.class);
    private static final int MAX_CACHED_URLS = 20_000;
 
    private final MinioClient client;
@@ -35,9 +33,8 @@ public class S3ChatMediaStorage extends ChatMediaStorage {
    private record SignedUrl(String url, long refreshAtMillis) {
    }
 
-   public S3ChatMediaStorage(AppProperties properties) {
-      super(properties);
-      this.s3 = config.s3();
+   public S3MediaStorage(AppProperties properties) {
+      this.s3 = properties.media().s3();
       this.client = MinioClient.builder()
             .endpoint(s3.endpoint())
             .credentials(s3.accessKey(), s3.secretKey())
@@ -83,19 +80,17 @@ public class S3ChatMediaStorage extends ChatMediaStorage {
    }
 
    @Override
-   protected String save(MultipartFile file, MessageType type, String extension) {
-      String key = "chat/" + type.name().toLowerCase() + "/" + UUID.randomUUID() + extension;
+   public void put(String key, InputStream content, long size, String contentType) {
       try {
          client.putObject(PutObjectArgs.builder()
                .bucket(s3.bucket())
                .object(key)
-               .stream(file.getInputStream(), file.getSize(), -1)
-               .contentType(file.getContentType())
+               .stream(content, size, -1)
+               .contentType(contentType)
                .headers(Map.of("Cache-Control", "private, max-age=31536000, immutable"))
                .build());
       } catch (Exception e) {
          throw new IllegalStateException("Не удалось загрузить файл в хранилище", e);
       }
-      return key;
    }
 }

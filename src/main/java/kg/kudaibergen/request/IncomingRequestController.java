@@ -1,10 +1,13 @@
 package kg.kudaibergen.request;
 
+import java.util.List;
+
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import kg.kudaibergen.catalog.dto.PartCardDto;
 import kg.kudaibergen.common.i18n.Langs;
 import kg.kudaibergen.common.idempotency.Idempotent;
 import kg.kudaibergen.common.security.AuthPrincipal;
@@ -57,6 +60,13 @@ public class IncomingRequestController {
                                  @Parameter(hidden = true) @RequestHeader(value = HttpHeaders.ACCEPT_LANGUAGE,
                                        required = false) String language) {
       return incoming.one(principal.userId(), id, Langs.fromHeader(language));
+   }
+
+   @GetMapping("/my/shop/requests/{id}/suggested-parts")
+   @Operation(summary = "Подходящие свои запчасти для ответа «Есть» (12)",
+         description = "Опубликованные запчасти бокса под машину запроса, сначала совпавшие с текстом. id — в partId ответа")
+   public List<PartCardDto> suggestedParts(@AuthenticationPrincipal AuthPrincipal principal, @PathVariable Long id) {
+      return incoming.suggestedParts(principal.userId(), id);
    }
 
    @PostMapping("/my/shop/requests/{id}/seen")

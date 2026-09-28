@@ -3,6 +3,8 @@ package kg.kudaibergen.request;
 import java.time.Duration;
 import java.util.Map;
 
+import kg.kudaibergen.catalog.dto.CarFilter;
+import kg.kudaibergen.catalog.dto.PartCardDto;
 import kg.kudaibergen.category.Category;
 import kg.kudaibergen.category.CategoryDto;
 import kg.kudaibergen.category.CategoryService;
@@ -46,6 +48,11 @@ public class RequestMapper {
             request.getYear(), brand.getName() + " " + model.label() + " · " + request.getYear());
    }
 
+   /** Машина запроса как фильтр каталога: подбор своих запчастей к ответу «Есть». */
+   public CarFilter carFilter(PartRequest request) {
+      return new CarFilter(request.getBrandId(), request.getModelId(), (int) request.getYear(), car(request).label());
+   }
+
    public static RequestState state(PartRequest request) {
       return switch (request.getStatus()) {
          case CLOSED -> RequestState.CLOSED;
@@ -67,10 +74,10 @@ public class RequestMapper {
             request.getClosedWithShopId(), request.getCreatedAt(), request.getClosedAt());
    }
 
-   public ReplyDto reply(RequestReply reply, ShopCardDto shop, Long chatId) {
+   public ReplyDto reply(RequestReply reply, ShopCardDto shop, Long chatId, PartCardDto part) {
       return new ReplyDto(reply.getId(), reply.getRequestId(), shop, reply.getAnswer(), reply.getCondition(),
             reply.getMessage(), reply.getPrice(), reply.getCreatedAt(), reply.getUpdatedAt(),
-            reply.getCreatedAt().plus(replyEditWindow), chatId);
+            reply.getCreatedAt().plus(replyEditWindow), chatId, part);
    }
 
    public IncomingRequestDto incoming(PartRequest request, RequestRecipient recipient, String buyerName,

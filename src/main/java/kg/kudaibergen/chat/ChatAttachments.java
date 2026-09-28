@@ -1,33 +1,40 @@
-package kg.kudaibergen.chat.media;
+package kg.kudaibergen.chat;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.UncheckedIOException;
+import java.util.UUID;
 
 import kg.kudaibergen.chat.entity.MessageType;
 import kg.kudaibergen.common.config.AppProperties;
 import kg.kudaibergen.common.error.BadRequestException;
+import kg.kudaibergen.media.storage.MediaStorage;
+import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.util.unit.DataSize;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
- * Вложения чата: фото, голосовые, видео. В базе лежит ключ, клиенту при каждой выдаче собирается URL
- * ({@link #urlFor}). Реализации: локальная папка (dev, app.media.storage=local) и бакет MinIO/S3 (s3).
- * Фото сжимает и чистит от EXIF и геометки телефон (ТЗ 9.2, 14).
+ * Вложения чата — фото, голосовые, видео — кладутся в хранилище как есть. Фото сжимает и чистит
+ * от EXIF и геометки телефон (ТЗ 9.2, 14). Проверяются тип и размер.
  */
-public abstract class ChatMediaStorage {
+@Component
+public class ChatAttachments {
 
-   protected final AppProperties.Media config;
+   private final MediaStorage storage;
+   private final AppProperties.Media config;
 
-   protected ChatMediaStorage(AppProperties properties) {
+   public ChatAttachments(MediaStorage storage, AppProperties properties) {
+      this.storage = storage;
       this.config = properties.media();
    }
 
    public record Stored(String key, String mimeType) {
    }
 
-   /** URL для клиента по ключу из базы; null — вложения нет. */
-   public abstract String urlFor(String key);
-
-   /** Кладёт уже проверенный файл и возвращает ключ. */
-   protected abstract String save(MultipartFile file, MessageType type, String extension);
+   public String urlFor(String key) {
+      return storage.urlFor(key);
+   }
 
    public Stored store(MultipartFile file, MessageType type) {
       if (file == null || file.isEmpty()) {
@@ -43,7 +50,14 @@ public abstract class ChatMediaStorage {
       if (file.getSize() > limit.toBytes()) {
          throw new BadRequestException("FILE_TOO_LARGE", "Файл больше допустимого размера (" + limit + ")");
       }
-      return new Stored(save(file, type, extensionOf(file.getOriginalFilename())), mimeType);
+      String key = "chat/" + type.name().toLowerCase() + "/" + UUID.randomUUID()
+            + extensionOf(file.getOriginalFilename());
+      try (InputStream content = file.getInputStream()) {
+         storage.put(key, content, file.getSize(), mimeType);
+      } catch (IOException e) {
+         throw new UncheckedIOException("Не удалось прочитать файл", e);
+      }
+      return new Stored(key, mimeType);
    }
 
    private static DataSize requirePrefix(String mimeType, String prefix, String message, DataSize limit) {

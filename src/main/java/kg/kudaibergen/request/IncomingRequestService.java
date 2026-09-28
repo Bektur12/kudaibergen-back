@@ -9,6 +9,9 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import kg.kudaibergen.catalog.CatalogView;
+import kg.kudaibergen.catalog.MyPartsService;
+import kg.kudaibergen.catalog.dto.PartCardDto;
 import kg.kudaibergen.chat.ChatRepository;
 import kg.kudaibergen.chat.ChatService;
 import kg.kudaibergen.chat.entity.Chat;
@@ -54,6 +57,8 @@ public class IncomingRequestService {
    private final UserRepository users;
    private final ChatService chatService;
    private final ChatRepository chats;
+   private final MyPartsService myParts;
+   private final CatalogView catalogView;
    private final ApplicationEventPublisher events;
    private final AppProperties.Requests config;
    private final Clock clock;
@@ -61,7 +66,8 @@ public class IncomingRequestService {
    public IncomingRequestService(PartRequestRepository requests, RequestRecipientRepository recipients,
                                  RequestReplyRepository replies, ShopAccess access, ShopMapper shopMapper,
                                  RequestMapper mapper, UserRepository users, ChatService chatService,
-                                 ChatRepository chats, ApplicationEventPublisher events,
+                                 ChatRepository chats, MyPartsService myParts, CatalogView catalogView,
+                                 ApplicationEventPublisher events,
                                  AppProperties properties, Clock clock) {
       this.requests = requests;
       this.recipients = recipients;
@@ -72,6 +78,8 @@ public class IncomingRequestService {
       this.users = users;
       this.chatService = chatService;
       this.chats = chats;
+      this.myParts = myParts;
+      this.catalogView = catalogView;
       this.events = events;
       this.config = properties.requests();
       this.clock = clock;
@@ -118,7 +126,8 @@ public class IncomingRequestService {
          PartRequest request = byId.get(row.getRequestId());
          RequestReply reply = myReplies.get(row.getRequestId());
          return mapper.incoming(request, row, buyerNames.get(request.getBuyerId()),
-               reply == null ? null : mapper.reply(reply, null, chatOfRequest.get(row.getRequestId())), lang);
+               reply == null ? null : mapper.reply(reply, null, chatOfRequest.get(row.getRequestId()),
+                     partCard(reply, request)), lang);
       });
    }
 
@@ -129,7 +138,8 @@ public class IncomingRequestService {
       RequestRecipient recipient = recipient(requestId, shop.getId());
       PartRequest request = requests.findById(requestId).orElseThrow(RequestService::notFound);
       ReplyDto myReply = replies.findByRequestIdAndShopId(requestId, shop.getId())
-            .map(reply -> mapper.reply(reply, null, chatId(request, shop.getId()))).orElse(null);
+            .map(reply -> mapper.reply(reply, null, chatId(request, shop.getId()), partCard(reply, request)))
+            .orElse(null);
       return mapper.incoming(request, recipient, buyerNames(List.of(request)).get(request.getBuyerId()), myReply,
             lang);
    }
@@ -157,10 +167,11 @@ public class IncomingRequestService {
          throw new ConflictException("ALREADY_REPLIED", "Бокс уже ответил на этот запрос");
       }
       requireCondition(input);
+      requirePart(shop, input);
 
       Instant now = clock.instant();
       RequestReply reply = new RequestReply(requestId, shop.getId(), userId, now);
-      reply.fill(input.answer(), input.condition(), trimToNull(input.message()), input.price(), now);
+      reply.fill(input.answer(), input.condition(), trimToNull(input.message()), input.price(), input.partId(), now);
       try {
          replies.saveAndFlush(reply);
       } catch (DataIntegrityViolationException parallel) {
@@ -174,7 +185,7 @@ public class IncomingRequestService {
          chatId = chatService.openForReply(request, reply, userId);
          events.publishEvent(new RequestEvents.HaveReceived(requestId, reply.getId()));
       }
-      return mapper.reply(reply, shopMapper.card(shop), chatId);
+      return mapper.reply(reply, shopMapper.card(shop), chatId, partCard(reply, request));
    }
 
    /** Изменить ответ в течение 10 минут (ТЗ 10.2), в том числе «Нет» ↔ «Есть». Потом — только в чате. */
@@ -191,8 +202,9 @@ public class IncomingRequestService {
                + config.replyEditWindow().toMinutes() + " минут — напишите покупателю в чат");
       }
       requireCondition(input);
+      requirePart(shop, input);
       boolean wasHave = reply.isHave();
-      reply.fill(input.answer(), input.condition(), trimToNull(input.message()), input.price(), now);
+      reply.fill(input.answer(), input.condition(), trimToNull(input.message()), input.price(), input.partId(), now);
       if (wasHave != reply.isHave()) {
          request.haveCountChanged(reply.isHave() ? 1 : -1, now);
       }
@@ -200,7 +212,7 @@ public class IncomingRequestService {
          chatService.openForReply(request, reply, userId);
          events.publishEvent(new RequestEvents.HaveReceived(requestId, reply.getId()));
       }
-      return mapper.reply(reply, shopMapper.card(shop), chatId(request, shop.getId()));
+      return mapper.reply(reply, shopMapper.card(shop), chatId(request, shop.getId()), partCard(reply, request));
    }
 
    /** Заблокированный или ещё не проверенный бокс не отвечает. */
@@ -210,6 +222,32 @@ public class IncomingRequestService {
          throw new ForbiddenException("SHOP_NOT_ACTIVE", "Бокс не проверен или заблокирован");
       }
       return shop;
+   }
+
+   /**
+    * «Приложить товар из каталога» (12): свои опубликованные запчасти под машину запроса,
+    * сначала совпавшие с текстом запроса.
+    */
+   @Transactional(readOnly = true)
+   public List<PartCardDto> suggestedParts(Long userId, Long requestId) {
+      Shop shop = access.requireMember(userId).shop();
+      recipient(requestId, shop.getId());
+      PartRequest request = requests.findById(requestId).orElseThrow(RequestService::notFound);
+      return myParts.suggestions(shop.getId(), mapper.carFilter(request), request.getText());
+   }
+
+   private void requirePart(Shop shop, RequestInputs.Reply input) {
+      if (input.partId() != null && input.answer() == ReplyAnswer.HAVE) {
+         myParts.requireActiveOf(shop.getId(), input.partId());
+      }
+   }
+
+   private PartCardDto partCard(RequestReply reply, PartRequest request) {
+      if (reply.getPartId() == null) {
+         return null;
+      }
+      return catalogView.cards(List.of(reply.getPartId()), mapper.carFilter(request), null).stream()
+            .findFirst().orElse(null);
    }
 
    private Long chatId(PartRequest request, Long shopId) {

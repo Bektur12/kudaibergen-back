@@ -52,11 +52,15 @@ public final class RequestInputs {
          List<ReviewTag> tags) {
    }
 
-   /** Ответ бокса (12, кнопки пуша 14). Для «Есть» обязательно состояние, остальное — по желанию. */
+   /**
+    * Ответ бокса (12, кнопки пуша 14). Для «Есть» обязательно состояние, остальное — по желанию.
+    * partId — «Приложить товар из каталога»: своя опубликованная запчасть.
+    */
    public record Reply(
          @NotNull(message = "Ответьте «Есть» или «Нет»") ReplyAnswer answer,
          PartCondition condition,
          @Size(max = 300, message = "Не длиннее 300 символов") String message,
-         @Positive(message = "Цена — целое число сом больше нуля") Integer price) {
+         @Positive(message = "Цена — целое число сом больше нуля") Integer price,
+         Long partId) {
    }
 }

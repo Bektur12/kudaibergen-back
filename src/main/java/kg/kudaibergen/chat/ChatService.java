@@ -10,6 +10,8 @@ import java.util.Optional;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import kg.kudaibergen.catalog.PartRepository;
+import kg.kudaibergen.catalog.entity.Part;
 import kg.kudaibergen.chat.dto.ChatDto;
 import kg.kudaibergen.chat.dto.ChatInputs;
 import kg.kudaibergen.chat.dto.ChatListItemDto;
@@ -22,7 +24,6 @@ import kg.kudaibergen.chat.entity.Message;
 import kg.kudaibergen.chat.entity.MessageType;
 import kg.kudaibergen.chat.entity.QuickReply;
 import kg.kudaibergen.chat.entity.SystemEvent;
-import kg.kudaibergen.chat.media.ChatMediaStorage;
 import kg.kudaibergen.chat.realtime.CentrifugoTokens;
 import kg.kudaibergen.chat.realtime.ChatChannels;
 import kg.kudaibergen.common.config.AppProperties;
@@ -69,12 +70,13 @@ public class ChatService {
    private final ReplyTemplateRepository templates;
    private final ChatAccess access;
    private final ChatView view;
-   private final ChatMediaStorage media;
+   private final ChatAttachments media;
    private final CentrifugoTokens tokens;
    private final ShopRepository shops;
    private final ShopAccess shopAccess;
    private final ShopMapper shopMapper;
    private final PartRequestRepository requests;
+   private final PartRepository parts;
    private final UserRepository users;
    private final ComplaintService complaints;
    private final ApplicationEventPublisher events;
@@ -84,9 +86,9 @@ public class ChatService {
    private final Clock clock;
 
    public ChatService(ChatRepository chats, MessageRepository messages, ReplyTemplateRepository templates,
-                      ChatAccess access, ChatView view, ChatMediaStorage media, CentrifugoTokens tokens,
+                      ChatAccess access, ChatView view, ChatAttachments media, CentrifugoTokens tokens,
                       ShopRepository shops, ShopAccess shopAccess, ShopMapper shopMapper,
-                      PartRequestRepository requests, UserRepository users, ComplaintService complaints,
+                      PartRequestRepository requests, PartRepository parts, UserRepository users, ComplaintService complaints,
                       ApplicationEventPublisher events, TransactionTemplate tx, ObjectMapper json,
                       AppProperties properties, Clock clock) {
       this.chats = chats;
@@ -100,6 +102,7 @@ public class ChatService {
       this.shopAccess = shopAccess;
       this.shopMapper = shopMapper;
       this.requests = requests;
+      this.parts = parts;
       this.users = users;
       this.complaints = complaints;
       this.events = events;
@@ -132,6 +135,9 @@ public class ChatService {
                      "Этот бокс не отвечал «Есть» на запрос"));
       } else {
          chat = chats.findDirect(buyerId, shop.getId()).orElseGet(() -> createChat(buyerId, shop.getId(), null));
+         if (input.partId() != null) {
+            attachPart(chat, buyerId, input.partId());
+         }
       }
       return view.chat(chat, ChatSide.BUYER, lang);
    }
@@ -148,9 +154,32 @@ public class ChatService {
       card.put("replyId", reply.getId());
       card.put("condition", reply.getCondition() == null ? null : reply.getCondition().name());
       card.put("price", reply.getPrice());
+      card.put("partId", reply.getPartId());
       // о «Есть» покупателю уже пришёл пуш модуля запросов — второй не нужен
       add(chat, Message.reply(chat.getId(), authorId, reply.getMessage(), card, clock.instant()), false);
       return chat.getId();
+   }
+
+   /**
+    * Карточка товара в чате (ТЗ 5.3). Та же карточка подряд второй раз не добавляется — повторное
+    * «Написать» с той же карточки просто открывает чат.
+    */
+   private void attachPart(Chat chat, Long buyerId, Long partId) {
+      Part part = parts.findById(partId)
+            .filter(found -> found.getShopId().equals(chat.getShopId()) && found.isActive())
+            .orElseThrow(() -> new NotFoundException("PART_NOT_FOUND", "Запчасть не найдена"));
+      if (chat.getLastMessageId() != null) {
+         Message last = messages.findById(chat.getLastMessageId()).orElse(null);
+         if (last != null && last.getType() == MessageType.PART && last.getPayload() != null
+               && partId.equals(((Number) last.getPayload().get("partId")).longValue())) {
+            return;
+         }
+      }
+      Map<String, Object> card = new LinkedHashMap<>();
+      card.put("partId", part.getId());
+      card.put("price", part.getPrice());
+      card.put("mediaId", part.getPhotoIds().isEmpty() ? null : part.getPhotoIds().get(0));
+      add(chat, Message.part(chat.getId(), buyerId, part.getTitle(), card, clock.instant()), true);
    }
 
    /** Новый чат начинается с плашки «Оплата в боксе при осмотре». Гонку двух созданий ловит UNIQUE. */
@@ -314,7 +343,7 @@ public class ChatService {
       if (existing != null) {
          return existing;
       }
-      ChatMediaStorage.Stored stored = media.store(file, type);
+      ChatAttachments.Stored stored = media.store(file, type);
       return tx.execute(status -> {
          ChatAccess.Participant participant = access.requireForUpdate(userId, chatId);
          Chat chat = participant.chat();
