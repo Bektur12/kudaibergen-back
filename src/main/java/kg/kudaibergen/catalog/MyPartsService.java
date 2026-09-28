@@ -34,6 +34,7 @@ import kg.kudaibergen.shop.entity.ShopMember;
 import kg.kudaibergen.user.entity.Lang;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -140,6 +141,14 @@ public class MyPartsService {
          publish(part);
       }
       return view.detail(part, null, null, lang);
+   }
+
+   /** Черновик из импорта Excel (без фото). Вызывается внутри транзакции импорта, доступ уже проверен. */
+   @Transactional(propagation = Propagation.MANDATORY)
+   public Long createImported(Long shopId, PartInput input) {
+      Part part = new Part(shopId);
+      apply(part, input);
+      return parts.save(part).getId();
    }
 
    /** Сохранение на ходу и правка: null — поле не меняется, пустой список — очистить. */

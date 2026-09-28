@@ -155,6 +155,35 @@ class CatalogIT extends AbstractIntegrationTest {
       assertThat(messages.get(0).get("payload").get("photo").get("thumbUrl").asText()).contains("-320.jpg");
    }
 
+   @Test
+   void импортИзExcelСоздаётЧерновики() throws Exception {
+      String owner = activeShop("+996700700741", "16", 12, "Импорт Камри");
+      byte[] template = mvc.perform(authed(get("/api/v1/my/parts/import/template"), owner)).andReturn()
+            .getResponse().getContentAsByteArray();
+      assertThat(template.length).isPositive();
+
+      org.apache.poi.xssf.usermodel.XSSFWorkbook workbook = new org.apache.poi.xssf.usermodel.XSSFWorkbook(
+            new java.io.ByteArrayInputStream(template));
+      org.apache.poi.ss.usermodel.Row bad = workbook.getSheetAt(0).createRow(3);
+      String[] values = {"Колодки", "Нет такой", "Новое", "900", "", "", "", "Toyota", "", "", ""};
+      for (int i = 0; i < values.length; i++) {
+         bad.createCell(i).setCellValue(values[i]);
+      }
+      ByteArrayOutputStream out = new ByteArrayOutputStream();
+      workbook.write(out);
+      workbook.close();
+
+      JsonNode report = call(authed(multipart("/api/v1/my/parts/import")
+            .file(new MockMultipartFile("file", "parts.xlsx",
+                  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", out.toByteArray())), owner), 200);
+      assertThat(report.get("created").asInt()).isEqualTo(1);
+      assertThat(report.get("errors").get(0).get("row").asInt()).isEqualTo(4);
+      long partId = report.get("partIds").get(0).asLong();
+      JsonNode draft = call(authed(get("/api/v1/my/parts/" + partId), owner), 200);
+      assertThat(draft.get("status").asText()).isEqualTo("DRAFT");
+      assertThat(draft.get("fitments")).hasSize(2);
+   }
+
    // ─────────────────────── хелперы ───────────────────────
 
    private long uploadPhoto(String token) throws Exception {

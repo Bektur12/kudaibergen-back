@@ -9,12 +9,16 @@ import kg.kudaibergen.catalog.dto.MyPartItemDto;
 import kg.kudaibergen.catalog.dto.MyPartsSummaryDto;
 import kg.kudaibergen.catalog.dto.PartDetailDto;
 import kg.kudaibergen.catalog.dto.PartInput;
+import kg.kudaibergen.catalog.importing.ImportReportDto;
+import kg.kudaibergen.catalog.importing.PartImportService;
 import kg.kudaibergen.common.i18n.Langs;
 import kg.kudaibergen.common.idempotency.Idempotent;
 import kg.kudaibergen.common.security.AuthPrincipal;
 import kg.kudaibergen.common.web.CursorPage;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -27,6 +31,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 /** Каталог продавца (вкладка «Товары», экраны 24–26): владелец и сотрудники бокса. */
 @RestController
@@ -35,9 +40,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class MyPartsController {
 
    private final MyPartsService parts;
+   private final PartImportService importer;
 
-   public MyPartsController(MyPartsService parts) {
+   public MyPartsController(MyPartsService parts, PartImportService importer) {
       this.parts = parts;
+      this.importer = importer;
    }
 
    @GetMapping("/my/parts")
@@ -50,6 +57,28 @@ public class MyPartsController {
                                          @Parameter(hidden = true) @RequestHeader(
                                                value = HttpHeaders.ACCEPT_LANGUAGE, required = false) String language) {
       return parts.list(principal.userId(), filter, q, cursor, limit, Langs.fromHeader(language));
+   }
+
+   @GetMapping(value = "/my/parts/import/template",
+         produces = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+   @Operation(summary = "Шаблон Excel для загрузки каталога",
+         description = "Лист «Запчасти» с примером и лист «Справочник»: категории, состояния, марки")
+   public ResponseEntity<byte[]> importTemplate(@Parameter(hidden = true) @RequestHeader(
+         value = HttpHeaders.ACCEPT_LANGUAGE, required = false) String language) {
+      return ResponseEntity.ok()
+            .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"kudaibergen-parts.xlsx\"")
+            .body(importer.template(Langs.fromHeader(language)));
+   }
+
+   @PostMapping(value = "/my/parts/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+   @Operation(summary = "Загрузить каталог из Excel", description = """
+         .xlsx по шаблону, до 500 запчастей и 5 МБ. Строка — запчасть; строка без названия, но с маркой —
+         ещё одна машина для запчасти выше. Создаются черновики: фото добавляются в приложении, потом «Опубликовать».
+         Ошибочные строки пропускаются и перечисляются в errors с номером строки.""")
+   @ApiResponse(responseCode = "400", description = "BAD_EXCEL, TOO_MANY_ROWS, FILE_TOO_LARGE")
+   public ImportReportDto importXlsx(@AuthenticationPrincipal AuthPrincipal principal,
+                                     @RequestParam MultipartFile file) {
+      return importer.importXlsx(principal.userId(), file);
    }
 
    @GetMapping("/my/parts/summary")
