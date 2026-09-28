@@ -4,6 +4,7 @@ import java.nio.charset.StandardCharsets;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import kg.kudaibergen.support.FakeCentrifugo;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -22,7 +23,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 
 /**
  * Контейнеры поднимаются один раз на весь прогон (singleton), контекст Spring кэшируется
- * между классами. Kafka и MinIO добавятся вместе со своими модулями.
+ * между классами. Centrifugo — заглушка Server API (FakeCentrifugo), Kafka и MinIO добавятся вместе
+ * со своими модулями.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -30,10 +32,13 @@ public abstract class AbstractIntegrationTest {
 
    static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine");
    static final GenericContainer<?> REDIS = new GenericContainer<>("redis:7-alpine").withExposedPorts(6379);
+   /** Заглушка Server API Centrifugo на весь прогон: один контекст Spring на все тесты. */
+   protected static final FakeCentrifugo CENTRIFUGO = new FakeCentrifugo();
 
    static {
       POSTGRES.start();
       REDIS.start();
+      CENTRIFUGO.start();
    }
 
    @Autowired
@@ -52,6 +57,7 @@ public abstract class AbstractIntegrationTest {
       registry.add("spring.datasource.password", POSTGRES::getPassword);
       registry.add("spring.data.redis.host", REDIS::getHost);
       registry.add("spring.data.redis.port", () -> REDIS.getMappedPort(6379));
+      registry.add("app.centrifugo.api-url", CENTRIFUGO::apiUrl);
    }
 
    // ─────────────────────── хелперы ───────────────────────

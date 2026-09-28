@@ -145,6 +145,12 @@ public class Shop {
       blockReason = null;
    }
 
+   /** Пересчёт после нового отзыва: средняя с одним знаком после запятой. */
+   public void updateRating(BigDecimal rating, int reviewsCount) {
+      this.rating = rating;
+      this.reviewsCount = reviewsCount;
+   }
+
    public boolean isActive() {
       return status == ShopStatus.ACTIVE;
    }

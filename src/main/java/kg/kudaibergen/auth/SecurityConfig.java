@@ -31,6 +31,8 @@ public class SecurityConfig {
          "/api/v1/models/**",
          // логотипы марок из design/assets/brands, отдаются как статика
          "/assets/**",
+         // dev: вложения чата из локальной папки (app.media.storage=local), имена — UUID
+         "/media/**",
          "/api/v1/categories/**",
          "/api/v1/parts/**",
          "/api/v1/shops/**",

@@ -1,0 +1,26 @@
+{
+  "client": {
+    "allowed_origins": ["*"]
+  },
+  "channel": {
+    "namespaces": [
+      {
+        "name": "chat",
+        "presence": true,
+        "join_leave": true,
+        "history_size": 100,
+        "history_ttl": "600s",
+        "force_recovery": true,
+        "allow_publish_for_subscriber": true
+      },
+      {
+        "name": "inbox",
+        "presence": true,
+        "history_size": 50,
+        "history_ttl": "600s",
+        "force_recovery": true,
+        "allow_user_limited_channels": true
+      }
+    ]
+  }
+}

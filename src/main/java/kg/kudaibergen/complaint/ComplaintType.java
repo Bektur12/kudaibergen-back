@@ -6,5 +6,7 @@ public enum ComplaintType {
    SHOP,
    PART,
    PHOTO,
-   REVIEW
+   REVIEW,
+   /** «Пожаловаться» из меню чата. */
+   CHAT
 }

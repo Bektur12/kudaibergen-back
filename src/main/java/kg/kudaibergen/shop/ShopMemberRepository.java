@@ -1,5 +1,6 @@
 package kg.kudaibergen.shop;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -13,6 +14,8 @@ public interface ShopMemberRepository extends JpaRepository<ShopMember, ShopMemb
    Optional<ShopMember> findByUserId(Long userId);
 
    List<ShopMember> findByShopIdOrderByCreatedAtAsc(Long shopId);
+
+   List<ShopMember> findByShopIdIn(Collection<Long> shopIds);
 
    long countByShopIdAndRole(Long shopId, MemberRole role);
 }

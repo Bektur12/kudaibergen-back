@@ -33,5 +33,12 @@ public interface ShopRepository extends JpaRepository<Shop, Long> {
                      @Param("categoryId") Long categoryId, @Param("rowId") Long rowId, @Param("query") String query,
                      Pageable page);
 
+   /**
+    * Кому может уйти запрос по марке: действующий магазин, тумблер «Бокс закрыт» выключен.
+    * Часы работы и ряд/бокс досматривает модуль requests.
+    */
+   @Query("select s from Shop s where s.status = :status and s.open = true and :brandId member of s.brandIds")
+   List<Shop> findReceiving(@Param("status") ShopStatus status, @Param("brandId") Long brandId);
+
    List<Shop> findByStatusOrderByCreatedAtAsc(ShopStatus status, Pageable page);
 }

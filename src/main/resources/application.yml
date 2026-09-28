@@ -18,7 +18,8 @@ spring:
       hibernate:
         jdbc:
           batch_size: 50
-          time_zone: UTC
+          # time_zone не задаём: Instant и так пишется в UTC, а с time_zone Hibernate сдвигает
+          # LocalTime часов работы на пояс JVM (08:00 в Бишкеке ложилось в базу как 02:00)
         order_inserts: true
   flyway:
     enabled: true
@@ -26,6 +27,11 @@ spring:
   jackson:
     # null-поля оставляем в ответе: клиент рассчитывает на "debugCode": null и т.п.
     default-property-inclusion: always
+  servlet:
+    # фото, голосовые и видео в чате
+    multipart:
+      max-file-size: 100MB
+      max-request-size: 100MB
   threads:
     virtual:
       enabled: true
@@ -76,6 +82,38 @@ app:
   market:
     # ссылка в QR-наклейках рядов и контейнеров; приложение ловит её как deep link
     qr-base-url: ${QR_BASE_URL:https://kudaibergen.kg/qr/}
+  requests:
+    # на покупателя: открытых одновременно и новых за сутки
+    max-open: 10
+    max-per-day: 20
+    # нет ни одного «Есть» — пуш и экран «Пока никто не ответил»
+    no-reply-after: 30m
+    # без действий — статус EXPIRED
+    expire-after: 7d
+    # продавец может изменить ответ, дальше — только в чате
+    reply-edit-window: 10m
+  centrifugo:
+    # Server API: публикация событий чата и presence («в сети»)
+    api-url: ${CENTRIFUGO_API_URL:http://localhost:8000/api}
+    api-key: ${CENTRIFUGO_API_KEY:change-me-centrifugo-api-key}
+    # HMAC-ключ токенов подключения и подписки клиента — не путать с app.jwt.secret
+    token-secret: ${CENTRIFUGO_TOKEN_SECRET:change-me-centrifugo-secret-32-bytes-min}
+    token-ttl: 1h
+  media:
+    # local — папка на диске, отдаётся по /media/** (dev); s3 — приватный бакет MinIO/S3 + presigned-ссылки
+    storage: ${MEDIA_STORAGE:local}
+    upload-dir: ${MEDIA_UPLOAD_DIR:uploads}
+    s3:
+      endpoint: ${S3_ENDPOINT:http://localhost:9000}
+      access-key: ${S3_ACCESS_KEY:}
+      secret-key: ${S3_SECRET_KEY:}
+      bucket: ${S3_BUCKET:kudaibergen}
+      region: ${S3_REGION:us-east-1}
+      presign-ttl: 24h
+    max-photo-size: 10MB
+    max-voice-size: 15MB
+    max-video-size: 100MB
+    max-voice-seconds: 60
   fcm:
     enabled: ${FCM_ENABLED:false}
     credentials-path: ${FCM_CREDENTIALS:}

@@ -11,6 +11,10 @@ import com.google.auth.oauth2.GoogleCredentials;
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.FirebaseOptions;
 import com.google.firebase.messaging.FirebaseMessaging;
+import com.google.firebase.messaging.AndroidConfig;
+import com.google.firebase.messaging.AndroidNotification;
+import com.google.firebase.messaging.ApnsConfig;
+import com.google.firebase.messaging.Aps;
 import com.google.firebase.messaging.FirebaseMessagingException;
 import com.google.firebase.messaging.MulticastMessage;
 import com.google.firebase.messaging.Notification;
@@ -66,6 +70,8 @@ public class FcmPushSender implements PushSender {
                      .setBody(message.body())
                      .build())
                .putAllData(message.data())
+               .setAndroidConfig(android(message))
+               .setApnsConfig(apns(message))
                .build();
          try {
             var response = FirebaseMessaging.getInstance().sendEachForMulticast(multicast);
@@ -76,5 +82,27 @@ public class FcmPushSender implements PushSender {
             throw new IllegalStateException("Ошибка отправки пуша через FCM", ex);
          }
       }
+   }
+
+   private static AndroidConfig android(PushMessage message) {
+      AndroidNotification.Builder notification = AndroidNotification.builder();
+      if (message.sound()) {
+         notification.setSound("default");
+      }
+      if (message.category() != null) {
+         notification.setClickAction(message.category());
+      }
+      return AndroidConfig.builder().setNotification(notification.build()).build();
+   }
+
+   private static ApnsConfig apns(PushMessage message) {
+      Aps.Builder aps = Aps.builder();
+      if (message.sound()) {
+         aps.setSound("default");
+      }
+      if (message.category() != null) {
+         aps.setCategory(message.category());
+      }
+      return ApnsConfig.builder().setAps(aps.build()).build();
    }
 }
