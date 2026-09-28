@@ -30,6 +30,11 @@ class ChatAttachmentsTest {
       public void put(String key, InputStream content, long size, String contentType) {
          saved.add(key);
       }
+
+      @Override
+      public void delete(String key) {
+         saved.remove(key);
+      }
    }, new AppProperties(null, null, null, null, null, null, null, new AppProperties.Media("local", "uploads", null,
          DataSize.ofBytes(10), DataSize.ofMegabytes(15), DataSize.ofMegabytes(100), 60)));
 

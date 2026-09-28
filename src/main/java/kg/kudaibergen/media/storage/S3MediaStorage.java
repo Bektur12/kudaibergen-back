@@ -8,6 +8,7 @@ import java.util.concurrent.TimeUnit;
 import io.minio.GetPresignedObjectUrlArgs;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
+import io.minio.RemoveObjectArgs;
 import io.minio.http.Method;
 import kg.kudaibergen.common.config.AppProperties;
 import org.slf4j.Logger;
@@ -76,6 +77,16 @@ public class S3MediaStorage implements MediaStorage {
       } catch (Exception e) {
          log.error("Не удалось подписать ссылку на {}: {}", key, e.getMessage());
          return null;
+      }
+   }
+
+   @Override
+   public void delete(String key) {
+      try {
+         client.removeObject(RemoveObjectArgs.builder().bucket(s3.bucket()).object(key).build());
+         urlCache.remove(key);
+      } catch (Exception e) {
+         throw new IllegalStateException("Не удалось удалить объект " + key, e);
       }
    }
 

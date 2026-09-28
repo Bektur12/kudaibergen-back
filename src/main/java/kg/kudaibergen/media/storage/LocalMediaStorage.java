@@ -28,6 +28,19 @@ public class LocalMediaStorage implements MediaStorage {
    }
 
    @Override
+   public void delete(String key) {
+      Path target = root.resolve(key).normalize();
+      if (!target.startsWith(root)) {
+         throw new IllegalArgumentException("Ключ вне папки хранилища: " + key);
+      }
+      try {
+         Files.deleteIfExists(target);
+      } catch (IOException e) {
+         throw new UncheckedIOException("Не удалось удалить файл " + key, e);
+      }
+   }
+
+   @Override
    public void put(String key, InputStream content, long size, String contentType) {
       Path target = root.resolve(key).normalize();
       if (!target.startsWith(root)) {

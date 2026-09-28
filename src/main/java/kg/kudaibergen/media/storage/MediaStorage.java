@@ -14,4 +14,7 @@ public interface MediaStorage {
 
    /** Кладёт объект под ключом. Ключи — UUID, содержимое по ключу не меняется. */
    void put(String key, InputStream content, long size, String contentType);
+
+   /** Удалить объект; нет такого — не ошибка. Ошибка хранилища — исключение (повторим позже). */
+   void delete(String key);
 }

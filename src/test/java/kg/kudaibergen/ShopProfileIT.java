@@ -6,6 +6,7 @@ import java.io.ByteArrayOutputStream;
 import javax.imageio.ImageIO;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import kg.kudaibergen.media.MediaCleanupJob;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -77,6 +78,24 @@ class ShopProfileIT extends AbstractIntegrationTest {
       assertThat(profileMe.get("avatarUrl").asText()).contains("-320.jpg");
       // чужое фото аватаром поставить нельзя
       call(authed(jsonPut("/api/v1/my/shop/avatar", "{\"mediaId\":" + me + "}"), owner), 400);
+   }
+
+   @Autowired
+   MediaCleanupJob cleanup;
+
+   @Test
+   void неприкреплённыеФотоУдаляютсяЧерезСутки() throws Exception {
+      String user = accessToken("+996700800820", "BUYER");
+      long orphan = upload(user, "PART");
+      long avatar = upload(user, "AVATAR");
+      call(authed(patch("/api/v1/me").contentType("application/json")
+            .content("{\"avatarMediaId\":" + avatar + "}"), user), 200);
+      jdbc.update("update media set created_at = now() - interval '2 days' where id in (?, ?)", orphan, avatar);
+
+      cleanup.cleanup();
+
+      assertThat(jdbc.queryForObject("select count(*) from media where id = ?", Integer.class, orphan)).isZero();
+      assertThat(jdbc.queryForObject("select count(*) from media where id = ?", Integer.class, avatar)).isEqualTo(1);
    }
 
    private long upload(String token, String purpose) throws Exception {
