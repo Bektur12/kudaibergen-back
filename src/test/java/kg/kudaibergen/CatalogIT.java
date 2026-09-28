@@ -116,6 +116,11 @@ class CatalogIT extends AbstractIntegrationTest {
             .content("{\"price\":4300}"), staff), 200);
       assertThat(call(authed(delete("/api/v1/parts/" + partId), staff), 403).get("code").asText())
             .isEqualTo("OWNER_ONLY");
+
+      // у покупателя запчасть в избранном: «закончилось» и «подешевело» (пуши после коммита, асинхронно)
+      long buyerId = call(authed(get("/api/v1/me"), buyer), 200).get("id").asLong();
+      awaitKey("fav:OUT_OF_STOCK:" + partId + ":" + buyerId);
+      awaitKey("fav:PRICE_DROP:" + partId + ":" + buyerId);
       call(authed(delete("/api/v1/parts/" + partId), owner), 204);
       call(get("/api/v1/parts/" + partId), 404);
    }
@@ -185,6 +190,14 @@ class CatalogIT extends AbstractIntegrationTest {
    }
 
    // ─────────────────────── хелперы ───────────────────────
+
+   /** Пуши уходят асинхронно после коммита — ждём отметку о рассылке. */
+   private void awaitKey(String key) throws InterruptedException {
+      for (int i = 0; i < 50 && !Boolean.TRUE.equals(redis.hasKey(key)); i++) {
+         Thread.sleep(100);
+      }
+      assertThat(redis.hasKey(key)).as(key).isTrue();
+   }
 
    private long uploadPhoto(String token) throws Exception {
       ByteArrayOutputStream png = new ByteArrayOutputStream();

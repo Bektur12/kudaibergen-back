@@ -102,6 +102,13 @@ class CatalogRulesTest {
       assertThat(CatalogView.years(null, null, Lang.RU)).isEmpty();
    }
 
+   @Test
+   void ценаВПушеСПробеламиТысяч() {
+      assertThat(FavoritePartNotifier.price(3200)).isEqualTo("3 200");
+      assertThat(FavoritePartNotifier.price(950)).isEqualTo("950");
+      assertThat(FavoritePartNotifier.price(1250000)).isEqualTo("1 250 000");
+   }
+
    private static CarFilter car(long brand, Long model, int year) {
       return new CarFilter(brand, model, year, "car");
    }

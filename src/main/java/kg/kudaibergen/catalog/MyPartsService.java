@@ -32,6 +32,7 @@ import kg.kudaibergen.shop.ShopMemberRepository;
 import kg.kudaibergen.shop.entity.Shop;
 import kg.kudaibergen.shop.entity.ShopMember;
 import kg.kudaibergen.user.entity.Lang;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -68,11 +69,12 @@ public class MyPartsService {
    private final MediaService media;
    private final CategoryService categories;
    private final VehicleDirectory directory;
+   private final ApplicationEventPublisher events;
    private final Clock clock;
 
    public MyPartsService(PartRepository parts, CatalogView view, PartSearch search, ShopAccess access,
                          ShopMemberRepository members, MediaService media, CategoryService categories,
-                         VehicleDirectory directory, Clock clock) {
+                         VehicleDirectory directory, ApplicationEventPublisher events, Clock clock) {
       this.parts = parts;
       this.view = view;
       this.search = search;
@@ -81,6 +83,7 @@ public class MyPartsService {
       this.media = media;
       this.categories = categories;
       this.directory = directory;
+      this.events = events;
       this.clock = clock;
    }
 
@@ -155,9 +158,18 @@ public class MyPartsService {
    @Transactional
    public PartDetailDto update(Long userId, Long partId, PartInput input, Lang lang) {
       Part part = own(userId, partId, true);
+      Integer oldPrice = part.getPrice();
+      boolean wasInStock = part.inStock();
       apply(part, input);
       if (part.isActive()) {
          requireComplete(part);
+         // пуши тем, у кого в избранном (ТЗ 5.5) — после коммита
+         if (oldPrice != null && part.getPrice() < oldPrice) {
+            events.publishEvent(new PartEvents.PriceDropped(part.getId(), oldPrice, part.getPrice()));
+         }
+         if (wasInStock && !part.inStock()) {
+            events.publishEvent(new PartEvents.OutOfStock(part.getId()));
+         }
       }
       return view.detail(part, null, null, lang);
    }

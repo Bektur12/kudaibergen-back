@@ -38,6 +38,12 @@ public class FavoritePartRepository {
             Map.of("userId", userId, "partIds", partIds), Long.class));
    }
 
+   /** Кто держит запчасть в избранном — для «подешевело» и «закончилось». */
+   public List<Long> usersWhoFavorited(Long partId) {
+      return jdbc.queryForList("select user_id from favorite_parts where part_id = :partId",
+            Map.of("partId", partId), Long.class);
+   }
+
    /** Новые сверху, не больше 200. */
    public List<Long> favoritesOf(Long userId) {
       return jdbc.queryForList(
