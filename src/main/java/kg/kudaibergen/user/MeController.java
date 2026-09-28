@@ -5,11 +5,14 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import kg.kudaibergen.common.security.AuthPrincipal;
 import kg.kudaibergen.user.dto.ChangeRoleRequest;
+import kg.kudaibergen.media.MediaService;
 import kg.kudaibergen.user.dto.MeResponse;
+import kg.kudaibergen.user.entity.User;
 import kg.kudaibergen.user.dto.SettingsResponse;
 import kg.kudaibergen.user.dto.UpdateMeRequest;
 import kg.kudaibergen.user.dto.UpdateSettingsRequest;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -24,21 +27,34 @@ public class MeController {
 
    private final UserService userService;
 
-   public MeController(UserService userService) {
+   private final MediaService media;
+
+   public MeController(UserService userService, MediaService media) {
       this.userService = userService;
+      this.media = media;
+   }
+
+   @DeleteMapping("/avatar")
+   @Operation(summary = "Убрать аватар", description = "Клиент рисует первую букву имени")
+   public MeResponse removeAvatar(@AuthenticationPrincipal AuthPrincipal principal) {
+      return me(userService.removeAvatar(principal.userId()));
+   }
+
+   private MeResponse me(User user) {
+      return MeResponse.of(user, media.thumbUrl(user.getAvatarMediaId()));
    }
 
    @GetMapping
    @Operation(summary = "Профиль текущего пользователя", description = "Экраны 05, 19, 21")
    public MeResponse me(@AuthenticationPrincipal AuthPrincipal principal) {
-      return MeResponse.of(userService.getRequired(principal.userId()));
+      return me(userService.getRequired(principal.userId()));
    }
 
    @PatchMapping
-   @Operation(summary = "Изменить имя и язык интерфейса", description = "Экран 19: RU / KG")
+   @Operation(summary = "Изменить имя, язык и аватар", description = "Экран 19: RU / KG; avatarMediaId — из POST /media/photos")
    public MeResponse update(@AuthenticationPrincipal AuthPrincipal principal,
                             @Valid @RequestBody UpdateMeRequest request) {
-      return MeResponse.of(userService.updateProfile(principal.userId(), request));
+      return me(userService.updateProfile(principal.userId(), request));
    }
 
    @PutMapping("/role")
@@ -46,7 +62,7 @@ public class MeController {
          description = "Экран 03, а также «Я продавец — открыть бокс» (19) и «Перейти в режим покупателя» (21)")
    public MeResponse changeRole(@AuthenticationPrincipal AuthPrincipal principal,
                                 @Valid @RequestBody ChangeRoleRequest request) {
-      return MeResponse.of(userService.changeRole(principal.userId(), request.role()));
+      return me(userService.changeRole(principal.userId(), request.role()));
    }
 
    @GetMapping("/settings")

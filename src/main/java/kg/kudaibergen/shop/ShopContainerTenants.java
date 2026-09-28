@@ -2,9 +2,11 @@ package kg.kudaibergen.shop;
 
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import kg.kudaibergen.market.ContainerTenants;
+import kg.kudaibergen.media.MediaService;
 import kg.kudaibergen.shop.entity.Shop;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,19 +19,24 @@ import org.springframework.transaction.annotation.Transactional;
 public class ShopContainerTenants implements ContainerTenants {
 
    private final ShopRepository shops;
+   private final MediaService media;
 
-   public ShopContainerTenants(ShopRepository shops) {
+   public ShopContainerTenants(ShopRepository shops, MediaService media) {
       this.shops = shops;
+      this.media = media;
    }
 
    @Override
    @Transactional(readOnly = true)
    public Map<Long, Tenant> byContainers(Collection<Long> containerIds) {
       Map<Long, Tenant> result = new HashMap<>();
-      for (Shop shop : shops.findOccupying(containerIds)) {
+      List<Shop> occupying = shops.findOccupying(containerIds);
+      Map<Long, String> avatars = media.thumbUrls(occupying.stream().map(Shop::getAvatarMediaId).toList());
+      for (Shop shop : occupying) {
          boolean visible = shop.isActive();
          if (containerIds.contains(shop.getContainerId())) {
-            result.put(shop.getContainerId(), visible ? new Tenant(shop.getId(), shop.getName(), null) : HIDDEN);
+            result.put(shop.getContainerId(), visible ? new Tenant(shop.getId(), shop.getName(),
+                  avatars.get(shop.getAvatarMediaId())) : HIDDEN);
          }
          if (shop.getPendingContainerId() != null && containerIds.contains(shop.getPendingContainerId())) {
             result.put(shop.getPendingContainerId(), HIDDEN);

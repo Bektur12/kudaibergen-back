@@ -2,6 +2,7 @@ package kg.kudaibergen.shop.dto;
 
 import java.time.DayOfWeek;
 import java.time.LocalTime;
+import java.util.List;
 import java.util.Set;
 
 import jakarta.validation.constraints.NotBlank;
@@ -65,5 +66,13 @@ public final class ShopRequests {
 
    public record SmsConfirm(
          @NotBlank @Pattern(regexp = "\\d{4}", message = "Код состоит из 4 цифр") String code) {
+   }
+
+   /** Ссылка на загруженное фото (POST /media/photos). */
+   public record MediaRef(@NotNull(message = "Загрузите фото") Long mediaId) {
+   }
+
+   /** Новый порядок фото места: все id. */
+   public record PhotoOrder(@NotEmpty(message = "Передайте фото") List<Long> mediaIds) {
    }
 }

@@ -5,7 +5,9 @@ import java.time.DayOfWeek;
 import java.time.Instant;
 import java.time.LocalTime;
 import java.util.EnumSet;
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 import jakarta.persistence.CollectionTable;
@@ -18,6 +20,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
+import jakarta.persistence.OrderColumn;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 
@@ -85,6 +88,16 @@ public class Shop {
    @CollectionTable(name = "shop_categories", joinColumns = @JoinColumn(name = "shop_id"))
    @Column(name = "category_id")
    private Set<Long> categoryIds = new HashSet<>();
+
+   @Column(name = "avatar_media_id")
+   private Long avatarMediaId;
+
+   /** Фото места по порядку (id media), первое — «Обложка»; до 8 (экран 22). */
+   @ElementCollection
+   @CollectionTable(name = "shop_photos", joinColumns = @JoinColumn(name = "shop_id"))
+   @OrderColumn(name = "sort")
+   @Column(name = "media_id", nullable = false)
+   private List<Long> photoIds = new ArrayList<>();
 
    @Column(name = "created_at", nullable = false, updatable = false)
    private Instant createdAt = Instant.now();
@@ -261,6 +274,23 @@ public class Shop {
 
    public Set<Long> getCategoryIds() {
       return categoryIds;
+   }
+
+   public Long getAvatarMediaId() {
+      return avatarMediaId;
+   }
+
+   public void setAvatarMediaId(Long avatarMediaId) {
+      this.avatarMediaId = avatarMediaId;
+   }
+
+   public List<Long> getPhotoIds() {
+      return photoIds;
+   }
+
+   public void replacePhotos(List<Long> ids) {
+      photoIds.clear();
+      photoIds.addAll(ids);
    }
 
    public Instant getCreatedAt() {

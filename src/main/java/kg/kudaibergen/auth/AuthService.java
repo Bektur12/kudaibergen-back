@@ -11,6 +11,7 @@ import kg.kudaibergen.auth.sms.SmsProvider;
 import kg.kudaibergen.auth.sms.SmsTexts;
 import kg.kudaibergen.auth.token.RefreshTokenService;
 import kg.kudaibergen.common.config.AppProperties;
+import kg.kudaibergen.media.MediaService;
 import kg.kudaibergen.common.error.ForbiddenException;
 import kg.kudaibergen.common.error.UnauthorizedException;
 import kg.kudaibergen.user.DeviceService;
@@ -40,11 +41,12 @@ public class AuthService {
    private final DeviceService devices;
    private final JwtService jwtService;
    private final RefreshTokenService refreshTokens;
+   private final MediaService media;
    private final boolean exposeCode;
 
    public AuthService(OtpService otpService, SmsProvider smsProvider, UserService userService,
                       UserRepository users, DeviceService devices, JwtService jwtService,
-                      RefreshTokenService refreshTokens, AppProperties properties) {
+                      RefreshTokenService refreshTokens, MediaService media, AppProperties properties) {
       this.otpService = otpService;
       this.smsProvider = smsProvider;
       this.userService = userService;
@@ -52,6 +54,7 @@ public class AuthService {
       this.devices = devices;
       this.jwtService = jwtService;
       this.refreshTokens = refreshTokens;
+      this.media = media;
       this.exposeCode = properties.otp().exposeCode();
    }
 
@@ -119,7 +122,8 @@ public class AuthService {
 
    private TokenResponse tokens(User user) {
       return new TokenResponse(jwtService.generateAccessToken(user), refreshTokens.issue(user.getId()),
-            jwtService.accessTtlSeconds(), !user.isOnboarded(), MeResponse.of(user));
+            jwtService.accessTtlSeconds(), !user.isOnboarded(),
+            MeResponse.of(user, media.thumbUrl(user.getAvatarMediaId())));
    }
 
    private static void ensureNotBlocked(User user) {

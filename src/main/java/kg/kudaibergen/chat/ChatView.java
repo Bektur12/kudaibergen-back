@@ -112,7 +112,8 @@ public class ChatView {
       long unread = unread(List.of(chat), mySide).getOrDefault(chat.getId(), 0L);
       ChatSide other = mySide.other();
       return new ChatDto(chat.getId(), mySide, shopMapper.card(shop),
-            new ChatDto.BuyerDto(chat.getBuyerId(), buyer == null ? null : buyer.getName()),
+            new ChatDto.BuyerDto(chat.getBuyerId(), buyer == null ? null : buyer.getName(),
+                  buyer == null ? null : photos.thumbUrl(buyer.getAvatarMediaId())),
             pinned(chat, lang), online, lastSeenAt, chat.isBlockedBy(mySide), chat.isBlockedBy(other),
             canWrite(chat, shop), unread, chat.readMessageId(other), ChatChannels.chat(chat.getId()));
    }
@@ -161,24 +162,32 @@ public class ChatView {
       Map<String, Set<Long>> presence = presence(inboxes(counterpartUsers.values().stream()
             .flatMap(Collection::stream).distinct().toList()));
 
+      List<Long> avatarIds = new ArrayList<>();
+      shopsById.values().forEach(shop -> avatarIds.add(shop.getAvatarMediaId()));
+      buyers.values().forEach(buyer -> avatarIds.add(buyer.getAvatarMediaId()));
+      Map<Long, String> avatars = photos.thumbUrls(avatarIds);
+
       List<ChatListItemDto> rows = new ArrayList<>(page.size());
       for (Chat chat : page) {
          Shop shop = shopsById.get(chat.getShopId());
          PartRequest request = chat.getRequestId() == null ? null : requestsById.get(chat.getRequestId());
          String title;
          String subtitle;
+         String avatarUrl;
          if (mySide == ChatSide.BUYER) {
             LocationDto location = shopMapper.location(shop.getContainerId());
             String place = location.rowLabel() + " · Бокс " + location.number();
             title = shop.getName();
             subtitle = request == null ? place : request.getText() + " · " + place;
+            avatarUrl = avatars.get(shop.getAvatarMediaId());
          } else {
             User buyer = buyers.get(chat.getBuyerId());
             title = buyer == null || buyer.getName() == null ? ChatTexts.buyer(lang) : buyer.getName();
             subtitle = request == null ? null : request.getText() + " · " + requestMapper.car(request).label();
+            avatarUrl = buyer == null ? null : avatars.get(buyer.getAvatarMediaId());
          }
          Message lastMessage = last.get(chat.getLastMessageId());
-         rows.add(new ChatListItemDto(chat.getId(), mySide, title, null, subtitle, chat.getRequestId(),
+         rows.add(new ChatListItemDto(chat.getId(), mySide, title, avatarUrl, subtitle, chat.getRequestId(),
                request != null && !request.isOpen(), lastMessage == null ? null : lastMessage(lastMessage, mySide),
                unread.getOrDefault(chat.getId(), 0L),
                anyOnline(counterpartUsers.get(chat.getId()), presence), chat.isBlocked(),

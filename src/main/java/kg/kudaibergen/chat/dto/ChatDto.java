@@ -15,8 +15,8 @@ public record ChatDto(Long id, ChatSide mySide, ShopCardDto shop, BuyerDto buyer
                       boolean online, Instant lastSeenAt, boolean blockedByMe, boolean blockedByOther,
                       boolean canWrite, long unread, long otherReadMessageId, String channel) {
 
-   /** Покупатель для продавца: только имя, телефон не показываем (ТЗ 14). null — имя не заполнено. */
-   public record BuyerDto(Long id, String name) {
+   /** Покупатель для продавца: имя и аватар, телефон не показываем (ТЗ 14). null — не заполнено. */
+   public record BuyerDto(Long id, String name, String avatarUrl) {
    }
 
    /** «Стойки передние · Toyota Camry 50 · 2012», open = false — запрос закрыт или истёк. */

@@ -58,6 +58,12 @@ public class Review {
       this.createdAt = now;
    }
 
+   /** Один ответ продавца на отзыв (экран 21). */
+   public void reply(String text, Instant now) {
+      replyText = text;
+      repliedAt = now;
+   }
+
    public Long getId() {
       return id;
    }

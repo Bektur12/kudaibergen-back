@@ -4,9 +4,12 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 
 import kg.kudaibergen.common.config.AppProperties;
@@ -82,6 +85,35 @@ public class MediaService {
          }
       });
       return byId;
+   }
+
+   /** Превью 320 px — для аватаров; null — фото нет. */
+   @Transactional(readOnly = true)
+   public String thumbUrl(Long mediaId) {
+      return mediaId == null ? null : media.findById(mediaId).map(item -> storage.urlFor(item.getKey320())).orElse(null);
+   }
+
+   /** Превью 320 px пачкой: id фото → URL. */
+   @Transactional(readOnly = true)
+   public Map<Long, String> thumbUrls(Collection<Long> mediaIds) {
+      Map<Long, String> urls = new LinkedHashMap<>();
+      photos(mediaIds.stream().filter(Objects::nonNull).distinct().toList())
+            .forEach((id, photo) -> urls.put(id, photo.thumbUrl()));
+      return urls;
+   }
+
+   /**
+    * Фото можно прикрепить: оно есть, загружено для одной из целей purposes и одним из пользователей
+    * owners. Иначе 400 BAD_PHOTO — клиент загружает фото заново.
+    */
+   @Transactional(readOnly = true)
+   public void requireUsable(Collection<Long> mediaIds, Collection<Long> owners, Set<MediaPurpose> purposes) {
+      List<Media> found = media.findAllById(mediaIds);
+      boolean ok = found.size() == new HashSet<>(mediaIds).size() && found.stream()
+            .allMatch(item -> purposes.contains(item.getPurpose()) && owners.contains(item.getOwnerId()));
+      if (!ok) {
+         throw new BadRequestException("BAD_PHOTO", "Фото не найдено — загрузите его заново");
+      }
    }
 
    public PhotoDto dto(Media item) {

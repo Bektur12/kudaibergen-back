@@ -82,6 +82,7 @@ public class CatalogView {
             part.getOemNumber(), part.getSide(), part.getPosition(),
             List.copyOf(media.photos(part.getPhotoIds()).values()), fitments(part.getFitments(), lang), fit,
             !favorites.favoriteAmong(viewerId, List.of(part.getId())).isEmpty(), shopMapper.card(shop),
+            shopMapper.photos(shop, 3),
             part.getPublishedAt(), part.getUpdatedAt());
    }
 

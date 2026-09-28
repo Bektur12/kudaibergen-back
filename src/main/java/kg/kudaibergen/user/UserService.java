@@ -2,8 +2,12 @@ package kg.kudaibergen.user;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
+import java.util.Set;
 
 import kg.kudaibergen.common.error.NotFoundException;
+import kg.kudaibergen.media.MediaPurpose;
+import kg.kudaibergen.media.MediaService;
 import kg.kudaibergen.user.dto.UpdateMeRequest;
 import kg.kudaibergen.user.dto.UpdateSettingsRequest;
 import kg.kudaibergen.user.entity.Lang;
@@ -26,8 +30,10 @@ public class UserService {
 
    private final UserRepository users;
    private final UserSettingsRepository settings;
+   private final MediaService media;
 
-   public UserService(UserRepository users, UserSettingsRepository settings) {
+   public UserService(UserRepository users, UserSettingsRepository settings, MediaService media) {
+      this.media = media;
       this.users = users;
       this.settings = settings;
    }
@@ -58,6 +64,18 @@ public class UserService {
       if (request.lang() != null) {
          user.setLang(request.lang());
       }
+      if (request.avatarMediaId() != null) {
+         media.requireUsable(List.of(request.avatarMediaId()), List.of(userId),
+               Set.of(MediaPurpose.AVATAR, MediaPurpose.SHOP));
+         user.setAvatarMediaId(request.avatarMediaId());
+      }
+      return user;
+   }
+
+   @Transactional
+   public User removeAvatar(Long userId) {
+      User user = getRequired(userId);
+      user.setAvatarMediaId(null);
       return user;
    }
 

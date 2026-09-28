@@ -26,6 +26,9 @@ public class User {
    @Column(length = 120)
    private String name;
 
+   @Column(name = "avatar_media_id")
+   private Long avatarMediaId;
+
    @Enumerated(EnumType.STRING)
    @Column(nullable = false, length = 10)
    private UserRole role = UserRole.BUYER;
@@ -110,6 +113,14 @@ public class User {
 
    public void setName(String name) {
       this.name = name;
+   }
+
+   public Long getAvatarMediaId() {
+      return avatarMediaId;
+   }
+
+   public void setAvatarMediaId(Long avatarMediaId) {
+      this.avatarMediaId = avatarMediaId;
    }
 
    public UserRole getRole() {

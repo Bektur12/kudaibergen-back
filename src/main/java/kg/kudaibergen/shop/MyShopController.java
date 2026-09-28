@@ -12,6 +12,7 @@ import kg.kudaibergen.common.i18n.Langs;
 import kg.kudaibergen.common.security.AuthPrincipal;
 import kg.kudaibergen.shop.dto.MemberDto;
 import kg.kudaibergen.shop.dto.MyShopDto;
+import kg.kudaibergen.shop.dto.ShopPhotoDto;
 import kg.kudaibergen.shop.dto.ShopRequests;
 import kg.kudaibergen.shop.dto.SmsVerificationSentDto;
 import kg.kudaibergen.shop.dto.VerificationDto;
@@ -39,11 +40,14 @@ public class MyShopController {
    private final ShopService shops;
    private final ShopVerificationService verification;
    private final ShopAccess access;
+   private final ShopPhotoService photos;
 
-   public MyShopController(ShopService shops, ShopVerificationService verification, ShopAccess access) {
+   public MyShopController(ShopService shops, ShopVerificationService verification, ShopAccess access,
+                           ShopPhotoService photos) {
       this.shops = shops;
       this.verification = verification;
       this.access = access;
+      this.photos = photos;
    }
 
    @PostMapping("/shops")
@@ -101,6 +105,61 @@ public class MyShopController {
                          @Parameter(hidden = true) @RequestHeader(value = HttpHeaders.ACCEPT_LANGUAGE,
                                required = false) String language) {
       return shops.setOpen(principal.userId(), request.isOpen(), Langs.fromHeader(language));
+   }
+
+   // ─────────────────────── аватар и фото места ───────────────────────
+
+   @PutMapping("/my/shop/avatar")
+   @Operation(summary = "Аватар магазина (22, владелец)", description = "mediaId из POST /media/photos (purpose AVATAR)")
+   public MyShopDto avatar(@AuthenticationPrincipal AuthPrincipal principal,
+                           @Valid @RequestBody ShopRequests.MediaRef request,
+                           @Parameter(hidden = true) @RequestHeader(value = HttpHeaders.ACCEPT_LANGUAGE,
+                                 required = false) String language) {
+      photos.setAvatar(principal.userId(), request.mediaId());
+      return shops.myShop(principal.userId(), Langs.fromHeader(language));
+   }
+
+   @DeleteMapping("/my/shop/avatar")
+   @Operation(summary = "Убрать аватар", description = "Покупатели увидят первую букву названия")
+   public MyShopDto removeAvatar(@AuthenticationPrincipal AuthPrincipal principal,
+                                 @Parameter(hidden = true) @RequestHeader(value = HttpHeaders.ACCEPT_LANGUAGE,
+                                       required = false) String language) {
+      photos.removeAvatar(principal.userId());
+      return shops.myShop(principal.userId(), Langs.fromHeader(language));
+   }
+
+   @GetMapping("/my/shop/photos")
+   @Operation(summary = "Фото места (22)", description = "Первое — «Обложка», до 8")
+   public List<ShopPhotoDto> photos(@AuthenticationPrincipal AuthPrincipal principal) {
+      return photos.mine(principal.userId());
+   }
+
+   @PostMapping("/my/shop/photos")
+   @Operation(summary = "Добавить фото места («Сфотать» / «Из галереи», владелец)",
+         description = "mediaId из POST /media/photos (purpose SHOP). 409 PHOTOS_LIMIT — уже 8")
+   public List<ShopPhotoDto> addPhoto(@AuthenticationPrincipal AuthPrincipal principal,
+                                      @Valid @RequestBody ShopRequests.MediaRef request) {
+      return photos.add(principal.userId(), request.mediaId());
+   }
+
+   @PutMapping("/my/shop/photos/order")
+   @Operation(summary = "Порядок фото (перетаскивание)", description = "Все id фото места в новом порядке")
+   public List<ShopPhotoDto> reorderPhotos(@AuthenticationPrincipal AuthPrincipal principal,
+                                           @Valid @RequestBody ShopRequests.PhotoOrder request) {
+      return photos.reorder(principal.userId(), request.mediaIds());
+   }
+
+   @PostMapping("/my/shop/photos/{mediaId}/cover")
+   @Operation(summary = "Сделать обложкой")
+   public List<ShopPhotoDto> makeCover(@AuthenticationPrincipal AuthPrincipal principal, @PathVariable Long mediaId) {
+      return photos.makeCover(principal.userId(), mediaId);
+   }
+
+   @DeleteMapping("/my/shop/photos/{mediaId}")
+   @Operation(summary = "Удалить фото места")
+   public List<ShopPhotoDto> removePhoto(@AuthenticationPrincipal AuthPrincipal principal,
+                                         @PathVariable Long mediaId) {
+      return photos.remove(principal.userId(), mediaId);
    }
 
    // ─────────────────────── проверка места ───────────────────────

@@ -9,5 +9,7 @@ public record UpdateMeRequest(
       @Size(min = 1, max = 120, message = "Имя от 1 до 120 символов")
       @Pattern(regexp = ".*\\S.*", message = "Имя не может быть пустым")
       String name,
-      Lang lang) {
+      Lang lang,
+      /** Фото из POST /media/photos (purpose AVATAR); убрать — DELETE /me/avatar. */
+      Long avatarMediaId) {
 }

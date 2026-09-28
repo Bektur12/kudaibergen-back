@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import kg.kudaibergen.common.i18n.Langs;
 import kg.kudaibergen.common.security.AuthPrincipal;
+import kg.kudaibergen.media.PhotoDto;
 import kg.kudaibergen.common.web.CursorPage;
 import kg.kudaibergen.shop.dto.ShopCardDto;
 import kg.kudaibergen.shop.dto.ShopPublicDto;
@@ -30,9 +31,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class ShopController {
 
    private final ShopService shops;
+   private final ShopPhotoService photos;
 
-   public ShopController(ShopService shops) {
+   public ShopController(ShopService shops, ShopPhotoService photos) {
       this.shops = shops;
+      this.photos = photos;
    }
 
    @GetMapping("/shops")
@@ -52,6 +55,12 @@ public class ShopController {
                              @Parameter(hidden = true) @RequestHeader(value = HttpHeaders.ACCEPT_LANGUAGE,
                                    required = false) String language) {
       return shops.publicProfile(id, principal == null ? null : principal.userId(), Langs.fromHeader(language));
+   }
+
+   @GetMapping("/shops/{id}/photos")
+   @Operation(summary = "Фото места (вкладка «Фото» на 30)", description = "Первое — обложка")
+   public List<PhotoDto> photos(@PathVariable Long id) {
+      return photos.publicPhotos(id);
    }
 
    @PutMapping("/shops/{id}/favorite")

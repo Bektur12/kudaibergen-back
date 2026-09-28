@@ -4,6 +4,8 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 
+import kg.kudaibergen.catalog.PartRepository;
+import kg.kudaibergen.catalog.entity.PartStatus;
 import kg.kudaibergen.category.Category;
 import kg.kudaibergen.category.CategoryDto;
 import kg.kudaibergen.category.CategoryService;
@@ -12,6 +14,8 @@ import kg.kudaibergen.garage.dto.BrandDto;
 import kg.kudaibergen.garage.entity.Brand;
 import kg.kudaibergen.market.MarketMapService;
 import kg.kudaibergen.market.dto.LocationDto;
+import kg.kudaibergen.media.MediaService;
+import kg.kudaibergen.media.PhotoDto;
 import kg.kudaibergen.shop.dto.MyShopDto;
 import kg.kudaibergen.shop.dto.ShopCardDto;
 import kg.kudaibergen.shop.dto.ShopPublicDto;
@@ -29,32 +33,50 @@ public class ShopMapper {
    private final VehicleDirectory directory;
    private final CategoryService categories;
    private final ShopHours hours;
+   private final MediaService media;
+   private final PartRepository parts;
 
    public ShopMapper(MarketMapService market, VehicleDirectory directory, CategoryService categories,
-                     ShopHours hours) {
+                     ShopHours hours, MediaService media, PartRepository parts) {
       this.market = market;
       this.directory = directory;
       this.categories = categories;
       this.hours = hours;
+      this.media = media;
+      this.parts = parts;
    }
 
    public ShopCardDto card(Shop shop) {
-      return new ShopCardDto(shop.getId(), shop.getName(), null, shop.getRating(), shop.getReviewsCount(),
+      return new ShopCardDto(shop.getId(), shop.getName(), avatarUrl(shop), shop.getRating(), shop.getReviewsCount(),
             location(shop.getContainerId()), hours.state(shop));
    }
 
    public ShopPublicDto publicProfile(Shop shop, boolean favorite, Lang lang) {
-      return new ShopPublicDto(shop.getId(), shop.getName(), null, shop.getRating(), shop.getReviewsCount(),
-            location(shop.getContainerId()), hours.state(shop), brands(shop), categories(shop, lang),
-            shop.isPhoneVisible() ? shop.getPhone() : null, favorite);
+      List<PhotoDto> photos = List.copyOf(media.photos(shop.getPhotoIds()).values());
+      return new ShopPublicDto(shop.getId(), shop.getName(), avatarUrl(shop), shop.getRating(),
+            shop.getReviewsCount(), location(shop.getContainerId()), hours.state(shop), brands(shop),
+            categories(shop, lang), shop.isPhoneVisible() ? shop.getPhone() : null, favorite, photos,
+            new ShopPublicDto.Counts(parts.countByShopIdAndStatus(shop.getId(), PartStatus.ACTIVE), photos.size(),
+                  shop.getReviewsCount()));
    }
 
    public MyShopDto mine(Shop shop, MemberRole role, VerificationDto verification, int staffCount, Lang lang) {
-      return new MyShopDto(shop.getId(), shop.getName(), null, shop.getStatus(), shop.getBlockReason(), role,
+      return new MyShopDto(shop.getId(), shop.getName(), avatarUrl(shop), shop.getStatus(), shop.getBlockReason(), role,
             location(shop.getContainerId()),
             shop.getPendingContainerId() == null ? null : location(shop.getPendingContainerId()),
             verification, hours.state(shop), shop.isOpen(), shop.getPhone(), shop.isPhoneVisible(), shop.getRating(),
-            shop.getReviewsCount(), brands(shop), categories(shop, lang), staffCount);
+            shop.getReviewsCount(), brands(shop), categories(shop, lang), staffCount,
+            List.copyOf(media.photos(shop.getPhotoIds()).values()));
+   }
+
+   /** Аватар — превью 320 px; null — клиент рисует первую букву названия. */
+   public String avatarUrl(Shop shop) {
+      return media.thumbUrl(shop.getAvatarMediaId());
+   }
+
+   /** Первые фото места — блок продавца на карточке запчасти (29). */
+   public List<PhotoDto> photos(Shop shop, int limit) {
+      return List.copyOf(media.photos(shop.getPhotoIds().stream().limit(limit).toList()).values());
    }
 
    public LocationDto location(Long containerId) {
