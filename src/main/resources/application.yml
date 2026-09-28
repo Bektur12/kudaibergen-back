@@ -114,6 +114,13 @@ app:
     max-voice-size: 15MB
     max-video-size: 100MB
     max-voice-seconds: 60
+  ocr:
+    # распознавание номера детали (второй этап): none — выключено, google — Google Cloud Vision
+    provider: ${OCR_PROVIDER:none}
+    google:
+      api-key: ${OCR_GOOGLE_API_KEY:}
+      url: ${OCR_GOOGLE_URL:https://vision.googleapis.com}
+    per-user-hourly: 30
   fcm:
     enabled: ${FCM_ENABLED:false}
     credentials-path: ${FCM_CREDENTIALS:}
