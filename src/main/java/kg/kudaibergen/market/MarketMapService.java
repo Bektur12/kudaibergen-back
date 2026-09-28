@@ -112,9 +112,11 @@ public class MarketMapService {
       List<RowDetailDto.SideDto> sides = new ArrayList<>();
       view.sides().forEach((side, list) -> sides.add(new RowDetailDto.SideDto(side, list.stream()
             .map(c -> {
-               ContainerTenants.Tenant shop = occupied.get(c.container().getId());
+               ContainerTenants.Tenant tenant = occupied.get(c.container().getId());
+               // занято, но магазин покупателю не показывается (на проверке, переезжает) — shopId = null
+               ContainerTenants.Tenant shop = tenant == null || tenant.shopId() == null ? null : tenant;
                return new RowDetailDto.ContainerSlotDto(c.container().getId(), c.container().getNumber(),
-                     shop != null, shop);
+                     tenant != null, shop);
             })
             .toList())));
       return new RowDetailDto(view.row().getId(), view.row().getCode(), view.row().getLabel(), view.row().getType(),
