@@ -6,7 +6,11 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /** Все настройки домена в одном месте (префикс app.*). */
 @ConfigurationProperties(prefix = "app")
-public record AppProperties(Jwt jwt, Otp otp, Sms sms, Fcm fcm) {
+public record AppProperties(Jwt jwt, Otp otp, Sms sms, Fcm fcm, Market market) {
+
+   /** qrBaseUrl — префикс ссылки в QR-наклейках: {qrBaseUrl}{token} открывает приложение. */
+   public record Market(String qrBaseUrl) {
+   }
 
    public record Jwt(String secret, Duration accessTtl, Duration refreshTtl) {
    }

@@ -28,7 +28,7 @@ class RefreshTokenServiceTest {
    void setUp() {
       repository = mock(RefreshTokenRepository.class);
       AppProperties properties = new AppProperties(
-            new AppProperties.Jwt("x".repeat(32), Duration.ofMinutes(15), Duration.ofDays(30)), null, null, null);
+            new AppProperties.Jwt("x".repeat(32), Duration.ofMinutes(15), Duration.ofDays(30)), null, null, null, null);
       service = new RefreshTokenService(repository, properties);
    }
 

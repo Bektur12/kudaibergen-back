@@ -61,6 +61,7 @@ public class SecurityConfig {
                   // гость (ТЗ, раздел 2): карта, маршрут, каталог, карточка товара, профиль магазина.
                   // Токен, если он есть, всё равно разбирается — например, для признака «Подходит».
                   .requestMatchers(HttpMethod.GET, PUBLIC_READ).permitAll()
+                  .requestMatchers(HttpMethod.POST, "/api/v1/market/locate").permitAll()
                   .requestMatchers("/api/v1/admin/**").hasAnyRole("MARKET_ADMIN", "SUPERADMIN")
                   .anyRequest().authenticated())
             .exceptionHandling(handling -> handling

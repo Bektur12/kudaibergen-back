@@ -40,7 +40,7 @@ class JwtServiceTest {
 
    private static JwtService service(String secret) {
       return new JwtService(new AppProperties(
-            new AppProperties.Jwt(secret, Duration.ofMinutes(15), Duration.ofDays(30)), null, null, null));
+            new AppProperties.Jwt(secret, Duration.ofMinutes(15), Duration.ofDays(30)), null, null, null, null));
    }
 
    private static User user(Long id, boolean admin) {

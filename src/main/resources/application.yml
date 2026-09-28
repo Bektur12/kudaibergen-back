@@ -73,6 +73,9 @@ app:
       login: ${SMS_LOGIN:}
       password: ${SMS_PASSWORD:}
       sender: ${SMS_SENDER:Kudaibergen}
+  market:
+    # ссылка в QR-наклейках рядов и контейнеров; приложение ловит её как deep link
+    qr-base-url: ${QR_BASE_URL:https://kudaibergen.kg/qr/}
   fcm:
     enabled: ${FCM_ENABLED:false}
     credentials-path: ${FCM_CREDENTIALS:}
