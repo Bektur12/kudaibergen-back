@@ -1,6 +1,7 @@
 package kg.kudaibergen.auth;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 
 import jakarta.servlet.FilterChain;
@@ -11,6 +12,7 @@ import kg.kudaibergen.common.security.AuthPrincipal;
 import kg.kudaibergen.user.LastSeenTracker;
 import org.springframework.lang.NonNull;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
@@ -37,10 +39,8 @@ public class JwtAuthFilter extends OncePerRequestFilter {
       if (header != null && header.startsWith(PREFIX)
             && SecurityContextHolder.getContext().getAuthentication() == null) {
          try {
-            JwtService.ParsedToken parsed = jwtService.parseAccessToken(header.substring(PREFIX.length()).trim());
-            AuthPrincipal principal = new AuthPrincipal(parsed.userId(), parsed.phone(), parsed.role());
-            var authentication = new UsernamePasswordAuthenticationToken(principal, null,
-                  List.of(new SimpleGrantedAuthority("ROLE_" + parsed.role().name())));
+            AuthPrincipal principal = jwtService.parseAccessToken(header.substring(PREFIX.length()).trim());
+            var authentication = new UsernamePasswordAuthenticationToken(principal, null, authorities(principal));
             authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
             SecurityContextHolder.getContext().setAuthentication(authentication);
             lastSeenTracker.touch(principal.userId());
@@ -49,5 +49,18 @@ public class JwtAuthFilter extends OncePerRequestFilter {
          }
       }
       chain.doFilter(request, response);
+   }
+
+   private static List<GrantedAuthority> authorities(AuthPrincipal principal) {
+      List<GrantedAuthority> authorities = new ArrayList<>();
+      authorities.add(new SimpleGrantedAuthority("ROLE_USER"));
+      // суперадмин может всё, что админ рынка
+      if (principal.isMarketAdmin()) {
+         authorities.add(new SimpleGrantedAuthority("ROLE_MARKET_ADMIN"));
+      }
+      if (principal.isSuperadmin()) {
+         authorities.add(new SimpleGrantedAuthority("ROLE_SUPERADMIN"));
+      }
+      return authorities;
    }
 }

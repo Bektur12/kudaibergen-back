@@ -9,12 +9,8 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 
 /**
- * lastSeenAt раньше обновлялся на WebSocket-дисконнект, но Centrifugo не проксирует события
- * отключения на бэкенд (сознательное ограничение OSS: https://centrifugal.dev/docs/server/proxy —
- * disconnect не поддерживается). Поэтому теперь это "последняя активность по REST" — обновляется
- * на каждый аутентифицированный запрос (см. JwtAuthFilter), с троттлингом, чтобы не писать в БД
- * на каждый чих. Точность отличается от точного момента дисконнекта на несколько минут — для
- * экрана "был(а) в сети недавно" этого достаточно.
+ * «Был в сети»: время последнего аутентифицированного запроса (см. JwtAuthFilter).
+ * Пишем в БД не чаще раза в минуту на пользователя.
  */
 @Component
 public class LastSeenTracker {

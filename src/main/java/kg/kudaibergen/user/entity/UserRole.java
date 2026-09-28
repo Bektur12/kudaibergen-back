@@ -1,6 +1,6 @@
 package kg.kudaibergen.user.entity;
 
-/** Роль пользователя. В БД — нативный enum user_role. */
+/** Текущий режим приложения (экран 03, переключатели на 19 и 21). */
 public enum UserRole {
    BUYER,
    SELLER

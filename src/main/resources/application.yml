@@ -2,39 +2,38 @@ spring:
   application:
     name: kudaibergen-backend
   datasource:
-    url: ${DB_URL:jdbc:postgresql://postgres.railway.internal:5432/railway}
-    username: ${DB_USER:postgres}
-    password: ${DB_PASSWORD:1111}
-    hikari:
-      data-source-properties:
-        # нативные enum-типы Postgres (user_role, request_status, offer_status, verification_status):
-        # драйвер шлёт строки без типа, а Postgres сам приводит их к нужному enum
-        stringtype: unspecified
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/kudaibergen}
+    username: ${DB_USER:kudaibergen}
+    password: ${DB_PASSWORD:kudaibergen}
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
   jpa:
     open-in-view: false
     hibernate:
-      ddl-auto: none
+      ddl-auto: validate
     properties:
       hibernate:
         jdbc:
           batch_size: 50
+          time_zone: UTC
         order_inserts: true
   flyway:
     enabled: true
     locations: classpath:db/migration
   jackson:
-    # null-поля оставляем в ответе: клиент рассчитывает на "repliedAt": null и т.п.
+    # null-поля оставляем в ответе: клиент рассчитывает на "debugCode": null и т.п.
     default-property-inclusion: always
   threads:
     virtual:
       enabled: true
-  servlet:
-    multipart:
-      max-file-size: 100MB
-      max-request-size: 100MB
 
 server:
   port: ${SERVER_PORT:8080}
+  # за балансировщиком: реальный IP клиента из X-Forwarded-For (нужен для rate limit)
+  forward-headers-strategy: native
   error:
     include-message: never
 
@@ -51,56 +50,34 @@ app:
     secret: ${JWT_SECRET:change-me-in-production-please-32-bytes-minimum-secret}
     access-ttl: 15m
     refresh-ttl: 30d
-  sms:
-    provider: ${SMS_PROVIDER:log}       # log | nikita
+  otp:
     code-ttl: 2m
-    max-attempts: 3
-    resend-interval: 1m
-    # в dev-режиме код возвращается в ответе /auth/request-code
+    resend-interval: 42s
+    max-attempts: 5
+    # после max-attempts неверных вводов номер блокируется
+    block-duration: 15m
+    # лимиты отправки: на номер и на IP за окно
+    phone-limit: 5
+    ip-limit: 20
+    limit-window: 1h
+    # ключ HMAC для хэша кода в Redis; по умолчанию берётся JWT_SECRET
+    hash-secret: ${OTP_HASH_SECRET:${JWT_SECRET:change-me-in-production-please-32-bytes-minimum-secret}}
+    # в dev-режиме код возвращается в ответе /auth/otp/send
     expose-code: ${SMS_EXPOSE_CODE:true}
     # тестовый стенд: если задан, все коды входа равны ему (SMS_FIXED_CODE=1111). В проде оставить пустым
     fixed-code: ${SMS_FIXED_CODE:}
+  sms:
+    provider: ${SMS_PROVIDER:log}       # log | nikita
     nikita:
       url: ${SMS_URL:https://smspro.nikita.kg/api/message}
       login: ${SMS_LOGIN:}
       password: ${SMS_PASSWORD:}
       sender: ${SMS_SENDER:Kudaibergen}
-  request:
-    normal-ttl: 24h
-    urgent-ttl: 2h
-    extend-by: 24h
-    daily-limit-per-buyer: 10
-  notification:
-    dispatch-batch-size: 200
-    max-attempts: 5
-    batching-window: 15m
-    batching-threshold: 3
   fcm:
     enabled: ${FCM_ENABLED:false}
     credentials-path: ${FCM_CREDENTIALS:}
-    # содержимое service account JSON целиком (для Railway и т.п., где нет файлов); приоритетнее пути
+    # содержимое service account JSON целиком (для окружений без файлов); приоритетнее пути
     credentials-json: ${FCM_CREDENTIALS_JSON:}
-  media:
-    # local — локальная папка, отдаётся по /media/** (dev); s3 — приватный бакет + presigned-ссылки
-    storage: ${MEDIA_STORAGE:local}
-    upload-dir: ${MEDIA_UPLOAD_DIR:uploads}
-    s3:
-      endpoint: ${AWS_ENDPOINT_URL:}
-      access-key: ${AWS_ACCESS_KEY_ID:}
-      secret-key: ${AWS_SECRET_ACCESS_KEY:}
-      bucket: ${AWS_S3_BUCKET_NAME:}
-      region: ${AWS_DEFAULT_REGION:auto}
-      presign-ttl: 24h
-    max-photo-size: 10MB
-    max-voice-size: 15MB
-    max-video-size: 100MB
-  centrifugo:
-    # Server API (публикация и presence), см. CentrifugoClient
-    api-url: ${CENTRIFUGO_API_URL:http://localhost:8000/api}
-    api-key: ${CENTRIFUGO_API_KEY:change-me-centrifugo-api-key}
-    # HMAC-секрет connection-токена клиента — не путать с app.jwt.secret, это разные ключи
-    token-secret: ${CENTRIFUGO_TOKEN_SECRET:change-me-centrifugo-secret-32-bytes-minimum}
-    token-ttl: 1h
 
 logging:
   level:
