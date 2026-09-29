@@ -1,9 +1,9 @@
 # Сверка BACKEND_SPEC (спецификация по дизайну) с кодом v2
 
 Состояние на 29.09.2026, ветка `v2`. Отмечены только расхождения: что в спецификации сделано так же, здесь не повторяется.
-Пункты 1–7 и 13–16 сделаны (миграции V9–V11) — отмечены ✅.
+Все пункты закрыты: сделаны (✅) или решены не делать (➖). Контракт для фронта — `docs/BACKEND_SPEC.md`, он уже приведён к коду.
 
-## 1. Меняют поведение — нужно решение
+## 1. Меняют поведение
 
 | # | Спецификация | Сейчас в коде | Рекомендация |
 |---|---|---|---|
@@ -14,20 +14,26 @@
 | 5 ✅ | `GET /market/rows/{id}/containers?brandId=` с `state` HAS_SELLER / NO_SELLER и `sellsBrand`, счётчик «продают Toyota: 9» (экран 31) | `GET /market/rows/{id}` отдаёт контейнеры с магазином или null, без марки | **Сделано.** `GET /market/rows/{id}` и `/rows/{id}/containers` с `brandId`: `state`, `sellsBrand`, `brandSellers` |
 | 6 ✅ | Подсветка рядов на карте `GET /market/map/highlight?kind=BRAND\|CATEGORY&id=` (ТЗ 6.1) | — | **Сделано.** Поля спецификации + `containerIds`, `openNowCount`, ближайший бокс по проходам от точки, GPS или входа |
 | 7 ✅ | Статистика продавца `GET /seller/stats?period=` (ТЗ 12) | — | **Сделано.** `GET /my/shop/stats?period=WEEK\|MONTH` (модуль stats): поля спецификации + `answeredNotHave`, `buyersArrived`, `partViews` |
-| 8 | In-app уведомления `Notification(…, readAt)` | Только пуши FCM, списка уведомлений нет | Уточнить, есть ли экран со списком уведомлений; если нет — не делать |
+| 8 ➖ | In-app уведомления `Notification(…, readAt)` | Только пуши FCM | **Не делать**: списка уведомлений в макете нет, экран 14 — только вид пушей. Появится колокольчик с историей — одна миграция |
 
-## 2. Формат и названия — дешёвые правки
+## 2. Формат и названия
 
 | # | Спецификация | Сейчас | Комментарий |
 |---|---|---|---|
-| 9 | ID — UUID | BIGINT | Решено в BACKEND_DESIGN, раздел 0. Менять дорого, фронту всё равно |
-| 10 | Пути `/seller/...`, `/garage/cars` | `/my/...`, `/me/cars` (`/requests/estimate` уже как в спецификации) | Можно добавить алиасы, если фронт уже пишется по спецификации |
-| 11 | Загрузка фото: presign → PUT в MinIO → привязка | Multipart через бэкенд `POST /media/photos` | Сознательно: сервер пережимает фото и удаляет EXIF (ТЗ 14) |
-| 12 | `PartStatus.OUT_OF_STOCK` | «Нет в наличии» = `quantity = 0` при ACTIVE | Фронту удобнее статус — можно отдавать вычисляемым полем |
+| 9 ✅ | ID — UUID | BIGINT | Оставить BIGINT. Чужие данные закрыты проверкой владельца (запрос, статистика запроса, чаты — 404). Для ссылок «Поделиться» — непредсказуемый `publicId` у магазина и запчасти (V12), `GET /shops/public/{publicId}`, `GET /parts/public/{publicId}` |
+| 10 ➖ | Пути `/seller/...`, `/garage/cars` | `/my/...`, `/me/cars` | **Без алиасов**: фронт ещё не написан, спецификация исправлена под `/my/...` и `/me/cars` |
+| 11 ➖ | Загрузка фото: presign → PUT в MinIO → привязка | Multipart через бэкенд `POST /media/photos` | Оставить: сервер пережимает фото и удаляет EXIF (ТЗ 14). Приложение всё равно сжимает до 1080 px перед отправкой (ТЗ 9.2) — записано в спецификации и HANDOFF |
+| 12 ✅ | `PartStatus.OUT_OF_STOCK` | — | **Сделано**: вычисляемое `stockStatus: IN_STOCK\|OUT_OF_STOCK` в карточке, «Мои запчасти» и карточке запчасти вместо `inStock`; счётчики чипов — `GET /my/parts/summary` |
 | 13 ✅ | `side` детали: LEFT / RIGHT / **PAIR** | — | **Сделано** (V11) |
 | 14 ✅ | `Brand.shortName` («Mercedes» в плитке) | — | **Сделано**: `brands.short_name`, `BrandDto.shortName`, ищется наравне с названием |
 | 15 ✅ | Категории-енам с OTHER, FILTERS | Таблица `categories` | **Сделано**: «Другое» (`other`) последней; фильтры — «Фильтры и ТО» (`service`) |
 | 16 ✅ | Подсказки «что нужно» `part_hint`, топ-3 для машины (06) | — | **Сделано**: `part_hints` (12 шт.), `GET /requests/hints?carId=`; `hintId` запроса задаёт категорию и учится на запросах по модели и марке |
-| 17 | Ответ поиска: `currency`, `mainPhoto`, `appliedCar {brand, displayName, year}`, магазин плоско (`row`, `container`, `isOpenNow`) | `photo`, `carLabel`, магазин — `ShopCardDto` (location, open) | Данные те же, форма другая; подстроить при интеграции с фронтом |
-| 18 | `Review.text` | Только звёзды и теги (как в ТЗ 4.5) | Уточнить по макету 09 |
-| 19 | Живые события — STOMP | Centrifugo (решение ТЗ и BACKEND_DESIGN) | Оставить Centrifugo |
+| 17 ✅ | Ответ поиска: `currency`, `mainPhoto`, `appliedCar {brand, displayName, year}`, магазин плоско (`row`, `container`, `isOpenNow`) | — | **Сделано**: `appliedCar`, `currency`, магазин плоско (`ShopBriefDto`); главное фото везде `mainPhoto` (карточка, «Мои запчасти», карточка товара в чате) |
+| 18 ➖ | `Review.text` | Только звёзды и теги | **Без текста**: на экране 09 только звёзды и три тега |
+| 19 ✅ | Живые события — STOMP | Centrifugo | **Оставить Centrifugo**; в спецификации (раздел 11) и HANDOFF — каналы `inbox:{userId}#{userId}`, `chat:{id}` и событие `REQUEST_STATS` |
+
+## 3. Проверки сделанного
+
+- **Пуш об истечении без ответов** ведёт на экран 20: `data.type = NO_REPLY` (с ответами — `REQUEST_EXPIRED` → 32). Тест `RequestRulesTest`.
+- **Счётчик 06б совпадает с рассылкой**: `estimate` и `POST /requests` считаются одним `RecipientFinder`; для CONTAINERS — без фильтра по марке. Тест в `RequestsIT` сравнивает `recipients` с `recipientsCount` для CONTAINERS и MARKET.
+- **Перебор id**: `GET /requests/{id}`, `/stats`, `/replies` — только автор (и суперадмин), остальным 404; чаты — только участники. Профиль магазина и карточка запчасти публичны по смыслу, для ссылок — `publicId`.
