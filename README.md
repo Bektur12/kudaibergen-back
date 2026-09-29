@@ -42,6 +42,29 @@ curl -s -X PUT localhost:8080/api/v1/me/role -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' -d '{"role":"SELLER"}'
 ```
 
+### Локальная база
+
+База должна быть в UTF-8, иначе поиск по-русски молча не работает (в локали C Postgres не переводит
+кириллицу в нижний регистр; при старте в логе будет предупреждение). Для своего Postgres:
+
+```sql
+CREATE DATABASE kudaibergen TEMPLATE template0 ENCODING 'UTF8'
+  LOCALE_PROVIDER icu ICU_LOCALE 'ru-RU' LC_COLLATE 'en_US.UTF-8' LC_CTYPE 'en_US.UTF-8';
+```
+
+### Демо-данные
+
+```bash
+python3 scripts/demo_seed.py --yes   # нужны psycopg2 и Pillow
+```
+
+Удаляет пользователей, магазины, запчасти, запросы, чаты и фото (справочники и схема рынка остаются) и заливает
+живой рынок: 24 магазина по рядам, ~300 запчастей с картинками, историю запросов за месяц с ответами, чатами и
+отзывами, активные запросы для ленты продавцов. Покупатель из макета — Бакыт `+996555123456` (Camry 50 · 2012),
+продавцы — `+996700100001`…`+996700100024` (список печатается в конце). Только для локальной базы.
+
+Проверить запросы ночью: `SHOP_IGNORE_WORKING_HOURS=true` — боксы считаются открытыми в любое время.
+
 ### Переменные окружения
 
 | Переменная | Назначение | По умолчанию |
@@ -54,6 +77,7 @@ curl -s -X PUT localhost:8080/api/v1/me/role -H "Authorization: Bearer $TOKEN" \
 | `SMS_URL`, `SMS_LOGIN`, `SMS_PASSWORD`, `SMS_SENDER` | шлюз nikita.kg | — |
 | `CENTRIFUGO_API_URL`, `CENTRIFUGO_API_KEY` | Server API Centrifugo (чат) | localhost:8000/api, dev-ключ |
 | `CENTRIFUGO_TOKEN_SECRET` | HMAC токенов клиента Centrifugo, тот же в самом Centrifugo | dev-значение, **в проде обязателен** |
+| `SHOP_IGNORE_WORKING_HOURS` | только для разработки: боксы открыты в любое время, запросы доходят и ночью | `false` |
 | `SHOP_VERIFICATION_REQUIRED` | проверять место продавца (QR, SMS арендатора, админ) до того, как магазин начнёт работать | `false` — магазин действует сразу |
 | `OCR_PROVIDER`, `OCR_GOOGLE_API_KEY` | распознавание номера детали: `none` или `google` (Cloud Vision) | `none` |
 | `MEDIA_STORAGE` | вложения чата: `local` или `s3` | `local` |

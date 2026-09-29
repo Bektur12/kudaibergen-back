@@ -2,7 +2,7 @@ spring:
   application:
     name: kudaibergen-backend
   datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:5432/postgres}
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/kudaibergen}
     username: ${DB_USER:postgres}
     password: ${DB_PASSWORD:1111}
   data:
