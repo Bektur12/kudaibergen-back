@@ -229,6 +229,26 @@ class RequestsIT extends AbstractIntegrationTest {
             .param("target", "CONTAINERS").param("containerIds", String.valueOf(containerOf("+996700500542"))),
             seller), 200);
       assertThat(chosen.get("recipients").asInt()).isEqualTo(1);
+
+      // экран 31: у контейнеров ряда — есть ли продавец и продаёт ли он марку
+      JsonNode grid = call(authed(get("/api/v1/market/rows/" + rowId("16") + "/containers")
+            .param("brandId", String.valueOf(brandId("opel"))), seller), 200);
+      assertThat(grid.get("brandSellers").asInt()).isPositive();
+      JsonNode opelSlot = null;
+      JsonNode fordSlot = null;
+      for (JsonNode slot : grid.get("sides").findValues("containers").stream()
+            .flatMap(list -> java.util.stream.StreamSupport.stream(list.spliterator(), false)).toList()) {
+         if (slot.get("id").asLong() == containerOf("+996700500542")) {
+            opelSlot = slot;
+         }
+         if (slot.get("id").asLong() == containerOf("+996700500541")) {
+            fordSlot = slot;
+         }
+      }
+      assertThat(opelSlot.get("state").asText()).isEqualTo("HAS_SELLER");
+      assertThat(opelSlot.get("sellsBrand").asBoolean()).isTrue();
+      assertThat(opelSlot.get("shop").has("brandIds")).isFalse();
+      assertThat(fordSlot.get("sellsBrand").asBoolean()).isFalse();
       JsonNode noRows = call(authed(get("/api/v1/requests/estimate").param("carId", String.valueOf(carId))
             .param("target", "ROWS"), seller), 400);
       assertThat(noRows.get("code").asText()).isEqualTo("ROWS_REQUIRED");

@@ -104,23 +104,30 @@ public class MarketMapService {
       return snapshot().rows().stream().map(RowDto::of).toList();
    }
 
-   public RowDetailDto row(Long rowId) {
+   /** brandId — для экрана 31: какие продавцы ряда торгуют маркой машины. */
+   public RowDetailDto row(Long rowId, Long brandId) {
       MarketSnapshot.RowView view = snapshot().row(rowId)
             .orElseThrow(() -> new NotFoundException("ROW_NOT_FOUND", "Ряд не найден"));
       Map<Long, ContainerTenants.Tenant> occupied = tenantsOf(view.all().stream()
             .map(c -> c.container().getId()).toList());
       List<RowDetailDto.SideDto> sides = new ArrayList<>();
+      int[] brandSellers = {0};
       view.sides().forEach((side, list) -> sides.add(new RowDetailDto.SideDto(side, list.stream()
             .map(c -> {
                ContainerTenants.Tenant tenant = occupied.get(c.container().getId());
                // занято, но магазин покупателю не показывается (на проверке, переезжает) — shopId = null
                ContainerTenants.Tenant shop = tenant == null || tenant.shopId() == null ? null : tenant;
+               Boolean sellsBrand = brandId == null ? null : shop != null && shop.brandIds().contains(brandId);
+               if (Boolean.TRUE.equals(sellsBrand)) {
+                  brandSellers[0]++;
+               }
                return new RowDetailDto.ContainerSlotDto(c.container().getId(), c.container().getNumber(),
-                     tenant != null, shop);
+                     tenant != null, shop == null ? RowDetailDto.ContainerState.NO_SELLER
+                     : RowDetailDto.ContainerState.HAS_SELLER, sellsBrand, shop);
             })
             .toList())));
       return new RowDetailDto(view.row().getId(), view.row().getCode(), view.row().getLabel(), view.row().getType(),
-            sides);
+            sides, brandId == null ? null : brandSellers[0]);
    }
 
    /** Контейнер по id — для модулей shops и requests. */

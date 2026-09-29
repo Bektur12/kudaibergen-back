@@ -4,6 +4,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import kg.kudaibergen.market.ContainerTenants;
 import kg.kudaibergen.media.MediaService;
@@ -36,7 +37,7 @@ public class ShopContainerTenants implements ContainerTenants {
          boolean visible = shop.isActive();
          if (containerIds.contains(shop.getContainerId())) {
             result.put(shop.getContainerId(), visible ? new Tenant(shop.getId(), shop.getName(),
-                  avatars.get(shop.getAvatarMediaId())) : HIDDEN);
+                  avatars.get(shop.getAvatarMediaId()), Set.copyOf(shop.getBrandIds())) : HIDDEN);
          }
          if (shop.getPendingContainerId() != null && containerIds.contains(shop.getPendingContainerId())) {
             result.put(shop.getPendingContainerId(), HIDDEN);
@@ -46,5 +47,5 @@ public class ShopContainerTenants implements ContainerTenants {
    }
 
    /** Место занято, но магазин покупателю не показываем (на проверке, заблокирован, переезжает). */
-   private static final Tenant HIDDEN = new Tenant(null, null, null);
+   private static final Tenant HIDDEN = new Tenant(null, null, null, Set.of());
 }

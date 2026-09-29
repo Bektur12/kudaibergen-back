@@ -61,11 +61,12 @@ public class MarketController {
       return market.rows();
    }
 
-   @GetMapping("/rows/{id}")
-   @Operation(summary = "Контейнеры ряда по сторонам",
-         description = "occupied — место занято магазином (серое на 10а); shop = null — «Нет продавца в приложении»")
-   public RowDetailDto row(@PathVariable Long id) {
-      return market.row(id);
+   @GetMapping({"/rows/{id}", "/rows/{id}/containers"})
+   @Operation(summary = "Контейнеры ряда по сторонам (10а, 15, 31)", description = """
+         occupied — место занято магазином (серое на 10а); shop = null и state = NO_SELLER — «Нет продавца
+         в приложении». С brandId (экран 31): sellsBrand у каждого контейнера и brandSellers — «продают Toyota: 9».""")
+   public RowDetailDto row(@PathVariable Long id, @RequestParam(required = false) Long brandId) {
+      return market.row(id, brandId);
    }
 
    @GetMapping("/search")

@@ -1,7 +1,7 @@
 # Сверка BACKEND_SPEC (спецификация по дизайну) с кодом v2
 
 Состояние на 29.09.2026, ветка `v2`. Отмечены только расхождения: что в спецификации сделано так же, здесь не повторяется.
-Пункты 1–4 сделаны (миграция V9, модуль request) — отмечены ✅.
+Пункты 1–5 сделаны (миграция V9, модули request и market) — отмечены ✅.
 
 ## 1. Меняют поведение — нужно решение
 
@@ -11,7 +11,7 @@
 | 2 ✅ | Адресаты MARKET / ROWS (1–10 рядов) / CONTAINERS (1–30 контейнеров, **без фильтра по марке**), экран 31 | MARKET / ROW / SHOP — по одному ряду или боксу, марка фильтруется всегда | **Сделано.** `target_row_ids`, `target_container_ids`; счётчик — `GET /requests/estimate` → `{recipients, brand}` вместо `POST /requests/recipients-preview` |
 | 3 ✅ | Статистика запроса для покупателя `GET /requests/{id}/stats`: delivered / seen / have / notHave / silent, списки «Есть» и «Нет» (только ряд и контейнер), живое обновление | Есть `recipientsCount`, `seenCount`, `haveCount` в карточке запроса | **Сделано.** `request_recipients.status`, `row_id`, `container_id`; `GET /requests/{id}/stats`; живое — событие `REQUEST_STATS` в `inbox:{userId}#{userId}` |
 | 4 ✅ | Фото к запросу (до 3) и к ответу «Есть» | Нет: делались до модуля media | **Сделано.** `request_photos`, `reply_photos` (до 3), `mediaIds` в запросе и ответе, purpose REQUEST / REPLY |
-| 5 | `GET /market/rows/{id}/containers?brandId=` с `state` HAS_SELLER / NO_SELLER и `sellsBrand`, счётчик «продают Toyota: 9» (экран 31) | `GET /market/rows/{id}` отдаёт контейнеры с магазином или null, без марки | Добавить параметр `brandId` и поля |
+| 5 ✅ | `GET /market/rows/{id}/containers?brandId=` с `state` HAS_SELLER / NO_SELLER и `sellsBrand`, счётчик «продают Toyota: 9» (экран 31) | `GET /market/rows/{id}` отдаёт контейнеры с магазином или null, без марки | **Сделано.** `GET /market/rows/{id}` и `/rows/{id}/containers` с `brandId`: `state`, `sellsBrand`, `brandSellers` |
 | 6 | Подсветка рядов на карте `GET /market/map/highlight?kind=BRAND\|CATEGORY&id=` (ТЗ 6.1) | **Не сделано** | Сделать: данные уже есть (shop_brands, shop_categories, маршрут) |
 | 7 | Статистика продавца `GET /seller/stats?period=` (ТЗ 12) | **Не сделано**, есть только просмотры запчастей | Отдельный модуль stats — следующий по плану |
 | 8 | In-app уведомления `Notification(…, readAt)` | Только пуши FCM, списка уведомлений нет | Уточнить, есть ли экран со списком уведомлений; если нет — не делать |
