@@ -49,7 +49,7 @@ CREATE INDEX idx_part_requests_expiring ON part_requests (expires_at) WHERE stat
 
 -- ── получатель: статус и место на момент рассылки (для списка «Нет» — ряд и контейнер без названия)
 ALTER TABLE request_recipients
-    ADD COLUMN status       VARCHAR(8) NOT NULL DEFAULT 'DELIVERED'
+    ADD COLUMN status       VARCHAR(9) NOT NULL DEFAULT 'DELIVERED'
         CHECK (status IN ('DELIVERED', 'SEEN', 'HAVE', 'NOT_HAVE', 'EXPIRED')),
     ADD COLUMN row_id       BIGINT REFERENCES market_rows(id),
     ADD COLUMN container_id BIGINT REFERENCES containers(id);

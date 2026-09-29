@@ -34,7 +34,7 @@ public class RequestRecipient {
    private Long containerId;
 
    @Enumerated(EnumType.STRING)
-   @Column(nullable = false, length = 8)
+   @Column(nullable = false, length = 9)
    private RecipientStatus status = RecipientStatus.DELIVERED;
 
    @Column(name = "notified_at", nullable = false, updatable = false)
