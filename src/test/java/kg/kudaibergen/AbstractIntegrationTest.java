@@ -58,6 +58,8 @@ public abstract class AbstractIntegrationTest {
       registry.add("spring.data.redis.host", REDIS::getHost);
       registry.add("spring.data.redis.port", () -> REDIS.getMappedPort(6379));
       registry.add("app.centrifugo.api-url", CENTRIFUGO::apiUrl);
+      // тесты проверяют и проверку места (QR, SMS, админ), и то, что непроверенный магазин не получает запросы
+      registry.add("app.shops.verification-required", () -> "true");
    }
 
    // ─────────────────────── хелперы ───────────────────────

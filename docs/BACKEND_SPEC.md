@@ -190,7 +190,7 @@ enum QuickReply {                                                   // быст�
 ## 6. Магазин [10, 10а, 21, 22, 23, 30]
 
 - Сетка выбора бокса [10а]: `GET /market/rows`, `GET /market/rows/{id}` — контейнеры по сторонам, `occupied` — серые.
-- Регистрация: `POST /shops {containerId, name, brandIds[], categoryIds[], openFrom?, openTo?, workDays?}` → `PENDING_VERIFICATION`. Проверка: `GET /my/shop/verification`, `POST /my/shop/verification/qr {qrToken, lat?, lon?}`, по SMS арендатора (`…/sms/send`, `…/sms/confirm`) или через админа (`…/admin-request`).
+- Регистрация: `POST /shops {containerId, name, brandIds[], categoryIds[], openFrom?, openTo?, workDays?}` → **сразу `ACTIVE`**: проверка места пока выключена (`SHOP_VERIFICATION_REQUIRED=false`), экран «На проверке» и сканирование QR не показывать, переезд (`POST /my/shop/relocation`) тоже сразу. Когда проверку включат, магазин будет `PENDING_VERIFICATION` до подтверждения: `GET /my/shop/verification` (`required`), `POST /my/shop/verification/qr {qrToken, lat?, lon?}`, SMS арендатора (`…/sms/send`, `…/sms/confirm`) или админ (`…/admin-request`).
 - `GET /my/shop`; `PATCH /my/shop {name?, openFrom?, openTo?, workDays?, phone?, phoneVisible?}`; `PUT /my/shop/brands {brandIds}` [23] («Сохранить · 4 марки»); `PUT /my/shop/categories {categoryIds}`.
 - Тумблер «Бокс закрыт» [11, 21]: `PATCH /my/shop/open {isOpen}` — закрытым запросы не рассылаются.
 - Аватар: `PUT /my/shop/avatar {mediaId}`, `DELETE /my/shop/avatar`. Фото места (до 8, первое — обложка): `GET/POST /my/shop/photos`, `PUT /my/shop/photos/order`, `POST /my/shop/photos/{mediaId}/cover`, `DELETE /my/shop/photos/{mediaId}`.

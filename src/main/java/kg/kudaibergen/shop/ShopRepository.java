@@ -61,6 +61,10 @@ public interface ShopRepository extends JpaRepository<Shop, Long> {
    @Query("select s from Shop s where s.status = :status and :categoryId member of s.categoryIds")
    List<Shop> findByStatusAndCategory(@Param("status") ShopStatus status, @Param("categoryId") Long categoryId);
 
+   /** Ждут проверки места: новые магазины и переезды. */
+   @Query("select s from Shop s where s.status = :pending or s.pendingContainerId is not null")
+   List<Shop> findWaitingVerification(@Param("pending") ShopStatus pending);
+
    /** Действующие магазины — для сортировки выдачи «Ближе ко мне». */
    List<Shop> findByStatus(ShopStatus status);
 

@@ -1,5 +1,6 @@
 package kg.kudaibergen.shop;
 
+import java.util.List;
 import java.util.Optional;
 
 import kg.kudaibergen.auth.otp.OtpPurpose;
@@ -22,6 +23,8 @@ import kg.kudaibergen.shop.entity.VerificationStatus;
 import kg.kudaibergen.user.entity.Lang;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,6 +37,8 @@ import org.springframework.transaction.annotation.Transactional;
  *    <li>заявка администрации — админ сверяет со списком арендаторов.</li>
  * </ul>
  * Та же проверка нужна при переезде: до неё магазин остаётся на старом месте.
+ * Пока проверка выключена (app.shops.verification-required = false), магазин действует сразу после регистрации,
+ * переезд — сразу, а при старте приложения ждущие проверки магазины и переезды подтверждаются.
  */
 @Service
 public class ShopVerificationService {
@@ -47,10 +52,11 @@ public class ShopVerificationService {
    private final OtpService otp;
    private final SmsProvider sms;
    private final boolean exposeCode;
+   private final boolean verificationRequired;
 
    public ShopVerificationService(ShopRepository shops, ShopVerificationRepository verifications, ShopAccess access,
                                   MarketMapService market, OtpService otp, SmsProvider sms,
-                                  AppProperties properties) {
+                                  AppProperties properties, ShopProperties shopProperties) {
       this.shops = shops;
       this.verifications = verifications;
       this.access = access;
@@ -58,6 +64,21 @@ public class ShopVerificationService {
       this.otp = otp;
       this.sms = sms;
       this.exposeCode = properties.otp().exposeCode();
+      this.verificationRequired = shopProperties.verificationRequired();
+   }
+
+   /** Проверка выключена — то, что ждало её раньше, подтверждается сразу при старте. */
+   @EventListener(ApplicationReadyEvent.class)
+   @Transactional
+   public void approveWaitingWhenDisabled() {
+      if (verificationRequired) {
+         return;
+      }
+      List<Shop> waiting = shops.findWaitingVerification(ShopStatus.PENDING_VERIFICATION);
+      waiting.forEach(Shop::verified);
+      if (!waiting.isEmpty()) {
+         log.info("Проверка места выключена: подтверждено магазинов и переездов — {}", waiting.size());
+      }
    }
 
    // ─────────────────────── продавец ───────────────────────
@@ -135,7 +156,7 @@ public class ShopVerificationService {
       }
    }
 
-   /** Переезд: новое место ждёт проверки, до неё магазин остаётся на старом. */
+   /** Переезд: новое место ждёт проверки, до неё магазин остаётся на старом. Проверка выключена — сразу. */
    @Transactional
    public void relocate(Long userId, Long containerId) {
       Shop shop = ownerShop(userId);
@@ -151,6 +172,10 @@ public class ShopVerificationService {
          shop.moveUnverified(containerId);
       } else {
          shop.setPendingContainerId(containerId);
+      }
+      if (!verificationRequired) {
+         // проверка выключена — переезжает сразу
+         shop.verified();
       }
       try {
          shops.saveAndFlush(shop);

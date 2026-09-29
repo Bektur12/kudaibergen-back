@@ -56,10 +56,13 @@ public class ShopService {
    private final UserRepository users;
    private final SmsProvider sms;
 
+   private final boolean verificationRequired;
+
    public ShopService(ShopRepository shops, ShopMemberRepository members, FavoriteShopRepository favorites,
                       ShopAccess access, ShopMapper mapper, ShopVerificationService verification,
                       MarketMapService market, VehicleDirectory directory, CategoryService categories,
-                      UserService userService, UserRepository users, SmsProvider sms) {
+                      UserService userService, UserRepository users, SmsProvider sms,
+                      ShopProperties properties) {
       this.shops = shops;
       this.members = members;
       this.favorites = favorites;
@@ -72,11 +75,15 @@ public class ShopService {
       this.userService = userService;
       this.users = users;
       this.sms = sms;
+      this.verificationRequired = properties.verificationRequired();
    }
 
    // ─────────────────────── регистрация и профиль ───────────────────────
 
-   /** «Сохранить» на экране 10: магазин «На проверке», пользователь переходит в режим продавца. */
+   /**
+    * «Сохранить» на экране 10: пользователь переходит в режим продавца. Магазин «На проверке», если проверка
+    * места включена (app.shops.verification-required), иначе действует сразу.
+    */
    @Transactional
    public MyShopDto register(Long userId, ShopRequests.CreateShop request, Lang lang) {
       if (members.findByUserId(userId).isPresent()) {
@@ -88,6 +95,9 @@ public class ShopService {
       Long containerId = requireFreeContainer(request.containerId());
 
       Shop shop = new Shop(userId, name, containerId);
+      if (!verificationRequired) {
+         shop.verified();
+      }
       shop.setSchedule(request.openFrom(), request.openTo(), request.workDays());
       validateSchedule(shop.getOpenFrom(), shop.getOpenTo(), shop.getWorkDays());
       shop.getBrandIds().addAll(brandIds);
