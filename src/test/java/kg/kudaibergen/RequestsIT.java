@@ -139,6 +139,17 @@ class RequestsIT extends AbstractIntegrationTest {
 
       JsonNode mine = call(authed(get("/api/v1/requests/my"), buyer), 200);
       assertThat(mine.get("items").get(0).get("state").asText()).isEqualTo("CLOSED");
+
+      // статистика бокса (17): пришёл запрос, ответили «Есть», продажа; B ответил «Нет»
+      JsonNode statsA = call(authed(get("/api/v1/my/shop/stats").param("period", "WEEK"), sellerA), 200);
+      assertThat(statsA.get("requestsByBrands").asInt()).isEqualTo(1);
+      assertThat(statsA.get("answeredHave").asInt()).isEqualTo(1);
+      assertThat(statsA.get("sales").asInt()).isEqualTo(1);
+      assertThat(statsA.get("unanswered").asInt()).isZero();
+      assertThat(statsA.get("avgReplyMinutes").asInt()).isPositive();
+      JsonNode statsB = call(authed(get("/api/v1/my/shop/stats").param("period", "MONTH"), sellerB), 200);
+      assertThat(statsB.get("answeredNotHave").asInt()).isEqualTo(1);
+      assertThat(statsB.get("sales").asInt()).isZero();
    }
 
    @Test

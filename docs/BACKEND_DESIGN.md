@@ -271,7 +271,7 @@ Kafka-топики: `request.created`, `request.reply.created`, `request.closed`
 | 24 Мои запчасти | `GET /my/parts?status=&q=&cursor=`, `GET /my/parts/summary`, `PATCH /parts/{id}` (наличие) | `MyPartItemDto {id, title, photo, fitmentLabels[], brandLogos[], price, quantity, status}`; `{all, inStock, outOfStock, viewsWeek}` |
 | 25 Камера | `POST /media/uploads` + `POST /media/{id}/complete` | см. media |
 | 26 Новая запчасть | `GET /categories`, `GET /brands/{id}/models`, `POST /parts`, `PATCH /parts/{id}`, `DELETE /parts/{id}` | `UpsertPartDto {title, categoryId, condition, price, quantity, oemNumber?, mediaIds[1..6], fitments:[{brandId, modelId?, yearFrom?, yearTo?}], status: DRAFT\|ACTIVE}` ← `PartDetailDto` |
-| 17 Статистика | `GET /my/shop/stats?period=WEEK\|MONTH`; «Смотреть» → `GET /my/shop/requests?filter=UNANSWERED` | `StatsDto {period, requestsByBrands, repliedHave, chatsStarted, sales, unanswered, avgResponseSec, topCategories:[{categoryId, name, count}], partViews}` |
+| 17 Статистика | `GET /my/shop/stats?period=WEEK\|MONTH`; «Смотреть» → `GET /my/shop/requests?filter=UNANSWERED` | `ShopStatsDto {period, from, to, requestsByBrands, answeredHave, answeredNotHave, wroteInChat, buyersArrived, sales, unanswered, avgReplyMinutes, partViews, topCategories:[{categoryId, name, count}]}` |
 | 21 Профиль | `GET /my/shop`, `GET /shops/{id}/reviews`, `GET/POST/DELETE /my/shop/members`, `PATCH /me/settings`, `PUT /me/role` | `MemberDto {userId, name, phone, role}`; `AddMemberDto {phone}` |
 | 14 Пуши | `POST /devices`, `DELETE /devices/{token}`; кнопки «Есть/Нет» в пуше → `POST /requests/{id}/replies` | `RegisterDeviceDto {token, platform, lang}` |
 
@@ -388,7 +388,7 @@ auth → users/garage → market (+ гео-привязка, админка ка
 - **Доставка** после коммита, асинхронно (`ChatRealtime`), одним batch-запросом к Server API. Пуш «имя + текст» — только тем, кого нет в presence канала чата, с учётом «Уведомлений чата» и тихих часов. Карточка «Есть» пушем не дублируется. Centrifugo недоступен — чат работает на REST и пушах.
 - **Вложения:** `app.media.storage=local` (папка `uploads`, `/media/**`) или `s3` (MinIO, presigned-ссылки на 24 часа).
 - **Меню чата:** `PUT/DELETE /chats/{id}/block` — писать не может никто, пока блок не снят. `POST /chats/{id}/complaints` — жалоба типа CHAT.
-- **Не сделано:** «Покупатели подошли» в статистике (stats). Конфиг Centrifugo написан по документации v6 и живьём не проверялся.
+- Конфиг Centrifugo написан по документации v6 и живьём не проверялся.
 
 ### Фото и каталог — реализовано (модули media и catalog)
 
@@ -409,3 +409,11 @@ auth → users/garage → market (+ гео-привязка, админка ка
 - **Номер детали с фото:** `POST /ocr/oem` (multipart). `app.ocr.provider`: `none` — 503 `OCR_UNAVAILABLE`; `google` — Cloud Vision TEXT_DETECTION по ключу `OCR_GOOGLE_API_KEY`. Кандидаты в номер разбирает `OemExtractor`, у каждого — сколько таких запчастей продаётся. Не больше 30 распознаваний в час на пользователя.
 - **Импорт из Excel:** `GET /my/parts/import/template`, `POST /my/parts/import` (.xlsx до 5 МБ и 500 запчастей). Строка — запчасть, строка без названия — ещё одна машина. Создаются черновики (фото добавляются в приложении), ошибки — в отчёте с номером строки.
 - **Пуши по избранному:** цена опубликованной запчасти снизилась — «Подешевело»; количество стало 0 — «Закончилось». Людям бокса не шлём; одному человеку — не чаще раза в сутки на запчасть и вид.
+
+### Статистика бокса — реализовано (модуль stats)
+
+- `GET /my/shop/stats?period=WEEK|MONTH` — владелец и сотрудники, последние 7 или 30 дней от текущего момента.
+- Считается на лету из рабочих таблиц (`request_recipients`, `part_requests`, `chats`, `messages`, `part_views_daily`); `shop_stats_daily` не заводили — при сотнях запросов на бокс в месяц агрегаты по индексам быстрые.
+- Запросы, «Есть» / «Нет», без ответа и среднее время ответа — по запросам, **пришедшим** за период. «Без ответа» — время вышло или запрос закрыт, а бокс не ответил; лента `filter=UNANSWERED` показывает те же запросы (за всё время).
+- «Написали в чат» — `chats.buyer_first_message_at` в периоде; «Подошли» — быстрый ответ ARRIVED; «Продажи» — запросы, закрытые «Купил» у бокса (быстрый ответ SOLD не считается, чтобы не было двойного счёта).
+- «Чаще всего спрашивают» — до 4 категорий; учитываются только запросы, где покупатель выбрал чип категории.

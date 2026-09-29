@@ -44,7 +44,8 @@ public class IncomingRequestController {
    @GetMapping("/my/shop/requests")
    @Operation(summary = "Запросы бокса (11)", description = """
          NEW — активные без ответа (сверху, expiresAt — таймер «осталось 12 мин»), ANSWERED — «Вы ответили «есть»»
-         (ниже), EXPIRED — время вышло без ответа, UNANSWERED — без ответа за всё время (из статистики 17).
+         (ниже), EXPIRED — время вышло без ответа, UNANSWERED — бокс не ответил, а время
+         вышло или запрос закрыт («Смотреть» из статистики 17).
          Закрытый покупателем запрос остаётся только у бокса, где купили.""")
    public CursorPage<IncomingRequestDto> feed(@AuthenticationPrincipal AuthPrincipal principal,
                                               @RequestParam(defaultValue = "NEW") IncomingRequestService.Filter filter,

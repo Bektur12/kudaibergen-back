@@ -97,10 +97,14 @@ public interface RequestRecipientRepository extends JpaRepository<RequestRecipie
    List<RequestRecipient> findExpired(@Param("shopId") Long shopId, @Param("at") Instant at, @Param("id") long id,
                                       @Param("limit") int limit);
 
-   /** Без ответа — ни «Есть», ни «Нет»; «Смотреть» из статистики (17). */
+   /**
+    * Без ответа: время вышло или запрос закрыт, а бокс не ответил ни «Есть», ни «Нет» —
+    * «Смотреть» из статистики (17). Активные без ответа — в NEW.
+    */
    @Query(nativeQuery = true, value = """
          select rr.* from request_recipients rr
-         where rr.shop_id = :shopId and rr.replied_at is null
+         join part_requests r on r.id = rr.request_id
+         where rr.shop_id = :shopId and rr.replied_at is null and r.status <> 'ACTIVE'
            and (rr.notified_at, rr.request_id) < (:at, :id)
          order by rr.notified_at desc, rr.request_id desc
          limit :limit""")

@@ -1,7 +1,7 @@
 # Сверка BACKEND_SPEC (спецификация по дизайну) с кодом v2
 
 Состояние на 29.09.2026, ветка `v2`. Отмечены только расхождения: что в спецификации сделано так же, здесь не повторяется.
-Пункты 1–6 сделаны (миграция V9, модули request, market, shop) — отмечены ✅.
+Пункты 1–7 сделаны (миграции V9–V10, модули request, market, shop, stats) — отмечены ✅.
 
 ## 1. Меняют поведение — нужно решение
 
@@ -13,7 +13,7 @@
 | 4 ✅ | Фото к запросу (до 3) и к ответу «Есть» | Нет: делались до модуля media | **Сделано.** `request_photos`, `reply_photos` (до 3), `mediaIds` в запросе и ответе, purpose REQUEST / REPLY |
 | 5 ✅ | `GET /market/rows/{id}/containers?brandId=` с `state` HAS_SELLER / NO_SELLER и `sellsBrand`, счётчик «продают Toyota: 9» (экран 31) | `GET /market/rows/{id}` отдаёт контейнеры с магазином или null, без марки | **Сделано.** `GET /market/rows/{id}` и `/rows/{id}/containers` с `brandId`: `state`, `sellsBrand`, `brandSellers` |
 | 6 ✅ | Подсветка рядов на карте `GET /market/map/highlight?kind=BRAND\|CATEGORY&id=` (ТЗ 6.1) | — | **Сделано.** Поля спецификации + `containerIds`, `openNowCount`, ближайший бокс по проходам от точки, GPS или входа |
-| 7 | Статистика продавца `GET /seller/stats?period=` (ТЗ 12) | **Не сделано**, есть только просмотры запчастей | Отдельный модуль stats — следующий по плану |
+| 7 ✅ | Статистика продавца `GET /seller/stats?period=` (ТЗ 12) | — | **Сделано.** `GET /my/shop/stats?period=WEEK\|MONTH` (модуль stats): поля спецификации + `answeredNotHave`, `buyersArrived`, `partViews` |
 | 8 | In-app уведомления `Notification(…, readAt)` | Только пуши FCM, списка уведомлений нет | Уточнить, есть ли экран со списком уведомлений; если нет — не делать |
 
 ## 2. Формат и названия — дешёвые правки
