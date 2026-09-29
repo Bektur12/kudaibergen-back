@@ -13,10 +13,10 @@ import kg.kudaibergen.shop.dto.ShopCardDto;
  * Живое обновление — событие REQUEST_STATS в личном канале покупателя inbox:{userId}#{userId}.
  */
 public record RequestStatsDto(Long requestId, RequestStatus status, Instant expiresAt, long durationMin,
-                              long remainingMin, boolean canExtend, int extendedTimes, Counts counts,
+                              long remainingMin, boolean canExtend, int extendedTimes, RecipientCounts counts,
                               List<Have> have, List<Place> notHave) {
 
-   public record Counts(long delivered, long seen, long have, long notHave, long silent) {
+   public record RecipientCounts(long delivered, long seen, long have, long notHave, long silent) {
    }
 
    /** row — код ряда («14», «Ю»), container — номер контейнера; на момент рассылки. */

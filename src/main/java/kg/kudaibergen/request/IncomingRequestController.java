@@ -48,7 +48,7 @@ public class IncomingRequestController {
          вышло или запрос закрыт («Смотреть» из статистики 17).
          Закрытый покупателем запрос остаётся только у бокса, где купили.""")
    public CursorPage<IncomingRequestDto> feed(@AuthenticationPrincipal AuthPrincipal principal,
-                                              @RequestParam(defaultValue = "NEW") IncomingRequestService.Filter filter,
+                                              @RequestParam(defaultValue = "NEW") IncomingRequestService.IncomingFilter filter,
                                               @RequestParam(required = false) String cursor,
                                               @RequestParam(required = false) Integer limit,
                                               @Parameter(hidden = true) @RequestHeader(

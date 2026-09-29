@@ -24,7 +24,7 @@
 1. **Типы из OpenAPI.** `openapi-typescript` (devDependency) → `src/api/schema.ts`, скрипт `npm run api:types` берёт `/v3/api-docs`. Руками DTO не описывать; удобные алиасы — в `src/api/types.ts`.
 2. **`src/lib/api.ts`** — доработать существующую обёртку:
    - базовый путь `/api/v1`, заголовок `Accept-Language: ru|ky` из языка пользователя;
-   - ошибки — `ApiError {status, code, message, fields?, retryAfter?}` из тела `{code, message, fields}`; экраны показывают `message` и ветвятся по `code`, не по тексту;
+   - ошибки — тело RFC 7807 (`application/problem+json`, см. раздел 0 контракта) → `ApiError {status, code, message ← detail, fields ← errors[] как {field: message}, retryAfter ← тело или заголовок Retry-After, extra (attemptsLeft, missing…)}`; экраны показывают `message` и ветвятся по `code`, не по тексту;
    - токены в `expo-secure-store`; на 401 — один `POST /auth/refresh {refreshToken}` (single-flight: параллельные запросы ждут один refresh), потом повтор; refresh не удался — выход на экран 01;
    - `idempotencyKey` в опциях → заголовок `Idempotency-Key` (для `POST /requests`, `POST /requests/{id}/replies`);
    - `uploadPhoto(uri, purpose)` → multipart `POST /media/photos` → `{id, url, thumbUrl}`.
@@ -52,7 +52,7 @@
 
 ПОРЯДОК (после каждого шага — проверка, короткий отчёт, потом дальше):
 1. Архитектура: типы, `api.ts`, refresh, SecureStore, `format.ts`, провайдер Centrifugo (пока без подписок).
-2. Вход 01–03: `otp/send` → `otp/verify` (`isNewUser`, `user`) → `PUT /me/role`; при старте — `GET /me` по сохранённому токену.
+2. Вход 01–03: `otp/send` → `otp/verify` (`isNewUser`, `user`) → `PUT /me/role`; при старте — `GET /me` по сохранённому токену; продавца без бокса (`hasShop = false`) — на [10а], с боксом — на [11].
 3. Покупатель: 04 гараж (`/me/cars`, марки и модели), 05 главная (`/requests/my`), 06 «Найти запчасть» (подсказки `/requests/hints`, фото, `/requests/estimate` при каждом изменении выбора, `POST /requests`), 07 ответы, 09 закрытие, 20.
 4. Экраны без макета — **06б** (кому отправить: весь рынок / ряды / контейнеры + «Сколько ждать ответы»), **31** (выбор контейнеров ряда: `GET /market/rows/{id}/containers?brandId=`, «продают Toyota: 9», предупреждение, если марки нет), **32** (статистика запроса, таймер, «Продлить», «Отправить всему рынку»). Собрать из существующих компонентов и токенов в стиле 06 и 07; содержание — раздел 7.1–7.2 контракта ниже. Сделать и показать мне скриншоты до перехода дальше.
 5. Продавец: 10а, 10, 22, 23 (регистрация, проверка по QR, фото места, марки), 11 и 12 (лента `filter=NEW|ANSWERED|EXPIRED|UNANSWERED`, `…/seen` при открытии, ответ «Есть» с фото, таймер по `expiresAt`), 21, тумблер «Бокс закрыт».
@@ -84,7 +84,7 @@
 | id | Числа (BIGINT), не UUID. Для ссылок «Поделиться» у магазина и запчасти есть отдельный непредсказуемый `publicId` (10 символов base62) — см. 6 и 4.4. |
 | Вход | `Authorization: Bearer {accessToken}` (SMS-код → `POST /auth/otp/verify`). Каталог, карта, марки, категории, профиль магазина открыты гостю. |
 | Язык | `Accept-Language: ru` или `ky`; в данных язык — `RU` / `KG`. |
-| Ошибки | `{code, message, fields?}`; `code` — стабильный (`REQUEST_EXPIRED`, `EXTEND_LIMIT`…), `message` — для показа. 429 — ещё `retryAfter`. |
+| Ошибки | RFC 7807, `Content-Type: application/problem+json`: `{type, title, status, detail, code, errors?, …}`. `code` — стабильный UPPER_SNAKE (`REQUEST_EXPIRED`, `EXTEND_LIMIT`…), по нему ветвиться; `detail` — текст для показа как есть. Ошибки полей — `code: VALIDATION_ERROR` и `errors: [{field, message}]`. Дополнительные поля по коду: `retryAfter` (сек, 429, ещё и заголовок `Retry-After`), `attemptsLeft` (неверный SMS-код), `missing[]` (`PART_INCOMPLETE`). Общие коды: `UNAUTHORIZED` (401), `FORBIDDEN`, `NOT_FOUND`, `CONFLICT`, `PAYLOAD_TOO_LARGE`, `INTERNAL_ERROR`. |
 | Идемпотентность | `Idempotency-Key` на `POST /requests`, `POST /requests/{id}/replies`, сообщения чата (`clientId`). Без сети клиент повторяет с тем же ключом. |
 | Цена | Целые сомы, `currency: "KGS"`. Фронт форматирует «3 200 сом». |
 | Время | ISO-8601 UTC. «12 мин назад», «9:38», «вчера» — на клиенте. Рабочие часы магазинов — по Бишкеку. |
@@ -176,7 +176,7 @@ enum QuickReply {                                                   // быст�
 
 ### 3. Пользователь и гараж
 
-- `GET /me` → `{id, phone, name?, avatarUrl?, role, lang, hasShop, …}`; `PATCH /me {name?, lang?, avatarMediaId?}`; `DELETE /me/avatar`; `PUT /me/role {role}` [03].
+- `GET /me` → `{id, phone, name?, avatarUrl?, role, lang, adminRole?, onboarded, hasShop, shop? {id, name, status, role}, createdAt}` (тот же объект — `user` в ответе `POST /auth/otp/verify`). `hasShop = false` — продавца ведут на регистрацию [10а]; `shop.status` — `PENDING_VERIFICATION` / `ACTIVE` / `BLOCKED`, `shop.role` — `OWNER` / `STAFF`; `PATCH /me {name?, lang?, avatarMediaId?}`; `DELETE /me/avatar`; `PUT /me/role {role}` [03].
 - `GET/PATCH /me/settings` → `{notifyReplies, notifyChat, newRequestSound, theme}` [19, 21].
 - `POST /devices {token, platform}` / `DELETE /devices/{token}` — FCM.
 - Гараж [04]: `GET /me/cars`, `POST /me/cars {modelId, year, engine?, vin?, …}`, `PATCH /me/cars/{id}`, `POST /me/cars/{id}/primary`, `DELETE /me/cars/{id}`. Машина: `brand`, модель, `year`, `isPrimary`; подпись «Camry 50 · 2012».

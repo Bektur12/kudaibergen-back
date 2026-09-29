@@ -13,6 +13,7 @@ import kg.kudaibergen.auth.sms.SmsProvider;
 import kg.kudaibergen.auth.token.RefreshTokenService;
 import kg.kudaibergen.common.config.AppProperties;
 import kg.kudaibergen.media.MediaService;
+import kg.kudaibergen.user.MeView;
 import kg.kudaibergen.common.error.BadRequestException;
 import kg.kudaibergen.common.error.ForbiddenException;
 import kg.kudaibergen.user.DeviceService;
@@ -142,7 +143,7 @@ class AuthServiceTest {
    private AuthService service(boolean exposeCode) {
       AppProperties properties = new AppProperties(null, new AppProperties.Otp(Duration.ofMinutes(2),
             Duration.ofSeconds(42), 5, Duration.ofMinutes(15), 5, 20, Duration.ofHours(1), "secret", exposeCode, null), null, null, null, null, null, null);
-      return new AuthService(otp, sms, userService, users, devices, jwt, refreshTokens, mock(MediaService.class),
+      return new AuthService(otp, sms, userService, users, devices, jwt, refreshTokens, new MeView(mock(MediaService.class), userId -> Optional.empty()),
             properties);
    }
 

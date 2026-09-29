@@ -304,7 +304,7 @@ public class ChatService {
     * ROUTE несёт место бокса для карточки «Маршрут»; ACTION-кнопки сообщением не отправляются.
     */
    private Message quick(ChatAccess.Participant participant, QuickReply reply, String clientId, Instant now) {
-      if (reply.side() != participant.side() || reply.kind() != QuickReply.Kind.MESSAGE) {
+      if (reply.side() != participant.side() || reply.kind() != QuickReply.QuickReplyKind.MESSAGE) {
          throw new BadRequestException("QUICK_REPLY_NOT_ALLOWED", "Этот быстрый ответ здесь недоступен");
       }
       Chat chat = participant.chat();
@@ -456,7 +456,7 @@ public class ChatService {
       result.add(quick(QuickReply.ROUTE, lang));
       result.add(quick(QuickReply.SOLD, lang));
       templates.findByShopIdOrderBySortOrderAscIdAsc(chat.getShopId()).forEach(template ->
-            result.add(new QuickReplyDto(null, QuickReply.Kind.MESSAGE, template.getId(), template.getText())));
+            result.add(new QuickReplyDto(null, QuickReply.QuickReplyKind.MESSAGE, template.getId(), template.getText())));
       return result;
    }
 

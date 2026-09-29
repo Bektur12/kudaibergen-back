@@ -50,7 +50,7 @@ public class MyPartsController {
    @GetMapping("/my/parts")
    @Operation(summary = "Мои запчасти (24)", description = "filter: ALL (без архива), IN_STOCK, OUT_OF_STOCK, DRAFT, ARCHIVED; q — название или номер")
    public CursorPage<MyPartItemDto> list(@AuthenticationPrincipal AuthPrincipal principal,
-                                         @RequestParam(defaultValue = "ALL") MyPartsService.Filter filter,
+                                         @RequestParam(defaultValue = "ALL") MyPartsService.PartsFilter filter,
                                          @RequestParam(required = false) String q,
                                          @RequestParam(required = false) String cursor,
                                          @RequestParam(required = false) Integer limit,

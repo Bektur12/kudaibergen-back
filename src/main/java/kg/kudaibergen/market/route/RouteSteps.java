@@ -21,11 +21,11 @@ public final class RouteSteps {
    static final double MIN_LEG_METERS = 3;
    private static final double STRAIGHT_DEGREES = 30;
 
-   public enum Kind {
+   public enum StepKind {
       STRAIGHT, LEFT, RIGHT, ARRIVE
    }
 
-   public record Step(int n, Kind kind, String text, int distanceM) {
+   public record Step(int n, StepKind kind, String text, int distanceM) {
    }
 
    private RouteSteps() {
@@ -41,7 +41,7 @@ public final class RouteSteps {
       List<Router.Leg> legs = mergeShort(path.legs(), metersPerPx);
       List<Step> steps = new ArrayList<>();
       if (legs.isEmpty()) {
-         steps.add(new Step(1, Kind.ARRIVE, arrive(lang, containerNumber, 0, true), 0));
+         steps.add(new Step(1, StepKind.ARRIVE, arrive(lang, containerNumber, 0, true), 0));
          return steps;
       }
 
@@ -52,9 +52,9 @@ public final class RouteSteps {
          int meters = meters(leg.length(), metersPerPx);
          if (i == 0) {
             String text = lastLeg ? straight(lang, name, null) : straight(lang, name, meters);
-            steps.add(new Step(steps.size() + 1, Kind.STRAIGHT, text, lastLeg ? 0 : meters));
+            steps.add(new Step(steps.size() + 1, StepKind.STRAIGHT, text, lastLeg ? 0 : meters));
          } else {
-            Kind turn = turn(legs.get(i - 1).endDirection(), leg.startDirection());
+            StepKind turn = turn(legs.get(i - 1).endDirection(), leg.startDirection());
             String text = turnText(lang, turn, name, lastLeg ? null : meters);
             steps.add(new Step(steps.size() + 1, turn, text, lastLeg ? 0 : meters));
          }
@@ -63,7 +63,7 @@ public final class RouteSteps {
       Router.Leg last = legs.get(legs.size() - 1);
       boolean rightHand = last.endDirection().cross(container.minus(path.finish())) > 0;
       int lastMeters = meters(last.length(), metersPerPx);
-      steps.add(new Step(steps.size() + 1, Kind.ARRIVE, arrive(lang, containerNumber, lastMeters, rightHand),
+      steps.add(new Step(steps.size() + 1, StepKind.ARRIVE, arrive(lang, containerNumber, lastMeters, rightHand),
             lastMeters));
       return steps;
    }
@@ -73,12 +73,12 @@ public final class RouteSteps {
       return (int) Math.max(5, Math.round(px * metersPerPx / 5.0) * 5);
    }
 
-   static Kind turn(Point before, Point after) {
+   static StepKind turn(Point before, Point after) {
       double angle = Math.toDegrees(Math.atan2(before.cross(after), before.dot(after)));
       if (Math.abs(angle) < STRAIGHT_DEGREES) {
-         return Kind.STRAIGHT;
+         return StepKind.STRAIGHT;
       }
-      return angle > 0 ? Kind.RIGHT : Kind.LEFT;
+      return angle > 0 ? StepKind.RIGHT : StepKind.LEFT;
    }
 
    private static List<Router.Leg> mergeShort(List<Router.Leg> legs, double metersPerPx) {
@@ -131,7 +131,7 @@ public final class RouteSteps {
       };
    }
 
-   private static String turnText(Lang lang, Kind turn, PassageName name, Integer meters) {
+   private static String turnText(Lang lang, StepKind turn, PassageName name, Integer meters) {
       String direction = switch (lang) {
          case RU -> switch (turn) {
             case LEFT -> "Налево";

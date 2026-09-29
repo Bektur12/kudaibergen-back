@@ -7,5 +7,5 @@ import kg.kudaibergen.chat.entity.QuickReply;
  * {quickReply: code}, ACTION выполняет клиент (маршрут, закрытие запроса). templateId != null — свой
  * шаблон магазина: text подставляется в поле ввода и уходит обычным сообщением.
  */
-public record QuickReplyDto(QuickReply code, QuickReply.Kind kind, Long templateId, String text) {
+public record QuickReplyDto(QuickReply code, QuickReply.QuickReplyKind kind, Long templateId, String text) {
 }

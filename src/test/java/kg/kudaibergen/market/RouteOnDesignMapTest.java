@@ -41,8 +41,8 @@ class RouteOnDesignMapTest {
             names.add(PassageName.UNKNOWN);
          }
          // как в сиде V3: 0 — центральный, 12 — между рядами 16 и 14
-         names.set(0, new PassageName(PassageName.Kind.CENTRAL, null));
-         names.set(12, new PassageName(PassageName.Kind.BETWEEN, List.of("16", "14")));
+         names.set(0, new PassageName(PassageName.PassageKind.CENTRAL, null));
+         names.set(12, new PassageName(PassageName.PassageKind.BETWEEN, List.of("16", "14")));
       }
    }
 
@@ -84,7 +84,7 @@ class RouteOnDesignMapTest {
             "Направо — между рядами 16 и 14",
             "Через ~30 м бокс 12 по левую руку");
       assertThat(steps).extracting(RouteSteps.Step::kind).containsExactly(
-            RouteSteps.Kind.STRAIGHT, RouteSteps.Kind.RIGHT, RouteSteps.Kind.ARRIVE);
+            RouteSteps.StepKind.STRAIGHT, RouteSteps.StepKind.RIGHT, RouteSteps.StepKind.ARRIVE);
       // полилиния идёт по проходам и заканчивается у двери контейнера
       List<Point> polyline = path.polyline();
       assertThat(polyline.get(0)).isEqualTo(new Point(584, 540));
@@ -114,7 +114,7 @@ class RouteOnDesignMapTest {
       List<RouteSteps.Step> steps = RouteSteps.build(path, names, row14.containerCenter(Side.NORTH, 12, 15), 12,
             METERS_PER_PX, Lang.RU);
       assertThat(steps).hasSize(1);
-      assertThat(steps.get(0).kind()).isEqualTo(RouteSteps.Kind.ARRIVE);
+      assertThat(steps.get(0).kind()).isEqualTo(RouteSteps.StepKind.ARRIVE);
    }
 
    private static JsonNode rect(double x, double y, double w, double h) {

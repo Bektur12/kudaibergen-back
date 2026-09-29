@@ -11,13 +11,12 @@ import kg.kudaibergen.auth.sms.SmsProvider;
 import kg.kudaibergen.auth.sms.SmsTexts;
 import kg.kudaibergen.auth.token.RefreshTokenService;
 import kg.kudaibergen.common.config.AppProperties;
-import kg.kudaibergen.media.MediaService;
 import kg.kudaibergen.common.error.ForbiddenException;
 import kg.kudaibergen.common.error.UnauthorizedException;
 import kg.kudaibergen.user.DeviceService;
 import kg.kudaibergen.user.UserRepository;
 import kg.kudaibergen.user.UserService;
-import kg.kudaibergen.user.dto.MeResponse;
+import kg.kudaibergen.user.MeView;
 import kg.kudaibergen.user.entity.Lang;
 import kg.kudaibergen.user.entity.User;
 import org.slf4j.Logger;
@@ -41,12 +40,12 @@ public class AuthService {
    private final DeviceService devices;
    private final JwtService jwtService;
    private final RefreshTokenService refreshTokens;
-   private final MediaService media;
+   private final MeView meView;
    private final boolean exposeCode;
 
    public AuthService(OtpService otpService, SmsProvider smsProvider, UserService userService,
                       UserRepository users, DeviceService devices, JwtService jwtService,
-                      RefreshTokenService refreshTokens, MediaService media, AppProperties properties) {
+                      RefreshTokenService refreshTokens, MeView meView, AppProperties properties) {
       this.otpService = otpService;
       this.smsProvider = smsProvider;
       this.userService = userService;
@@ -54,7 +53,7 @@ public class AuthService {
       this.devices = devices;
       this.jwtService = jwtService;
       this.refreshTokens = refreshTokens;
-      this.media = media;
+      this.meView = meView;
       this.exposeCode = properties.otp().exposeCode();
    }
 
@@ -123,7 +122,7 @@ public class AuthService {
    private TokenResponse tokens(User user) {
       return new TokenResponse(jwtService.generateAccessToken(user), refreshTokens.issue(user.getId()),
             jwtService.accessTtlSeconds(), !user.isOnboarded(),
-            MeResponse.of(user, media.thumbUrl(user.getAvatarMediaId())));
+            meView.of(user));
    }
 
    private static void ensureNotBlocked(User user) {

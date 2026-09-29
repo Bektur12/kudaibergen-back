@@ -5,7 +5,6 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import kg.kudaibergen.common.security.AuthPrincipal;
 import kg.kudaibergen.user.dto.ChangeRoleRequest;
-import kg.kudaibergen.media.MediaService;
 import kg.kudaibergen.user.dto.MeResponse;
 import kg.kudaibergen.user.entity.User;
 import kg.kudaibergen.user.dto.SettingsResponse;
@@ -27,11 +26,11 @@ public class MeController {
 
    private final UserService userService;
 
-   private final MediaService media;
+   private final MeView meView;
 
-   public MeController(UserService userService, MediaService media) {
+   public MeController(UserService userService, MeView meView) {
       this.userService = userService;
-      this.media = media;
+      this.meView = meView;
    }
 
    @DeleteMapping("/avatar")
@@ -41,7 +40,7 @@ public class MeController {
    }
 
    private MeResponse me(User user) {
-      return MeResponse.of(user, media.thumbUrl(user.getAvatarMediaId()));
+      return meView.of(user);
    }
 
    @GetMapping

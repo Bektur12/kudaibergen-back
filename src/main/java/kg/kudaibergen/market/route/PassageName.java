@@ -8,16 +8,16 @@ import kg.kudaibergen.user.entity.Lang;
  * Имя прохода для шагов маршрута. Хранится структурой ({"kind":"BETWEEN","rows":["16","14"]}),
  * а текст собирается на языке пользователя: «между рядами 16 и 14» / «16 жана 14 катарлардын ортосуна».
  */
-public record PassageName(Kind kind, List<String> rows) {
+public record PassageName(PassageKind kind, List<String> rows) {
 
-   public enum Kind {
+   public enum PassageKind {
       CENTRAL, BETWEEN, ALONG, WEST, ROW_ENDS, PARKING, SERVICE, OTHER
    }
 
-   public static final PassageName UNKNOWN = new PassageName(Kind.OTHER, List.of());
+   public static final PassageName UNKNOWN = new PassageName(PassageKind.OTHER, List.of());
 
    public PassageName {
-      kind = kind == null ? Kind.OTHER : kind;
+      kind = kind == null ? PassageKind.OTHER : kind;
       rows = rows == null ? List.of() : List.copyOf(rows);
    }
 

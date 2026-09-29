@@ -167,7 +167,7 @@ public class ChatController {
    @ResponseStatus(HttpStatus.CREATED)
    @Operation(summary = "Пожаловаться (меню чата)", description = "Жалоба уходит админу рынка на модерацию")
    public ComplaintDto complain(@AuthenticationPrincipal AuthPrincipal principal, @PathVariable Long id,
-                                @Valid @RequestBody(required = false) ChatInputs.Complaint request) {
+                                @Valid @RequestBody(required = false) ChatInputs.ChatComplaint request) {
       return chats.complain(principal.userId(), id, request == null ? null : request.text());
    }
 }

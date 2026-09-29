@@ -16,8 +16,8 @@ import kg.kudaibergen.media.PhotoDto;
 public record ShopPublicDto(Long id, String publicId, String name, String avatarUrl, BigDecimal rating, int reviewsCount,
                             LocationDto location, OpenStateDto open, List<BrandDto> brands,
                             List<CategoryDto> categories, String phone, boolean isFavorite, List<PhotoDto> photos,
-                            Counts counts) {
+                            ShopCounts counts) {
 
-   public record Counts(long parts, int photos, int reviews) {
+   public record ShopCounts(long parts, int photos, int reviews) {
    }
 }

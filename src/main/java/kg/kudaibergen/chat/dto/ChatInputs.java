@@ -33,7 +33,7 @@ public final class ChatInputs {
    public record Read(Long upToMessageId) {
    }
 
-   public record Complaint(@Size(max = 1000, message = "Не длиннее 1000 символов") String text) {
+   public record ChatComplaint(@Size(max = 1000, message = "Не длиннее 1000 символов") String text) {
    }
 
    /** Свой шаблон ответа магазина. */

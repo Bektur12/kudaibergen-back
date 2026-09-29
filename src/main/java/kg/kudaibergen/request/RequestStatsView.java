@@ -87,7 +87,7 @@ public class RequestStatsView {
       long remainingSec = request.isActive() ? Math.max(0, Duration.between(now, request.getExpiresAt()).toSeconds()) : 0;
       return new RequestStatsDto(requestId, request.getStatus(), request.getExpiresAt(), durationMin,
             (remainingSec + 59) / 60, request.canExtend(), request.getExtendedTimes(),
-            new RequestStatsDto.Counts(counts.getDelivered(), counts.getSeen(), counts.getHave(),
+            new RequestStatsDto.RecipientCounts(counts.getDelivered(), counts.getSeen(), counts.getHave(),
                   counts.getNotHave(), silent),
             haveItems, notHaveItems);
    }

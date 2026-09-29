@@ -53,7 +53,7 @@ public class MyPartsService {
    private static final int VIEWS_WEEK_DAYS = 7;
 
    /** Какую часть списка показать (24). ALL — всё, кроме архива. */
-   public enum Filter {
+   public enum PartsFilter {
       ALL,
       IN_STOCK,
       OUT_OF_STOCK,
@@ -90,7 +90,7 @@ public class MyPartsService {
    // ─────────────────────── списки ───────────────────────
 
    @Transactional(readOnly = true)
-   public CursorPage<MyPartItemDto> list(Long userId, Filter filter, String query, String cursor, Integer limit,
+   public CursorPage<MyPartItemDto> list(Long userId, PartsFilter filter, String query, String cursor, Integer limit,
                                          Lang lang) {
       Shop shop = access.requireMember(userId).shop();
       int size = CursorPage.limit(limit);
@@ -101,7 +101,7 @@ public class MyPartsService {
          case DRAFT -> PartStatus.DRAFT;
          case ARCHIVED -> PartStatus.ARCHIVED;
       };
-      Boolean stock = filter == Filter.IN_STOCK ? Boolean.TRUE : filter == Filter.OUT_OF_STOCK ? Boolean.FALSE : null;
+      Boolean stock = filter == PartsFilter.IN_STOCK ? Boolean.TRUE : filter == PartsFilter.OUT_OF_STOCK ? Boolean.FALSE : null;
       String like = query == null || query.isBlank() ? null
             : "%" + query.trim().toLowerCase(Locale.ROOT).replace("%", "").replace("_", "") + "%";
       String oemNorm = like == null ? null : Part.normalizeOem(query);

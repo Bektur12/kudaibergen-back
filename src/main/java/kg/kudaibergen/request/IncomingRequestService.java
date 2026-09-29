@@ -95,7 +95,7 @@ public class IncomingRequestService {
     * Какую часть ленты показать (11): новые, «Вы ответили «есть»», истёкшие без ответа,
     * пропущенные — время вышло или запрос закрыт, а бокс не ответил (из статистики 17).
     */
-   public enum Filter {
+   public enum IncomingFilter {
       NEW,
       ANSWERED,
       EXPIRED,
@@ -105,7 +105,7 @@ public class IncomingRequestService {
    // ─────────────────────── лента ───────────────────────
 
    @Transactional(readOnly = true)
-   public CursorPage<IncomingRequestDto> feed(Long userId, Filter filter, String cursor, Integer limit, Lang lang) {
+   public CursorPage<IncomingRequestDto> feed(Long userId, IncomingFilter filter, String cursor, Integer limit, Lang lang) {
       Shop shop = access.requireMember(userId).shop();
       int size = CursorPage.limit(limit);
       Instant at = FEED_START;

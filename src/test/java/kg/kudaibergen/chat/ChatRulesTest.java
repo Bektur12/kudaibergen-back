@@ -91,9 +91,9 @@ class ChatRulesTest {
    @Test
    void быстрыеОтветыПоСторонамИЯзыкам() {
       assertThat(QuickReply.RESERVED.side()).isEqualTo(ChatSide.SHOP);
-      assertThat(QuickReply.SOLD.kind()).isEqualTo(QuickReply.Kind.MESSAGE);
+      assertThat(QuickReply.SOLD.kind()).isEqualTo(QuickReply.QuickReplyKind.MESSAGE);
       assertThat(QuickReply.ARRIVED.side()).isEqualTo(ChatSide.BUYER);
-      assertThat(QuickReply.CLOSE_REQUEST.kind()).isEqualTo(QuickReply.Kind.ACTION);
+      assertThat(QuickReply.CLOSE_REQUEST.kind()).isEqualTo(QuickReply.QuickReplyKind.ACTION);
       assertThat(QuickReply.RESERVED.label(Lang.RU)).isEqualTo("Отложил для вас");
       assertThat(QuickReply.RESERVED.label(Lang.KG)).isEqualTo("Сиз үчүн калтырдым");
    }
