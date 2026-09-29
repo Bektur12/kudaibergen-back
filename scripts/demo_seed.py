@@ -363,6 +363,20 @@ def part_image(category, manufacturer, variant, rng):
     return img
 
 
+PHOTO_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "demo_photos")
+
+
+def real_photos(title):
+    """Отобранные фото с Wikimedia Commons (scripts/fetch_demo_photos.py) для вида запчасти; нет — пусто."""
+    if not os.path.isdir(PHOTO_DIR):
+        return []
+    kinds = [k for k in os.listdir(PHOTO_DIR) if os.path.isdir(os.path.join(PHOTO_DIR, k)) and title.startswith(k)]
+    if not kinds:
+        return []
+    folder = os.path.join(PHOTO_DIR, max(kinds, key=len))
+    return sorted(os.path.join(folder, f) for f in os.listdir(folder) if f.endswith(".jpg"))
+
+
 def save_media(cur, upload_dir, owner_id, purpose, img):
     key = f"{purpose.lower()}/{uuid.uuid4()}"
     sizes = {}
@@ -376,8 +390,9 @@ def save_media(cur, upload_dir, owner_id, purpose, img):
             fh.write(buf.getvalue())
         sizes[px] = buf.tell()
     cur.execute("""insert into media (owner_id, purpose, key_1080, key_320, width, height, size_bytes, created_at)
-                   values (%s, %s, %s, %s, 1080, 1080, %s, %s) returning id""",
-                (owner_id, purpose, f"{key}-1080.jpg", f"{key}-320.jpg", sizes[1080], NOW - timedelta(days=40)))
+                   values (%s, %s, %s, %s, %s, %s, %s, %s) returning id""",
+                (owner_id, purpose, f"{key}-1080.jpg", f"{key}-320.jpg", img.width, img.height, sizes[1080],
+                 NOW - timedelta(days=40)))
     return cur.fetchone()[0]
 
 
@@ -545,8 +560,13 @@ def main():
                         fitments.append((pid, brand_id[b], m, model["year_from"], model["year_to"] if model["year_to"] < 2025 else None))
             execute_values(cur, "insert into part_fitments (part_id, brand_id, model_id, year_from, year_to) values %s", fitments)
             # фото
-            photos = [save_media(cur, upload_dir, shop["owner"], "PART", part_image(cat, maker, v, RNG))
-                      for v in range(1, RNG.choice([1, 2, 2, 3]) + 1)]
+            available = real_photos(title)
+            if available:
+                chosen = RNG.sample(available, k=min(len(available), RNG.choice([1, 2, 2, 3])))
+                photos = [save_media(cur, upload_dir, shop["owner"], "PART", Image.open(path).convert("RGB")) for path in chosen]
+            else:
+                photos = [save_media(cur, upload_dir, shop["owner"], "PART", part_image(cat, maker, v, RNG))
+                          for v in range(1, RNG.choice([1, 2, 2, 3]) + 1)]
             execute_values(cur, "insert into part_photos (part_id, sort, media_id) values %s", [(pid, i, m) for i, m in enumerate(photos)])
             # просмотры за 3 недели
             views = []
@@ -739,6 +759,20 @@ def main():
                    from (select shop_id, round(avg(stars)::numeric, 1) avg, count(*) cnt from reviews group by shop_id) r
                    where r.shop_id = s.id""")
 
+    # тестовые аккаунты для ручной проверки: клиент с Camry 50 и продавец, открытый круглосуточно со всеми марками
+    tester = add_user("+996555000001", "Клиент", "BUYER", NOW - timedelta(days=1))
+    add_car(tester, "toyota", camry, 2014, "2.5 бензин", True)
+    seller = add_user("+996555000002", "Продавец", "SELLER", NOW - timedelta(days=1))
+    box = container_for("14", 8)
+    cur.execute("""insert into shops (owner_id, name, container_id, status, verified_at, open_from, open_to, work_days, is_open,
+                                      phone, phone_visible, rating, reviews_count, created_at, updated_at, public_id)
+                   values (%s, 'Мой бокс', %s, 'ACTIVE', now(), '00:00', '23:59', 127, true, '+996555000002', true, 0, 0,
+                           now(), now(), %s) returning id""", (seller, box[0], public_id()))
+    box_id = cur.fetchone()[0]
+    cur.execute("insert into shop_members (shop_id, user_id, role, created_at) values (%s, %s, 'OWNER', now())", (box_id, seller))
+    cur.execute("insert into shop_brands (shop_id, brand_id) select %s, id from brands", (box_id,))
+    cur.execute("insert into shop_categories (shop_id, category_id) select %s, id from categories", (box_id,))
+
     # избранное Бакыта
     for p in RNG.sample([p for p in all_parts if p["shop"] in (azamat["id"], japan["id"])], 3):
         cur.execute("insert into favorite_parts (user_id, part_id, created_at) values (%s, %s, now())", (bakyt, p["id"]))
@@ -754,6 +788,7 @@ def main():
     u, s, p, m, r, rv, ch, act = cur.fetchone()
     print(f"Готово: пользователей {u}, магазинов {s}, запчастей {p}, фото {m}, запросов {r} (активных {act}), отзывов {rv}, чатов {ch}")
     print("\nПокупатель: +996555123456 (Бакыт, Camry 50 · 2012)")
+    print("Тестовые: клиент +996555000001 (Camry 50 · 2014), продавец +996555000002 («Мой бокс», открыт всегда, все марки)")
     print("Продавцы (вход по коду из debugCode):")
     cur.execute("""select u.phone, s.name, r.code, c.number, s.rating, s.reviews_count,
                           (select count(*) from parts p where p.shop_id = s.id)
