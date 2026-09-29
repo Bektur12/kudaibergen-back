@@ -249,6 +249,22 @@ class RequestsIT extends AbstractIntegrationTest {
       assertThat(opelSlot.get("sellsBrand").asBoolean()).isTrue();
       assertThat(opelSlot.get("shop").has("brandIds")).isFalse();
       assertThat(fordSlot.get("sellsBrand").asBoolean()).isFalse();
+
+      // подсветка на карте (15): Opel — один бокс в ряду 16, ближайший — он же; карта открыта и гостю
+      JsonNode highlight = call(get("/api/v1/market/map/highlight").param("kind", "BRAND")
+            .param("id", String.valueOf(brandId("opel"))), 200);
+      assertThat(highlight.get("name").asText()).isEqualTo("Opel");
+      assertThat(highlight.get("shopsCount").asInt()).isEqualTo(1);
+      assertThat(highlight.get("rowsCount").asInt()).isEqualTo(1);
+      assertThat(highlight.get("rowIds").get(0).asLong()).isEqualTo(rowId("16"));
+      assertThat(highlight.get("nearestRow").asText()).isEqualTo("16");
+      assertThat(highlight.get("nearestContainerId").asLong()).isEqualTo(containerOf("+996700500542"));
+      assertThat(highlight.get("nearestDistanceM").asInt()).isPositive();
+      assertThat(highlight.get("fromSource").asText()).isEqualTo("ENTRANCE");
+      JsonNode none = call(get("/api/v1/market/map/highlight").param("kind", "BRAND")
+            .param("id", String.valueOf(brandId("daewoo"))), 200);
+      assertThat(none.get("shopsCount").asInt()).isZero();
+      assertThat(none.get("nearestRow").isNull()).isTrue();
       JsonNode noRows = call(authed(get("/api/v1/requests/estimate").param("carId", String.valueOf(carId))
             .param("target", "ROWS"), seller), 400);
       assertThat(noRows.get("code").asText()).isEqualTo("ROWS_REQUIRED");

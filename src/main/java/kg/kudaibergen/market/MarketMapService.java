@@ -4,6 +4,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -45,6 +46,7 @@ public class MarketMapService {
    static final Duration SNAPSHOT_TTL = Duration.ofMinutes(1);
    /** Пешком по рынку, м/мин: с толкучкой медленнее, чем по улице. */
    static final double WALK_METERS_PER_MINUTE = 60;
+   static final int NEAREST_CANDIDATES = 8;
 
    private final MapVersionRepository versions;
    private final MarketRowRepository rows;
@@ -212,33 +214,74 @@ public class MarketMapService {
    public RouteDto route(Long containerId, Point from, Double lat, Double lon, Integer entrance, Lang lang) {
       MarketSnapshot snapshot = snapshot();
       MarketSnapshot.ContainerView target = container(containerId);
-
-      Point start = from;
-      RouteDto.FromSource source = RouteDto.FromSource.POINT;
-      if (start == null && lat != null && lon != null) {
-         Optional<Point> gps = snapshot.calibration().map(c -> c.toMap(lat, lon)).filter(snapshot::inside);
-         if (gps.isPresent()) {
-            start = gps.get();
-            source = RouteDto.FromSource.GPS;
-         }
-      }
-      if (start == null) {
-         int index = entrance == null ? 0 : entrance;
-         if (index < 0 || index >= snapshot.entrances().size()) {
-            throw new NotFoundException("ENTRANCE_NOT_FOUND", "Нет такого входа");
-         }
-         start = snapshot.entrances().get(index).point();
-         source = RouteDto.FromSource.ENTRANCE;
-      }
+      Start origin = start(from, lat, lon, entrance);
+      Point start = origin.point();
+      RouteDto.FromSource source = origin.source();
 
       Router.Path path = snapshot.router().route(start, target.door());
       List<RouteSteps.Step> steps = RouteSteps.build(path, snapshot.passageNames(), target.center(),
             target.container().getNumber(), snapshot.metersPerPx(), lang);
       double meters = path.length() * snapshot.metersPerPx();
       int distance = (int) Math.round(meters);
-      int minutes = (int) Math.max(1, Math.ceil(meters / WALK_METERS_PER_MINUTE));
+      int minutes = walkMinutes(meters);
       return new RouteDto(LocationDto.of(target), target.center().toArray(), start.toArray(), source,
             path.polyline().stream().map(Point::toArray).toList(), distance, minutes, steps);
+   }
+
+   /** Откуда идёт человек и как это определили. */
+   public record Start(Point point, RouteDto.FromSource source) {
+   }
+
+   /**
+    * Точка старта: точка схемы (from), иначе GPS (если карта откалибрована и точка на рынке),
+    * иначе вход entrance (по умолчанию — главный).
+    */
+   public Start start(Point from, Double lat, Double lon, Integer entrance) {
+      if (from != null) {
+         return new Start(from, RouteDto.FromSource.POINT);
+      }
+      MarketSnapshot snapshot = snapshot();
+      if (lat != null && lon != null) {
+         Optional<Point> gps = snapshot.calibration().map(c -> c.toMap(lat, lon)).filter(snapshot::inside);
+         if (gps.isPresent()) {
+            return new Start(gps.get(), RouteDto.FromSource.GPS);
+         }
+      }
+      int index = entrance == null ? 0 : entrance;
+      if (index < 0 || index >= snapshot.entrances().size()) {
+         throw new NotFoundException("ENTRANCE_NOT_FOUND", "Нет такого входа");
+      }
+      return new Start(snapshot.entrances().get(index).point(), RouteDto.FromSource.ENTRANCE);
+   }
+
+   /** Ближайший пешком контейнер и путь до него в метрах. */
+   public record Nearest(MarketSnapshot.ContainerView container, int meters) {
+   }
+
+   /**
+    * Ближайший по проходам контейнер из списка (подсветка на карте, 15): «ближайший ряд 14, 170 м».
+    * Пешком меряются только {@link #NEAREST_CANDIDATES} ближайших по прямой — путь по проходам
+    * почти не отличается от прямой настолько, чтобы дальний по прямой оказался ближе всех.
+    * Контейнеры не со схемы пропускаются.
+    */
+   public Optional<Nearest> nearest(Point from, Collection<Long> containerIds) {
+      MarketSnapshot snapshot = snapshot();
+      return containerIds.stream().distinct()
+            .map(snapshot::container).flatMap(Optional::stream)
+            .sorted(Comparator.comparingDouble(view -> straight(from, view.door())))
+            .limit(NEAREST_CANDIDATES)
+            .map(view -> new Nearest(view, (int) Math.round(
+                  snapshot.router().route(from, view.door()).length() * snapshot.metersPerPx())))
+            .min(Comparator.comparingInt(Nearest::meters));
+   }
+
+   /** Минуты пешком, не меньше одной (60 м/мин). */
+   public static int walkMinutes(double meters) {
+      return (int) Math.max(1, Math.ceil(meters / WALK_METERS_PER_MINUTE));
+   }
+
+   private static double straight(Point a, Point b) {
+      return Math.hypot(a.x() - b.x(), a.y() - b.y());
    }
 
    /** Длина пешего пути по проходам от точки до контейнера в метрах — для «ближайший ряд, 170 м». */
