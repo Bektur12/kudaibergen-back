@@ -6,12 +6,13 @@ import java.util.List;
 import java.util.function.Function;
 
 import kg.kudaibergen.common.error.BadRequestException;
+import org.springframework.lang.Nullable;
 
 /**
  * Страница с курсором: {items, nextCursor}. nextCursor = null — дальше ничего нет.
  * Курсор непрозрачный для клиента (base64), внутри — ключ сортировки последнего элемента.
  */
-public record CursorPage<T>(List<T> items, String nextCursor) {
+public record CursorPage<T>(List<T> items, @Nullable String nextCursor) {
 
    public static final int DEFAULT_LIMIT = 20;
    public static final int MAX_LIMIT = 100;

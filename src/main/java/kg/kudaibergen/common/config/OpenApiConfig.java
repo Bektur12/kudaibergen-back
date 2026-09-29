@@ -4,6 +4,7 @@ import java.lang.reflect.RecordComponent;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -80,7 +81,7 @@ public class OpenApiConfig {
          if (properties == null || properties.isEmpty()) {
             return;
          }
-         Class<?> type = records.get(name);
+         Class<?> type = recordOf(name, records);
          if (type != null) {
             for (RecordComponent component : type.getRecordComponents()) {
                Schema<?> property = properties.get(component.getName());
@@ -93,6 +94,21 @@ public class OpenApiConfig {
             schema.setRequired(new ArrayList<>(properties.keySet()));
          }
       });
+   }
+
+   /**
+    * record для схемы: по точному имени, а для generic-record — по префиксу: springdoc называет
+    * CursorPage&lt;RequestSummaryDto&gt; схемой «CursorPageRequestSummaryDto».
+    */
+   private static Class<?> recordOf(String schemaName, Map<String, Class<?>> records) {
+      Class<?> exact = records.get(schemaName);
+      if (exact != null) {
+         return exact;
+      }
+      return records.values().stream()
+            .filter(type -> type.getTypeParameters().length > 0 && schemaName.startsWith(type.getSimpleName()))
+            .max(Comparator.comparingInt(type -> type.getSimpleName().length()))
+            .orElse(null);
    }
 
    private static Schema<?> nullable(Schema<?> property) {

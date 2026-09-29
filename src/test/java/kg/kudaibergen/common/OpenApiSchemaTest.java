@@ -48,6 +48,22 @@ class OpenApiSchemaTest {
    }
 
    @Test
+   @SuppressWarnings("rawtypes")
+   void nullableВGenericОбёрткеСписка() {
+      // springdoc называет CursorPage<RequestSummaryDto> схемой CursorPageRequestSummaryDto
+      Schema<?> page = new ObjectSchema().addProperty("items", new Schema<>().type("array"))
+            .addProperty("nextCursor", new StringSchema());
+      OpenAPI openApi = new OpenAPI().components(new Components().addSchemas("CursorPageRequestSummaryDto", page));
+
+      OpenApiConfig.customise(openApi, OpenApiConfig.records("kg.kudaibergen"));
+
+      Map<String, Schema> properties = page.getProperties();
+      assertThat(properties.get("nextCursor").getNullable()).isTrue();
+      assertThat(properties.get("items").getNullable()).isNotEqualTo(Boolean.TRUE);
+      assertThat(page.getRequired()).containsExactly("items", "nextCursor");
+   }
+
+   @Test
    void requiredТолькоУОтветов() {
       Schema<?> response = new ObjectSchema().addProperty("id", new StringSchema()).addProperty("name", new StringSchema());
       Schema<?> nested = new ObjectSchema().addProperty("year", new StringSchema());
