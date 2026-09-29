@@ -62,12 +62,15 @@ class CatalogIT extends AbstractIntegrationTest {
       long camry50 = car(buyer, camry("50"), 2012);
       JsonNode found = call(authed(get("/api/v1/parts/search").param("carId", String.valueOf(camry50)), buyer), 200);
       assertThat(found.get("total").asInt()).isEqualTo(1);
-      assertThat(found.get("carLabel").asText()).isEqualTo("Camry 50 · 2012");
+      assertThat(found.get("appliedCar").get("label").asText()).isEqualTo("Camry 50 · 2012");
+      assertThat(found.get("appliedCar").get("displayName").asText()).isEqualTo("Camry 50");
       JsonNode card = found.get("items").get(0);
       assertThat(card.get("fits").asBoolean()).isTrue();
       assertThat(card.get("exactModel").asBoolean()).isTrue();
-      assertThat(card.get("photo").get("thumbUrl").asText()).contains("-320.jpg");
-      assertThat(card.get("shop").get("location").get("rowCode").asText()).isEqualTo("16");
+      assertThat(card.get("mainPhoto").get("thumbUrl").asText()).contains("-320.jpg");
+      assertThat(card.get("shop").get("row").asText()).isEqualTo("16");
+      assertThat(card.get("stockStatus").asText()).isEqualTo("IN_STOCK");
+      assertThat(card.get("currency").asText()).isEqualTo("KGS");
       assertThat(call(get("/api/v1/parts/search").param("brandId", String.valueOf(brandId("toyota")))
             .param("modelId", String.valueOf(camry("70"))).param("year", "2019"), 200).get("total").asInt()).isZero();
 
@@ -157,7 +160,7 @@ class CatalogIT extends AbstractIntegrationTest {
       JsonNode messages = call(authed(get("/api/v1/chats/" + chat.get("id").asLong() + "/messages"), buyer), 200)
             .get("items");
       assertThat(messages.findValuesAsText("type")).containsExactly("PART", "SYSTEM");
-      assertThat(messages.get(0).get("payload").get("photo").get("thumbUrl").asText()).contains("-320.jpg");
+      assertThat(messages.get(0).get("payload").get("mainPhoto").get("thumbUrl").asText()).contains("-320.jpg");
    }
 
    @Test

@@ -15,6 +15,7 @@ import kg.kudaibergen.catalog.dto.FitmentDto;
 import kg.kudaibergen.catalog.dto.MyPartItemDto;
 import kg.kudaibergen.catalog.dto.PartCardDto;
 import kg.kudaibergen.catalog.dto.PartDetailDto;
+import kg.kudaibergen.catalog.dto.StockStatus;
 import kg.kudaibergen.catalog.entity.Fitment;
 import kg.kudaibergen.catalog.entity.Part;
 import kg.kudaibergen.category.Category;
@@ -27,6 +28,7 @@ import kg.kudaibergen.media.MediaService;
 import kg.kudaibergen.media.PhotoDto;
 import kg.kudaibergen.shop.ShopMapper;
 import kg.kudaibergen.shop.ShopRepository;
+import kg.kudaibergen.shop.dto.ShopBriefDto;
 import kg.kudaibergen.shop.dto.ShopCardDto;
 import kg.kudaibergen.shop.entity.Shop;
 import kg.kudaibergen.user.entity.Lang;
@@ -65,11 +67,12 @@ public class CatalogView {
       Map<Long, ShopCardDto> shopCards = shopCards(ordered.stream().map(Part::getShopId).toList());
       Set<Long> favorite = favorites.favoriteAmong(viewerId, ids);
       return ordered.stream()
-            .map(part -> new PartCardDto(part.getId(), part.getTitle(), part.getPrice(), part.getCondition(),
-                  part.inStock(), part.getPhotoIds().isEmpty() ? null : photos.get(part.getPhotoIds().get(0)),
+            .map(part -> new PartCardDto(part.getId(), part.getTitle(), part.getPrice(), PartCardDto.KGS,
+                  part.getCondition(), StockStatus.of(part.inStock()),
+                  part.getPhotoIds().isEmpty() ? null : photos.get(part.getPhotoIds().get(0)),
                   car == null ? null : Fits.anyFits(part.getFitments(), car),
                   car != null && Fits.anyExact(part.getFitments(), car), favorite.contains(part.getId()),
-                  shopCards.get(part.getShopId())))
+                  ShopBriefDto.of(shopCards.get(part.getShopId()))))
             .toList();
    }
 
@@ -77,8 +80,8 @@ public class CatalogView {
       Shop shop = shops.findById(part.getShopId()).orElseThrow();
       PartDetailDto.FitDto fit = car == null ? null
             : new PartDetailDto.FitDto(car.label(), Fits.anyFits(part.getFitments(), car));
-      return new PartDetailDto(part.getId(), part.getStatus(), part.getTitle(), part.getPrice(), part.getCondition(),
-            part.getQuantity(), part.inStock(), category(part.getCategoryId(), lang), part.getManufacturer(),
+      return new PartDetailDto(part.getId(), part.getPublicId(), part.getStatus(), part.getTitle(), part.getPrice(), part.getCondition(),
+            part.getQuantity(), StockStatus.of(part.inStock()), category(part.getCategoryId(), lang), part.getManufacturer(),
             part.getOemNumber(), part.getSide(), part.getPosition(),
             List.copyOf(media.photos(part.getPhotoIds()).values()), fitments(part.getFitments(), lang), fit,
             !favorites.favoriteAmong(viewerId, List.of(part.getId())).isEmpty(), shopMapper.card(shop),
@@ -95,7 +98,7 @@ public class CatalogView {
          List<String> labels = fitments(part.getFitments(), lang).stream().map(FitmentDto::label).toList();
          return new MyPartItemDto(part.getId(), part.getStatus(), part.getTitle(),
                part.getPhotoIds().isEmpty() ? null : photos.get(part.getPhotoIds().get(0)), brands, labels,
-               part.getPrice(), part.getQuantity(), part.inStock(), part.getViewsCount());
+               part.getPrice(), part.getQuantity(), StockStatus.of(part.inStock()), part.getViewsCount());
       }).toList();
    }
 

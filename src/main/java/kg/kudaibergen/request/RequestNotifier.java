@@ -102,7 +102,7 @@ public class RequestNotifier {
             have == 0 ? RequestTexts.noReplyTitle(user.getLang()) : RequestTexts.expiredTitle(have, user.getLang()),
             have == 0 ? RequestTexts.noReplyBody(request.getText(), user.getLang())
                   : RequestTexts.expiredBody(request.getText(), user.getLang()),
-            Map.of("type", have == 0 ? "NO_REPLY" : "REQUEST_EXPIRED", "requestId", request.getId().toString(),
+            Map.of("type", expiredPushType(have), "requestId", request.getId().toString(),
                   "haveCount", String.valueOf(have)),
             null, !quietHours.now()));
    }
@@ -119,6 +119,14 @@ public class RequestNotifier {
       pushes.send(staff, (user, settings) -> new PushMessage(
             RequestTexts.saleTitle(event.stars(), user.getLang()), null,
             Map.of("type", "SALE", "requestId", event.requestId().toString()), null, !quiet));
+   }
+
+   /**
+    * Куда ведёт пуш об истечении: NO_REPLY — экран 20 «Пока никто не ответил» («Отправить всему рынку» /
+    * «Закрыть запрос»), REQUEST_EXPIRED — статистика запроса 32 с «Продлить».
+    */
+   static String expiredPushType(int haveCount) {
+      return haveCount == 0 ? "NO_REPLY" : "REQUEST_EXPIRED";
    }
 
    /** «Уведомления об ответах» выключены — покупателю не шлём. */

@@ -141,6 +141,11 @@ class RequestsIT extends AbstractIntegrationTest {
       assertThat(closed.get("status").asText()).isEqualTo("CLOSED");
       assertThat(closed.get("closedWithShopId").asLong()).isEqualTo(shopA);
       JsonNode profile = call(get("/api/v1/shops/" + shopA), 200);
+      // ссылка «Поделиться» — по непредсказуемому publicId, ответ тот же
+      String publicId = profile.get("publicId").asText();
+      assertThat(publicId).matches("[0-9A-Za-z]{10}");
+      assertThat(call(get("/api/v1/shops/public/" + publicId), 200).get("id").asLong()).isEqualTo(shopA);
+      call(get("/api/v1/shops/public/nope123456"), 404);
       assertThat(profile.get("rating").asDouble()).isEqualTo(5.0);
       assertThat(profile.get("reviewsCount").asInt()).isEqualTo(1);
       String tags = jdbc.queryForObject("select array_to_string(tags, ',') from reviews where request_id = ?",
@@ -256,6 +261,16 @@ class RequestsIT extends AbstractIntegrationTest {
             .param("target", "CONTAINERS").param("containerIds", String.valueOf(containerOf("+996700500542"))),
             seller), 200);
       assertThat(chosen.get("recipients").asInt()).isEqualTo(1);
+      // число на 06б совпадает с реальной рассылкой: контейнерам — тоже без фильтра по марке
+      JsonNode sentToContainer = call(authed(jsonPost("/api/v1/requests", "{\"carId\":" + carId
+            + ",\"text\":\"Бампер передний\",\"target\":\"CONTAINERS\",\"targetContainerIds\":["
+            + containerOf("+996700500542") + "]}"), seller), 201);
+      assertThat(sentToContainer.get("recipientsCount").asInt()).isEqualTo(chosen.get("recipients").asInt());
+      JsonNode sentToMarket = call(authed(jsonPost("/api/v1/requests", "{\"carId\":" + carId
+            + ",\"text\":\"Бампер задний\",\"target\":\"MARKET\"}"), seller), 201);
+      JsonNode marketEstimate = call(authed(get("/api/v1/requests/estimate").param("carId", String.valueOf(carId))
+            .param("target", "MARKET"), seller), 200);
+      assertThat(sentToMarket.get("recipientsCount").asInt()).isEqualTo(marketEstimate.get("recipients").asInt());
 
       // экран 31: у контейнеров ряда — есть ли продавец и продаёт ли он марку
       JsonNode grid = call(authed(get("/api/v1/market/rows/" + rowId("16") + "/containers")

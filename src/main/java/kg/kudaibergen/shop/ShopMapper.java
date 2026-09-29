@@ -53,7 +53,7 @@ public class ShopMapper {
 
    public ShopPublicDto publicProfile(Shop shop, boolean favorite, Lang lang) {
       List<PhotoDto> photos = List.copyOf(media.photos(shop.getPhotoIds()).values());
-      return new ShopPublicDto(shop.getId(), shop.getName(), avatarUrl(shop), shop.getRating(),
+      return new ShopPublicDto(shop.getId(), shop.getPublicId(), shop.getName(), avatarUrl(shop), shop.getRating(),
             shop.getReviewsCount(), location(shop.getContainerId()), hours.state(shop), brands(shop),
             categories(shop, lang), shop.isPhoneVisible() ? shop.getPhone() : null, favorite, photos,
             new ShopPublicDto.Counts(parts.countByShopIdAndStatus(shop.getId(), PartStatus.ACTIVE), photos.size(),

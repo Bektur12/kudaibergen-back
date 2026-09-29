@@ -12,6 +12,7 @@ import java.util.Set;
 
 import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
+import kg.kudaibergen.common.web.PublicIds;
 import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -108,10 +109,18 @@ public class Shop {
    protected Shop() {
    }
 
+   /** Для ссылок «Поделиться»: не перебирается, в отличие от id. */
+   @Column(name = "public_id", nullable = false, updatable = false, length = 16)
+   private String publicId = PublicIds.next();
+
    public Shop(Long ownerId, String name, Long containerId) {
       this.ownerId = ownerId;
       this.name = name;
       this.containerId = containerId;
+   }
+
+   public String getPublicId() {
+      return publicId;
    }
 
    @PreUpdate

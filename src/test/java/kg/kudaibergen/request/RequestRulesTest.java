@@ -122,6 +122,13 @@ class RequestRulesTest {
    }
 
    @Test
+   void пушОбИстеченииБезОтветовВедётНаЭкран20() {
+      assertThat(RequestNotifier.expiredPushType(0)).isEqualTo("NO_REPLY");
+      assertThat(RequestNotifier.expiredPushType(3)).isEqualTo("REQUEST_EXPIRED");
+      assertThat(RequestTexts.noReplyTitle(Lang.RU)).isEqualTo("Пока никто не ответил");
+   }
+
+   @Test
    void склонениеОтветов() {
       assertThat(RequestTexts.expiredTitle(1, Lang.RU)).isEqualTo("Время вышло: 1 ответ");
       assertThat(RequestTexts.answers(3)).isEqualTo("ответа");

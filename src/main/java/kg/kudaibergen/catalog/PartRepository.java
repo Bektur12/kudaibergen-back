@@ -15,6 +15,10 @@ import org.springframework.data.repository.query.Param;
 
 public interface PartRepository extends JpaRepository<Part, Long> {
 
+   /** Ссылка «Поделиться» (29): публичный id → id. */
+   @Query("select p.id from Part p where p.publicId = :publicId")
+   Optional<Long> findIdByPublicId(@Param("publicId") String publicId);
+
    @Lock(LockModeType.PESSIMISTIC_WRITE)
    @Query("select p from Part p where p.id = :id")
    Optional<Part> findForUpdate(@Param("id") Long id);

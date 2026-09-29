@@ -118,6 +118,24 @@ public class CatalogController {
       return catalog.detail(id, userId, viewer, carId, brandId, modelId, year, Langs.fromHeader(language));
    }
 
+   @GetMapping("/parts/public/{publicId}")
+   @Operation(summary = "Карточка запчасти по ссылке «Поделиться» (29)",
+         description = "publicId из карточки — непредсказуемый, в отличие от id. Параметры и ответ как у /parts/{id}")
+   public PartDetailDto detailByPublicId(@AuthenticationPrincipal AuthPrincipal principal,
+                                         @PathVariable String publicId,
+                                         @RequestParam(required = false) Long carId,
+                                         @RequestParam(required = false) Long brandId,
+                                         @RequestParam(required = false) Long modelId,
+                                         @RequestParam(required = false) Integer year,
+                                         HttpServletRequest http,
+                                         @Parameter(hidden = true) @RequestHeader(value = HttpHeaders.ACCEPT_LANGUAGE,
+                                               required = false) String language) {
+      Long userId = userId(principal);
+      String viewer = userId != null ? "u" + userId : "ip" + http.getRemoteAddr();
+      return catalog.detailByPublicId(publicId, userId, viewer, carId, brandId, modelId, year,
+            Langs.fromHeader(language));
+   }
+
    @PutMapping("/parts/{id}/favorite")
    @ResponseStatus(HttpStatus.NO_CONTENT)
    @Operation(summary = "В избранное (сердечко)")

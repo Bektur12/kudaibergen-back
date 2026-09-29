@@ -2,6 +2,7 @@ package kg.kudaibergen.shop;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 
 import kg.kudaibergen.shop.entity.Shop;
 import kg.kudaibergen.shop.entity.ShopStatus;
@@ -11,6 +12,10 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface ShopRepository extends JpaRepository<Shop, Long> {
+
+   /** Ссылка «Поделиться» профилем (30): публичный id → id. */
+   @Query("select s.id from Shop s where s.publicId = :publicId")
+   Optional<Long> findIdByPublicId(@Param("publicId") String publicId);
 
    /** Кто стоит (или переезжает) в этих контейнерах — для серых клеток экрана 10а. */
    @Query("select s from Shop s where s.containerId in :ids or s.pendingContainerId in :ids")

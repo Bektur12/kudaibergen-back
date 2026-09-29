@@ -17,6 +17,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.OrderColumn;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import kg.kudaibergen.common.web.PublicIds;
 import kg.kudaibergen.request.entity.PartCondition;
 
 /** Запчасть в каталоге продавца (экраны 24, 26, 27, 29). */
@@ -93,8 +94,16 @@ public class Part {
    protected Part() {
    }
 
+   /** Для ссылок «Поделиться»: не перебирается, в отличие от id. */
+   @Column(name = "public_id", nullable = false, updatable = false, length = 16)
+   private String publicId = PublicIds.next();
+
    public Part(Long shopId) {
       this.shopId = shopId;
+   }
+
+   public String getPublicId() {
+      return publicId;
    }
 
    @PreUpdate

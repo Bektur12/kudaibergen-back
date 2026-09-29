@@ -8,6 +8,7 @@ import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import kg.kudaibergen.catalog.dto.AppliedCarDto;
 import kg.kudaibergen.catalog.dto.CarFilter;
 import kg.kudaibergen.catalog.dto.PartCardDto;
 import kg.kudaibergen.catalog.dto.PartDetailDto;
@@ -17,6 +18,9 @@ import kg.kudaibergen.catalog.entity.Part;
 import kg.kudaibergen.common.error.BadRequestException;
 import kg.kudaibergen.common.error.NotFoundException;
 import kg.kudaibergen.common.web.CursorPage;
+import kg.kudaibergen.garage.VehicleDirectory;
+import kg.kudaibergen.garage.dto.BrandDto;
+import kg.kudaibergen.garage.entity.Brand;
 import kg.kudaibergen.market.MarketMapService;
 import kg.kudaibergen.market.MarketSnapshot;
 import kg.kudaibergen.market.geo.Point;
@@ -48,11 +52,12 @@ public class CatalogService {
    private final ShopRepository shops;
    private final ShopAccess shopAccess;
    private final MarketMapService market;
+   private final VehicleDirectory directory;
    private final StringRedisTemplate redis;
 
    public CatalogService(PartRepository parts, PartSearch search, CatalogView view, CarFilters carFilters,
                          FavoritePartRepository favorites, ShopRepository shops, ShopAccess shopAccess,
-                         MarketMapService market, StringRedisTemplate redis) {
+                         MarketMapService market, VehicleDirectory directory, StringRedisTemplate redis) {
       this.parts = parts;
       this.search = search;
       this.view = view;
@@ -61,6 +66,7 @@ public class CatalogService {
       this.shops = shops;
       this.shopAccess = shopAccess;
       this.market = market;
+      this.directory = directory;
       this.redis = redis;
    }
 
@@ -81,8 +87,18 @@ public class CatalogService {
       boolean more = hits.size() > size;
       List<Long> ids = (more ? hits.subList(0, size) : hits).stream().map(PartSearch.Hit::partId).toList();
       List<PartCardDto> cards = view.cards(ids, car, viewerId);
-      return new PartSearchResultDto(cards, search.count(query), car == null ? null : car.label(),
+      return new PartSearchResultDto(cards, search.count(query), appliedCar(car),
             more ? CursorPage.encode(String.valueOf(offset + size)) : null);
+   }
+
+   /** «для Camry 50»: модель, а если выбрана только марка — марка. */
+   private AppliedCarDto appliedCar(CarFilter car) {
+      if (car == null) {
+         return null;
+      }
+      Brand brand = directory.brand(car.brandId());
+      String displayName = car.modelId() == null ? brand.getName() : directory.model(car.modelId()).label();
+      return new AppliedCarDto(BrandDto.of(brand), car.modelId(), displayName, car.year(), car.label());
    }
 
    /** «Показать 86» в шторке моделей (28). */
@@ -110,6 +126,14 @@ public class CatalogService {
          parts.countView(partId);
       }
       return view.detail(part, carFilters.resolve(viewerId, carId, brandId, modelId, year), viewerId, lang);
+   }
+
+   /** Ссылка «Поделиться» (29): карточка по публичному id, те же правила видимости. */
+   @Transactional
+   public PartDetailDto detailByPublicId(String publicId, Long viewerId, String viewerKey, Long carId, Long brandId,
+                                         Long modelId, Integer year, Lang lang) {
+      Long partId = parts.findIdByPublicId(publicId).orElseThrow(CatalogService::notFound);
+      return detail(partId, viewerId, viewerKey, carId, brandId, modelId, year, lang);
    }
 
    // ─────────────────────── избранное ───────────────────────

@@ -212,6 +212,14 @@ public class ShopService {
       return mapper.publicProfile(shop, favorite, lang);
    }
 
+   /** Ссылка «Поделиться» профилем (30): по публичному id. */
+   @Transactional(readOnly = true)
+   public ShopPublicDto publicProfileByPublicId(String publicId, Long viewerId, Lang lang) {
+      Long shopId = shops.findIdByPublicId(publicId)
+            .orElseThrow(() -> new NotFoundException("SHOP_NOT_FOUND", "Магазин не найден"));
+      return publicProfile(shopId, viewerId, lang);
+   }
+
    /** Список действующих магазинов: «Списком» на карте (15), выбор «Боксу» в запросе (06). */
    @Transactional(readOnly = true)
    public CursorPage<ShopCardDto> search(Long brandId, Long categoryId, Long rowId, String query, String cursor,

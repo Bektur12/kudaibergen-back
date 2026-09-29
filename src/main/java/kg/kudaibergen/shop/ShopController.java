@@ -49,6 +49,17 @@ public class ShopController {
       return shops.search(brandId, categoryId, rowId, q, cursor, limit);
    }
 
+   @GetMapping("/shops/public/{publicId}")
+   @Operation(summary = "Профиль продавца по ссылке «Поделиться» (30)",
+         description = "publicId из профиля — непредсказуемый, в отличие от id. Ответ как у /shops/{id}")
+   public ShopPublicDto shopByPublicId(@PathVariable String publicId,
+                                       @AuthenticationPrincipal AuthPrincipal principal,
+                                       @Parameter(hidden = true) @RequestHeader(value = HttpHeaders.ACCEPT_LANGUAGE,
+                                             required = false) String language) {
+      return shops.publicProfileByPublicId(publicId, principal == null ? null : principal.userId(),
+            Langs.fromHeader(language));
+   }
+
    @GetMapping("/shops/{id}")
    @Operation(summary = "Профиль продавца для покупателя (30)")
    public ShopPublicDto shop(@PathVariable Long id, @AuthenticationPrincipal AuthPrincipal principal,

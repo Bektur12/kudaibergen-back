@@ -89,7 +89,7 @@ public class ChatView {
          return message.getPayload();
       }
       Map<String, Object> payload = new LinkedHashMap<>(message.getPayload());
-      payload.put("photo", photos.photos(List.of(mediaId.longValue())).get(mediaId.longValue()));
+      payload.put("mainPhoto", photos.photos(List.of(mediaId.longValue())).get(mediaId.longValue()));
       return payload;
    }
 
