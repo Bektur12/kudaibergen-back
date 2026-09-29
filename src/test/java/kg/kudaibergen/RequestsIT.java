@@ -48,8 +48,24 @@ class RequestsIT extends AbstractIntegrationTest {
             .param("target", "ROWS").param("rowIds", String.valueOf(rowId("16"))), buyer), 200);
       assertThat(row.get("recipients").asInt()).isEqualTo(1);
 
-      JsonNode created = call(authed(jsonPost("/api/v1/requests",
-            "{\"carId\":" + carId + ",\"text\":\"Стойки передние, пара\",\"target\":\"MARKET\"}"), buyer), 201);
+      // подсказки «что нужно»: без истории — по базовой популярности, «Стойки» несут категорию «Ходовая»
+      JsonNode hints = call(authed(get("/api/v1/requests/hints").param("carId", String.valueOf(carId)), buyer), 200);
+      assertThat(hints).hasSize(3);
+      JsonNode struts = null;
+      for (JsonNode hint : call(authed(get("/api/v1/requests/hints").param("limit", "12"), buyer), 200)) {
+         if (hint.get("text").asText().equals("Стойки")) {
+            struts = hint;
+         }
+      }
+
+      JsonNode created = call(authed(jsonPost("/api/v1/requests", "{\"carId\":" + carId
+            + ",\"text\":\"Стойки передние, пара\",\"target\":\"MARKET\",\"hintId\":" + struts.get("id").asLong()
+            + "}"), buyer), 201);
+      assertThat(created.get("category").get("slug").asText()).isEqualTo("suspension");
+      assertThat(created.get("car").get("brand").get("shortName").asText()).isEqualTo("Subaru");
+      // эта подсказка теперь первая для Forester
+      assertThat(call(authed(get("/api/v1/requests/hints").param("carId", String.valueOf(carId)), buyer), 200)
+            .get(0).get("text").asText()).isEqualTo("Стойки");
       long requestId = created.get("id").asLong();
       assertThat(created.get("recipientsCount").asInt()).isEqualTo(2);
       assertThat(created.get("state").asText()).isEqualTo("WAITING");

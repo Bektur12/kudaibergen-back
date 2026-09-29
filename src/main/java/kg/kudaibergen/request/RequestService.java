@@ -34,6 +34,7 @@ import kg.kudaibergen.market.MarketMapService;
 import kg.kudaibergen.market.MarketSnapshot;
 import kg.kudaibergen.media.MediaPurpose;
 import kg.kudaibergen.media.MediaService;
+import kg.kudaibergen.request.dto.PartHintDto;
 import kg.kudaibergen.request.dto.RecipientsEstimateDto;
 import kg.kudaibergen.request.dto.ReplyDto;
 import kg.kudaibergen.request.dto.RequestDetailDto;
@@ -42,6 +43,7 @@ import kg.kudaibergen.request.dto.RequestStatsDto;
 import kg.kudaibergen.request.dto.RequestSummaryDto;
 import kg.kudaibergen.request.dto.ReviewTagDto;
 import kg.kudaibergen.request.dto.WidenResultDto;
+import kg.kudaibergen.request.entity.PartHint;
 import kg.kudaibergen.request.entity.PartRequest;
 import kg.kudaibergen.request.entity.ReplyAnswer;
 import kg.kudaibergen.request.entity.RequestDuration;
@@ -75,6 +77,9 @@ public class RequestService {
    private static final int JOB_BATCH = 200;
    /** «Продлить» (32): на 30 минут, час или 3 часа. */
    static final Set<Integer> EXTEND_MINUTES = Set.of(30, 60, 180);
+   /** «Колодки · Радиатор · Фара» — три чипа под полем (06). */
+   static final int DEFAULT_HINTS = 3;
+   static final int MAX_HINTS = 12;
 
    private final PartRequestRepository requests;
    private final RequestRecipientRepository recipients;
@@ -92,6 +97,7 @@ public class RequestService {
    private final ShopMapper shopMapper;
    private final MediaService media;
    private final RequestStatsView statsView;
+   private final PartHintRepository hints;
    private final ApplicationEventPublisher events;
    private final AppProperties.Requests config;
    private final Clock clock;
@@ -102,7 +108,7 @@ public class RequestService {
                          RequestMapper mapper, GarageService garage, VehicleDirectory directory,
                          CategoryService categories, MarketMapService market, ShopRepository shops,
                          ShopMapper shopMapper, MediaService media, RequestStatsView statsView,
-                         ApplicationEventPublisher events, AppProperties properties, Clock clock) {
+                         PartHintRepository hints, ApplicationEventPublisher events, AppProperties properties, Clock clock) {
       this.requests = requests;
       this.recipients = recipients;
       this.replies = replies;
@@ -119,6 +125,7 @@ public class RequestService {
       this.shopMapper = shopMapper;
       this.media = media;
       this.statsView = statsView;
+      this.hints = hints;
       this.events = events;
       this.config = properties.requests();
       this.clock = clock;
@@ -152,8 +159,11 @@ public class RequestService {
    public RequestDetailDto create(Long buyerId, RequestInputs.CreateRequest input, Lang lang) {
       Car car = garage.getOwned(input.carId(), buyerId);
       Targets targets = targets(input.target(), input.targetRowIds(), input.targetContainerIds());
-      if (input.categoryId() != null) {
-         categories.requireExisting(Set.of(input.categoryId()));
+      PartHint hint = input.hintId() == null ? null : hints.findById(input.hintId())
+            .orElseThrow(() -> new NotFoundException("HINT_NOT_FOUND", "Подсказка не найдена"));
+      Long categoryId = input.categoryId() != null ? input.categoryId() : hint == null ? null : hint.getCategoryId();
+      if (categoryId != null) {
+         categories.requireExisting(Set.of(categoryId));
       }
       List<Long> photoIds = input.mediaIds() == null ? List.of() : input.mediaIds().stream().distinct().toList();
       if (!photoIds.isEmpty()) {
@@ -164,7 +174,7 @@ public class RequestService {
 
       RequestDuration duration = input.duration() == null ? RequestDuration.MIN_30 : input.duration();
       PartRequest request = requests.save(new PartRequest(buyerId, car.getId(), car.getBrand().getId(),
-            car.getModel().getId(), car.getYear(), input.text().trim(), input.categoryId(), targets.target(),
+            car.getModel().getId(), car.getYear(), input.text().trim(), categoryId, input.hintId(), targets.target(),
             targets.rowIds(), targets.containerIds(), photoIds, duration, now));
       dispatch(request, finder.find(buyerId, request.getBrandId(), targets.target(), targets.rowIds(),
             targets.containerIds()), Set.of(), now);
@@ -351,6 +361,22 @@ public class RequestService {
    @Transactional(readOnly = true)
    public RequestStatsDto stats(AuthPrincipal principal, Long requestId) {
       return statsView.build(visible(principal, requestId));
+   }
+
+   /** Подсказки «что нужно» (06): топ для машины из гаража, без машины — самые частые вообще. */
+   @Transactional(readOnly = true)
+   public List<PartHintDto> hints(Long buyerId, Long carId, Integer limit, Lang lang) {
+      long brandId = 0;
+      long modelId = 0;
+      if (carId != null) {
+         Car car = garage.getOwned(carId, buyerId);
+         brandId = car.getBrand().getId();
+         modelId = car.getModel().getId();
+      }
+      int size = limit == null ? DEFAULT_HINTS : Math.clamp(limit, 1, MAX_HINTS);
+      return hints.topFor(brandId, modelId, size).stream()
+            .map(hint -> new PartHintDto(hint.getId(), hint.text(lang), hint.getCategoryId()))
+            .toList();
    }
 
    public List<ReviewTagDto> reviewTags(Lang lang) {

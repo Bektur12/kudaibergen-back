@@ -27,6 +27,10 @@ public class Brand {
    @Column(nullable = false, length = 60)
    private String name;
 
+   /** Подпись в плитке (23, 28): «Mercedes» вместо «Mercedes-Benz». */
+   @Column(name = "short_name", nullable = false, length = 30)
+   private String shortName;
+
    @Column(name = "logo_url")
    private String logoUrl;
 
@@ -59,6 +63,10 @@ public class Brand {
 
    public String getName() {
       return name;
+   }
+
+   public String getShortName() {
+      return shortName == null ? name : shortName;
    }
 
    public String getLogoUrl() {

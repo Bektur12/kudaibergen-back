@@ -28,13 +28,14 @@ public final class RequestInputs {
     * «Отправить» на экране 06. Машина — из гаража (новую клиент сначала добавляет через POST /me/cars).
     * targetRowIds — для «Рядам» (1–10), targetContainerIds — для «Контейнерам» (1–30).
     * duration — «Сколько ждать ответы», по умолчанию 30 минут. mediaIds — фото детали (POST /media/photos,
-    * purpose=REQUEST), до 3.
+    * purpose=REQUEST), до 3. hintId — чип подсказки «+ Колодки»; categoryId тогда берётся из подсказки.
     */
    public record CreateRequest(
          @NotNull(message = "Выберите машину") Long carId,
          @NotBlank(message = "Напишите, что нужно")
          @Size(min = 3, max = 200, message = "От 3 до 200 символов") String text,
          Long categoryId,
+         Long hintId,
          @NotNull(message = "Выберите, кому отправить") RequestTarget target,
          List<Long> targetRowIds,
          List<Long> targetContainerIds,

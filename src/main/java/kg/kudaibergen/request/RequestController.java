@@ -11,6 +11,7 @@ import kg.kudaibergen.common.i18n.Langs;
 import kg.kudaibergen.common.idempotency.Idempotent;
 import kg.kudaibergen.common.security.AuthPrincipal;
 import kg.kudaibergen.common.web.CursorPage;
+import kg.kudaibergen.request.dto.PartHintDto;
 import kg.kudaibergen.request.dto.RecipientsEstimateDto;
 import kg.kudaibergen.request.dto.ReplyDto;
 import kg.kudaibergen.request.dto.RequestDetailDto;
@@ -44,6 +45,18 @@ public class RequestController {
 
    public RequestController(RequestService requests) {
       this.requests = requests;
+   }
+
+   @GetMapping("/requests/hints")
+   @Operation(summary = "Подсказки «что нужно» (06)", description = """
+         Чипы «+ Колодки · Радиатор · Фара» для машины из гаража: сначала то, что чаще спрашивали для этой
+         модели и марки за 90 дней, дальше самые частые вообще. id передаётся в hintId запроса. limit — 1–12, по умолчанию 3.""")
+   public List<PartHintDto> hints(@AuthenticationPrincipal AuthPrincipal principal,
+                                  @RequestParam(required = false) Long carId,
+                                  @RequestParam(required = false) Integer limit,
+                                  @Parameter(hidden = true) @RequestHeader(value = HttpHeaders.ACCEPT_LANGUAGE,
+                                        required = false) String language) {
+      return requests.hints(principal.userId(), carId, limit, Langs.fromHeader(language));
    }
 
    @GetMapping("/requests/estimate")

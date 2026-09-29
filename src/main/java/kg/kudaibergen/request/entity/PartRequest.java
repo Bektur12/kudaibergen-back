@@ -55,6 +55,10 @@ public class PartRequest {
    @Column(name = "category_id", updatable = false)
    private Long categoryId;
 
+   /** Подсказка «+ Колодки», с которой начали запрос: из них считаются подсказки для этой машины. */
+   @Column(name = "hint_id", updatable = false)
+   private Long hintId;
+
    @Enumerated(EnumType.STRING)
    @Column(nullable = false, length = 10)
    private RequestTarget target;
@@ -111,7 +115,7 @@ public class PartRequest {
    }
 
    public PartRequest(Long buyerId, Long carId, Long brandId, Long modelId, short year, String text, Long categoryId,
-                      RequestTarget target, List<Long> targetRowIds, List<Long> targetContainerIds,
+                      Long hintId, RequestTarget target, List<Long> targetRowIds, List<Long> targetContainerIds,
                       List<Long> photoIds, RequestDuration duration, Instant now) {
       this.buyerId = buyerId;
       this.carId = carId;
@@ -120,6 +124,7 @@ public class PartRequest {
       this.year = year;
       this.text = text;
       this.categoryId = categoryId;
+      this.hintId = hintId;
       this.target = target;
       this.targetRowIds = new ArrayList<>(targetRowIds);
       this.targetContainerIds = new ArrayList<>(targetContainerIds);
@@ -222,6 +227,10 @@ public class PartRequest {
 
    public Long getCategoryId() {
       return categoryId;
+   }
+
+   public Long getHintId() {
+      return hintId;
    }
 
    public RequestTarget getTarget() {

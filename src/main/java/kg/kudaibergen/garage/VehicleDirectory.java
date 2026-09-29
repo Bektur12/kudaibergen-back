@@ -140,6 +140,7 @@ public class VehicleDirectory {
 
    private static Set<String> wordsOf(Brand brand) {
       Set<String> words = new HashSet<>(words(brand.getName()));
+      words.addAll(words(brand.getShortName()));
       words.addAll(words(brand.getSlug()));
       brand.getAliases().forEach(alias -> words.addAll(words(alias)));
       return words;

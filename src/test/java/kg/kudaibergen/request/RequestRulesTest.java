@@ -27,7 +27,7 @@ class RequestRulesTest {
    }
 
    private static PartRequest request(RequestDuration duration, Instant now) {
-      return new PartRequest(1L, 2L, 3L, 4L, (short) 2012, "Стойки передние", null, RequestTarget.MARKET,
+      return new PartRequest(1L, 2L, 3L, 4L, (short) 2012, "Стойки передние", null, null, RequestTarget.MARKET,
             List.of(), List.of(), List.of(), duration, now);
    }
 
@@ -83,7 +83,7 @@ class RequestRulesTest {
 
    @Test
    void расширениеНаРынокОтсчитываетСрокЗаново() {
-      PartRequest request = new PartRequest(1L, 2L, 3L, 4L, (short) 2012, "Фара", null, RequestTarget.ROWS,
+      PartRequest request = new PartRequest(1L, 2L, 3L, 4L, (short) 2012, "Фара", null, null, RequestTarget.ROWS,
             List.of(10L, 11L), List.of(), List.of(), RequestDuration.HOUR_1, at(10, 0));
       request.expire(at(11, 0));
       request.widenToMarket(at(13, 0));
