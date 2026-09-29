@@ -17,6 +17,7 @@ import kg.kudaibergen.shop.entity.VerificationMethod;
 import kg.kudaibergen.shop.entity.VerificationStatus;
 import kg.kudaibergen.user.UserRepository;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.lang.Nullable;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -116,8 +117,8 @@ public class AdminShopController {
    }
 
    /** Магазин для админки: место, куда переезжает, телефон владельца, последняя проверка. */
-   public record AdminShopDto(Long id, String name, ShopStatus status, String blockReason, LocationDto location,
-                              LocationDto pendingLocation, String ownerPhone, VerificationMethod lastMethod,
-                              VerificationStatus lastStatus, Instant createdAt) {
+   public record AdminShopDto(Long id, String name, ShopStatus status, @Nullable String blockReason, LocationDto location,
+                              @Nullable LocationDto pendingLocation, String ownerPhone, @Nullable VerificationMethod lastMethod,
+                              @Nullable VerificationStatus lastStatus, Instant createdAt) {
    }
 }

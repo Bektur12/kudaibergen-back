@@ -18,6 +18,7 @@ import jakarta.validation.constraints.Size;
 import kg.kudaibergen.auth.dto.PhoneFormat;
 import kg.kudaibergen.market.entity.RowType;
 import kg.kudaibergen.market.entity.Side;
+import org.springframework.lang.Nullable;
 
 /** Запросы и ответы админки карты. */
 public final class AdminMarketDtos {
@@ -37,7 +38,7 @@ public final class AdminMarketDtos {
    }
 
    public record AdminContainerDto(Long id, Long rowId, String rowCode, Side side, int number, boolean active,
-                                   String tenantPhone, String qrToken) {
+                                   @Nullable String tenantPhone, String qrToken) {
    }
 
    public record AnchorDto(

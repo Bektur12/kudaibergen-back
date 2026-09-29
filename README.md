@@ -20,7 +20,7 @@ MinIO/S3 (фото) · FCM (пуши) · springdoc-openapi · JUnit 5 + Testcont
 ## Запуск
 
 ```bash
-docker compose up -d          # Postgres 16, Redis, Centrifugo (8000), MinIO (9000)
+docker compose up -d          # Postgres 16, Redis, Centrifugo (8000); MinIO — docker compose --profile s3 up -d
 mvn spring-boot:run           # приложение на localhost:8080
 ```
 

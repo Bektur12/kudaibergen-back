@@ -5,6 +5,7 @@ import java.util.List;
 import kg.kudaibergen.market.ContainerTenants;
 import kg.kudaibergen.market.entity.RowType;
 import kg.kudaibergen.market.entity.Side;
+import org.springframework.lang.Nullable;
 
 /**
  * Ряд с контейнерами по сторонам: сетка выбора бокса (10а, занятые — occupied), тап по ряду на карте (15)
@@ -12,7 +13,7 @@ import kg.kudaibergen.market.entity.Side;
  * brandSellers — «продают Toyota: 9», только если передан brandId.
  */
 public record RowDetailDto(Long id, String code, String label, RowType type, List<SideDto> sides,
-                           Integer brandSellers) {
+                           @Nullable Integer brandSellers) {
 
    public record SideDto(Side side, List<ContainerSlotDto> containers) {
    }
@@ -21,8 +22,8 @@ public record RowDetailDto(Long id, String code, String label, RowType type, Lis
     * state — есть ли в контейнере продавец в приложении; sellsBrand — продаёт ли он марку brandId
     * (null без brandId). Контейнер без марки выбрать можно — клиент показывает предупреждение.
     */
-   public record ContainerSlotDto(Long id, int number, boolean occupied, ContainerState state, Boolean sellsBrand,
-                                  ContainerTenants.Tenant shop) {
+   public record ContainerSlotDto(Long id, int number, boolean occupied, ContainerState state, @Nullable Boolean sellsBrand,
+                                  @Nullable ContainerTenants.Tenant shop) {
    }
 
    public enum ContainerState {

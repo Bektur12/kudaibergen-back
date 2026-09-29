@@ -5,6 +5,7 @@ import java.util.List;
 
 import kg.kudaibergen.request.entity.RequestStatus;
 import kg.kudaibergen.shop.dto.ShopCardDto;
+import org.springframework.lang.Nullable;
 
 /**
  * Статистика запроса для покупателя (32). durationMin — длина текущего окна ожидания (для полоски таймера),
@@ -20,10 +21,10 @@ public record RequestStatsDto(Long requestId, RequestStatus status, Instant expi
    }
 
    /** row — код ряда («14», «Ю»), container — номер контейнера; на момент рассылки. */
-   public record Have(ShopCardDto shop, String row, Integer container, Instant answeredAt, Integer price,
-                      Long chatId) {
+   public record Have(ShopCardDto shop, @Nullable String row, @Nullable Integer container, @Nullable Instant answeredAt, @Nullable Integer price,
+                      @Nullable Long chatId) {
    }
 
-   public record Place(String row, Integer container) {
+   public record Place(@Nullable String row, @Nullable Integer container) {
    }
 }

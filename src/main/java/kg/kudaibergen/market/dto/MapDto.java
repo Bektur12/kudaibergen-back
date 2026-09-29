@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import kg.kudaibergen.market.entity.RowType;
 import kg.kudaibergen.market.entity.Side;
 import kg.kudaibergen.market.geo.GeoCalibration;
+import org.springframework.lang.Nullable;
 
 /**
  * Вся схема рынка одним ответом (экраны 15, 18). Координаты — пиксели схемы, ось Y вниз.
@@ -14,7 +15,7 @@ import kg.kudaibergen.market.geo.GeoCalibration;
  */
 public record MapDto(int version, String coordinateSystem, JsonNode boundary, JsonNode blocks,
                      List<PassageDto> passages, JsonNode entrances, JsonNode pois, JsonNode streets, JsonNode labels,
-                     List<MapRowDto> rows, double metersPerPx, GeoCalibration geo) {
+                     List<MapRowDto> rows, double metersPerPx, @Nullable GeoCalibration geo) {
 
    public record PassageDto(List<double[]> points, double width) {
    }

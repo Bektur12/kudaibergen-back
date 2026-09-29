@@ -2,6 +2,7 @@ package kg.kudaibergen.stats;
 
 import java.time.Instant;
 import java.util.List;
+import org.springframework.lang.Nullable;
 
 /**
  * Статистика бокса за период (17).
@@ -20,7 +21,7 @@ import java.util.List;
  */
 public record ShopStatsDto(StatsPeriod period, Instant from, Instant to, int requestsByBrands, int answeredHave,
                            int answeredNotHave, int wroteInChat, int buyersArrived, int sales, int unanswered,
-                           Integer avgReplyMinutes, long partViews, List<TopCategory> topCategories) {
+                           @Nullable Integer avgReplyMinutes, long partViews, List<TopCategory> topCategories) {
 
    public record TopCategory(Long categoryId, String name, int count) {
    }

@@ -1,12 +1,13 @@
 package kg.kudaibergen.garage.dto;
 
 import kg.kudaibergen.garage.entity.Brand;
+import org.springframework.lang.Nullable;
 
 /**
  * Марка для плиток и чипов. shortName — подпись в плитке («Mercedes»).
  * logoUrl = null — рисовать букву placeholder цветом color.
  */
-public record BrandDto(Long id, String slug, String name, String shortName, String logoUrl, String placeholder,
+public record BrandDto(Long id, String slug, String name, String shortName, @Nullable String logoUrl, String placeholder,
                        String color, boolean popular) {
 
    public static BrandDto of(Brand brand) {

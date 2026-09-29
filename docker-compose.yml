@@ -43,9 +43,11 @@ services:
     ports:
       - "${CENTRIFUGO_PORT:-8000}:8000"
 
-  # вложения чата при MEDIA_STORAGE=s3 (бакет создать в консоли на :9001)
+  # фото и вложения при MEDIA_STORAGE=s3 (бакет создать в консоли на :9001). По умолчанию хранилище local,
+  # поэтому MinIO поднимается только с профилем: docker compose --profile s3 up -d
   minio:
-    image: minio/minio:latest
+    image: quay.io/minio/minio:latest
+    profiles: ["s3"]
     container_name: kudaibergen-minio
     command: server /data --console-address ":9001"
     environment:

@@ -1,12 +1,13 @@
 package kg.kudaibergen.garage.dto;
 
 import kg.kudaibergen.garage.entity.Car;
+import org.springframework.lang.Nullable;
 
 /**
  * Машина из гаража. Готовые подписи из макета:
  * title «Toyota Camry 50» (или своё название), subtitle «2012 · 2.5 бензин», label «Camry 50 · 2012» (чипы 06, 27).
  */
-public record CarDto(Long id, BrandDto brand, ModelDto model, int year, String engine, String vin, String name,
+public record CarDto(Long id, BrandDto brand, ModelDto model, int year, @Nullable String engine, @Nullable String vin, @Nullable String name,
                      boolean isPrimary, String title, String subtitle, String label) {
 
    public static CarDto of(Car car) {

@@ -17,6 +17,7 @@
 | Вход | `Authorization: Bearer {accessToken}` (SMS-код → `POST /auth/otp/verify`). Каталог, карта, марки, категории, профиль магазина открыты гостю. |
 | Язык | `Accept-Language: ru` или `ky`; в данных язык — `RU` / `KG`. |
 | Ошибки | RFC 7807, `Content-Type: application/problem+json`: `{type, title, status, detail, code, errors?, …}`. `code` — стабильный UPPER_SNAKE (`REQUEST_EXPIRED`, `EXTEND_LIMIT`…), по нему ветвиться; `detail` — текст для показа как есть. Ошибки полей — `code: VALIDATION_ERROR` и `errors: [{field, message}]`. Дополнительные поля по коду: `retryAfter` (сек, 429, ещё и заголовок `Retry-After`), `attemptsLeft` (неверный SMS-код), `missing[]` (`PART_INCOMPLETE`). Общие коды: `UNAUTHORIZED` (401), `FORBIDDEN`, `NOT_FOUND`, `CONFLICT`, `PAYLOAD_TOO_LARGE`, `INTERNAL_ERROR`. |
+| Типы | Ответы отдают **все поля всегда**; в OpenAPI у схем ответов все поля `required`, а поле, которое бывает `null`, помечено `nullable: true` (ссылка на схему — `allOf` + `nullable`). Тела запросов: обязательные поля — `required`, остальные можно не передавать. Енамы — енамы и в схеме. |
 | Идемпотентность | `Idempotency-Key` на `POST /requests`, `POST /requests/{id}/replies`, сообщения чата (`clientId`). Без сети клиент повторяет с тем же ключом. |
 | Цена | Целые сомы, `currency: "KGS"`. Фронт форматирует «3 200 сом». |
 | Время | ISO-8601 UTC. «12 мин назад», «9:38», «вчера» — на клиенте. Рабочие часы магазинов — по Бишкеку. |
@@ -108,7 +109,7 @@ enum QuickReply {                                                   // быст�
 
 ## 3. Пользователь и гараж
 
-- `GET /me` → `{id, phone, name?, avatarUrl?, role, lang, adminRole?, onboarded, hasShop, shop? {id, name, status, role}, createdAt}` (тот же объект — `user` в ответе `POST /auth/otp/verify`). `hasShop = false` — продавца ведут на регистрацию [10а]; `shop.status` — `PENDING_VERIFICATION` / `ACTIVE` / `BLOCKED`, `shop.role` — `OWNER` / `STAFF`; `PATCH /me {name?, lang?, avatarMediaId?}`; `DELETE /me/avatar`; `PUT /me/role {role}` [03].
+- `GET /me` → `{id, phone, name?, avatarUrl?, role, lang, adminRole?, onboarded, hasShop, shop? {id, name, status, role}, createdAt}` (тот же объект — `user` в ответе `POST /auth/otp/verify`). **Роль ещё не выбрана — `onboarded = false`** (в ответе входа это же — `isNewUser = true`): вести на [03], даже если человек уже входил и закрыл приложение на выборе роли. `role` до выбора — `BUYER` по умолчанию, по нему не ориентироваться. `hasShop = false` — продавца ведут на регистрацию [10а]; `shop.status` — `PENDING_VERIFICATION` / `ACTIVE` / `BLOCKED`, `shop.role` — `OWNER` / `STAFF`; `PATCH /me {name?, lang?, avatarMediaId?}`; `DELETE /me/avatar`; `PUT /me/role {role}` [03].
 - `GET/PATCH /me/settings` → `{notifyReplies, notifyChat, newRequestSound, theme}` [19, 21].
 - `POST /devices {token, platform}` / `DELETE /devices/{token}` — FCM.
 - Гараж [04]: `GET /me/cars`, `POST /me/cars {modelId, year, engine?, vin?, …}`, `PATCH /me/cars/{id}`, `POST /me/cars/{id}/primary`, `DELETE /me/cars/{id}`. Машина: `brand`, модель, `year`, `isPrimary`; подпись «Camry 50 · 2012».
