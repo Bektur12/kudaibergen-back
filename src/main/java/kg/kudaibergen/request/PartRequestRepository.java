@@ -20,7 +20,7 @@ public interface PartRequestRepository extends JpaRepository<PartRequest, Long> 
    /** Hibernate переводит таймаут -2 в FOR UPDATE SKIP LOCKED. */
    String SKIP_LOCKED = "-2";
 
-   /** Ответы, закрытие и расширение меняют счётчики — по одному запросу за раз. */
+   /** Ответы, закрытие, продление и расширение меняют счётчики — по одному запросу за раз. */
    @Lock(LockModeType.PESSIMISTIC_WRITE)
    @Query("select r from PartRequest r where r.id = :id")
    Optional<PartRequest> findForUpdate(@Param("id") Long id);
@@ -33,36 +33,26 @@ public interface PartRequestRepository extends JpaRepository<PartRequest, Long> 
    Optional<PartRequest> findFirstByBuyerIdAndCreatedAtAfterOrderByCreatedAtAsc(Long buyerId, Instant after);
 
    /**
-    * «Мои запросы» (05): открытые сверху, потом остальные; внутри — новые первыми.
-    * Курсор — (ранг, id) последней строки; ранг 0 у открытых, 1 у закрытых.
+    * «Мои запросы» (05): активные сверху, потом истёкшие и закрытые; внутри — новые первыми.
+    * Курсор — (ранг, id) последней строки; ранг 0 у активных, 1 у остальных.
     */
    @Query("""
          select r from PartRequest r
          where r.buyerId = :buyerId
            and (:status is null or r.status = :status)
-           and ((case when r.status = :open then 0 else 1 end) > :rank
-             or ((case when r.status = :open then 0 else 1 end) = :rank and r.id < :beforeId))
-         order by (case when r.status = :open then 0 else 1 end), r.id desc""")
+           and ((case when r.status = :active then 0 else 1 end) > :rank
+             or ((case when r.status = :active then 0 else 1 end) = :rank and r.id < :beforeId))
+         order by (case when r.status = :active then 0 else 1 end), r.id desc""")
    List<PartRequest> findMine(@Param("buyerId") Long buyerId, @Param("status") RequestStatus status,
-                              @Param("open") RequestStatus open, @Param("rank") int rank,
+                              @Param("active") RequestStatus active, @Param("rank") int rank,
                               @Param("beforeId") long beforeId, Pageable page);
 
    /**
-    * Открытые запросы без «Есть», по которым 30 минут никто не ответил и покупателю ещё не сказали.
-    * SKIP LOCKED — несколько экземпляров приложения не возьмут одни и те же строки.
+    * Активные запросы, у которых вышло время. SKIP LOCKED — несколько экземпляров приложения
+    * не возьмут одни и те же строки.
     */
    @Lock(LockModeType.PESSIMISTIC_WRITE)
    @QueryHints(@QueryHint(name = "jakarta.persistence.lock.timeout", value = SKIP_LOCKED))
-   @Query("""
-         select r from PartRequest r
-         where r.status = :open and r.haveCount = 0 and r.noReplyAt is null and r.sentAt < :before
-         order by r.id""")
-   List<PartRequest> findNoReplyDue(@Param("open") RequestStatus open, @Param("before") Instant before,
-                                    Pageable page);
-
-   /** Открытые запросы без действий дольше срока — истекают. */
-   @Lock(LockModeType.PESSIMISTIC_WRITE)
-   @QueryHints(@QueryHint(name = "jakarta.persistence.lock.timeout", value = SKIP_LOCKED))
-   @Query("select r from PartRequest r where r.status = :open and r.lastActivityAt < :before order by r.id")
-   List<PartRequest> findIdle(@Param("open") RequestStatus open, @Param("before") Instant before, Pageable page);
+   @Query("select r from PartRequest r where r.status = :active and r.expiresAt <= :now order by r.expiresAt")
+   List<PartRequest> findExpiring(@Param("active") RequestStatus active, @Param("now") Instant now, Pageable page);
 }

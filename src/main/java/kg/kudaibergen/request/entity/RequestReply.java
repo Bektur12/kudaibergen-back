@@ -1,14 +1,20 @@
 package kg.kudaibergen.request.entity;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 
+import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
+import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.OrderColumn;
 import jakarta.persistence.Table;
 
 /** Ответ бокса на запрос (экраны 11, 12, 14). Один на бокс: ответ сотрудника засчитывается за магазин. */
@@ -45,6 +51,13 @@ public class RequestReply {
    @Column(name = "part_id")
    private Long partId;
 
+   /** Фото к ответу «Есть» по порядку, до 3. */
+   @ElementCollection
+   @CollectionTable(name = "reply_photos", joinColumns = @JoinColumn(name = "reply_id"))
+   @OrderColumn(name = "sort")
+   @Column(name = "media_id", nullable = false)
+   private List<Long> photoIds = new ArrayList<>();
+
    @Column(name = "created_at", nullable = false, updatable = false)
    private Instant createdAt;
 
@@ -64,13 +77,17 @@ public class RequestReply {
 
    /** «Нет» — детали ответа не нужны. */
    public void fill(ReplyAnswer answer, PartCondition condition, String message, Integer price, Long partId,
-                    Instant now) {
+                    List<Long> photoIds, Instant now) {
       this.answer = answer;
       boolean have = answer == ReplyAnswer.HAVE;
       this.condition = have ? condition : null;
       this.message = have ? message : null;
       this.price = have ? price : null;
       this.partId = have ? partId : null;
+      this.photoIds.clear();
+      if (have) {
+         this.photoIds.addAll(photoIds);
+      }
       this.updatedAt = now;
    }
 
@@ -112,6 +129,10 @@ public class RequestReply {
 
    public Long getPartId() {
       return partId;
+   }
+
+   public List<Long> getPhotoIds() {
+      return List.copyOf(photoIds);
    }
 
    public Instant getCreatedAt() {

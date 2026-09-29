@@ -6,6 +6,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -30,15 +31,20 @@ import kg.kudaibergen.garage.GarageService;
 import kg.kudaibergen.garage.VehicleDirectory;
 import kg.kudaibergen.garage.entity.Car;
 import kg.kudaibergen.market.MarketMapService;
-import kg.kudaibergen.request.dto.RecipientsPreviewDto;
+import kg.kudaibergen.market.MarketSnapshot;
+import kg.kudaibergen.media.MediaPurpose;
+import kg.kudaibergen.media.MediaService;
+import kg.kudaibergen.request.dto.RecipientsEstimateDto;
 import kg.kudaibergen.request.dto.ReplyDto;
 import kg.kudaibergen.request.dto.RequestDetailDto;
 import kg.kudaibergen.request.dto.RequestInputs;
+import kg.kudaibergen.request.dto.RequestStatsDto;
 import kg.kudaibergen.request.dto.RequestSummaryDto;
 import kg.kudaibergen.request.dto.ReviewTagDto;
 import kg.kudaibergen.request.dto.WidenResultDto;
 import kg.kudaibergen.request.entity.PartRequest;
 import kg.kudaibergen.request.entity.ReplyAnswer;
+import kg.kudaibergen.request.entity.RequestDuration;
 import kg.kudaibergen.request.entity.RequestRecipient;
 import kg.kudaibergen.request.entity.RequestReply;
 import kg.kudaibergen.request.entity.RequestStatus;
@@ -57,8 +63,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Запрос «Найти запчасть» со стороны покупателя (ТЗ 4.3–4.5): отправка продавцам марки, «Мои запросы»,
- * ответы «Есть», закрытие с оценкой, «Отправить всему рынку». Плюс таймеры «никто не ответил» и «истёк».
+ * Запрос «Найти запчасть» со стороны покупателя (ТЗ 4.3–4.5, спецификация 3.7а): отправка всему рынку,
+ * рядам или контейнерам, «Мои запросы», ответы «Есть», статистика, закрытие с оценкой, продление и
+ * «Отправить всему рынку». Плюс таймер: по expiresAt запрос становится EXPIRED.
  */
 @Service
 public class RequestService {
@@ -66,6 +73,8 @@ public class RequestService {
    private static final Logger log = LoggerFactory.getLogger(RequestService.class);
    private static final Duration DAY = Duration.ofDays(1);
    private static final int JOB_BATCH = 200;
+   /** «Продлить» (32): на 30 минут, час или 3 часа. */
+   static final Set<Integer> EXTEND_MINUTES = Set.of(30, 60, 180);
 
    private final PartRequestRepository requests;
    private final RequestRecipientRepository recipients;
@@ -81,6 +90,8 @@ public class RequestService {
    private final MarketMapService market;
    private final ShopRepository shops;
    private final ShopMapper shopMapper;
+   private final MediaService media;
+   private final RequestStatsView statsView;
    private final ApplicationEventPublisher events;
    private final AppProperties.Requests config;
    private final Clock clock;
@@ -90,8 +101,8 @@ public class RequestService {
                          CatalogView catalogView, RecipientFinder finder,
                          RequestMapper mapper, GarageService garage, VehicleDirectory directory,
                          CategoryService categories, MarketMapService market, ShopRepository shops,
-                         ShopMapper shopMapper, ApplicationEventPublisher events, AppProperties properties,
-                         Clock clock) {
+                         ShopMapper shopMapper, MediaService media, RequestStatsView statsView,
+                         ApplicationEventPublisher events, AppProperties properties, Clock clock) {
       this.requests = requests;
       this.recipients = recipients;
       this.replies = replies;
@@ -106,6 +117,8 @@ public class RequestService {
       this.market = market;
       this.shops = shops;
       this.shopMapper = shopMapper;
+      this.media = media;
+      this.statsView = statsView;
       this.events = events;
       this.config = properties.requests();
       this.clock = clock;
@@ -113,90 +126,160 @@ public class RequestService {
 
    // ─────────────────────── отправка ───────────────────────
 
-   /** «Запрос получат 43 продавца по Toyota» под выбором адресата (06). */
+   /** Адресаты после проверки: ряды и контейнеры без повторов, пустые списки для «Всему рынку». */
+   record Targets(RequestTarget target, List<Long> rowIds, List<Long> containerIds) {
+   }
+
+   /**
+    * «Запрос получат 18 продавцов по Toyota» (06б, 31): пересчитывается при каждом изменении выбора.
+    * Машина из гаража или просто марка (без гаража).
+    */
    @Transactional(readOnly = true)
-   public RecipientsPreviewDto preview(Long buyerId, RequestInputs.RecipientsPreview input) {
-      Long brandId = input.carId() != null ? garage.getOwned(input.carId(), buyerId).getBrand().getId()
-            : input.brandId();
-      if (brandId == null) {
+   public RecipientsEstimateDto estimate(Long buyerId, Long carId, Long brandId, RequestTarget target,
+                                         List<Long> rowIds, List<Long> containerIds) {
+      Long brand = carId != null ? garage.getOwned(carId, buyerId).getBrand().getId() : brandId;
+      if (brand == null) {
          throw new BadRequestException("CAR_REQUIRED", "Выберите машину или марку");
       }
-      String brandName = directory.brand(brandId).getName();
-      requireTarget(input.target(), input.targetRowId(), input.targetShopId());
-      int count = finder.find(buyerId, brandId, input.target(), input.targetRowId(), input.targetShopId()).size();
-      return new RecipientsPreviewDto(count, brandName);
+      String brandName = directory.brand(brand).getName();
+      Targets targets = targets(target, rowIds, containerIds);
+      int count = finder.find(buyerId, brand, targets.target(), targets.rowIds(), targets.containerIds()).size();
+      return new RecipientsEstimateDto(count, brandName);
    }
 
    /** «Отправить» (06): запрос уходит всем подходящим боксам, им — пуш с кнопками «Есть / Нет». */
    @Transactional
    public RequestDetailDto create(Long buyerId, RequestInputs.CreateRequest input, Lang lang) {
       Car car = garage.getOwned(input.carId(), buyerId);
-      requireTarget(input.target(), input.targetRowId(), input.targetShopId());
+      Targets targets = targets(input.target(), input.targetRowIds(), input.targetContainerIds());
       if (input.categoryId() != null) {
          categories.requireExisting(Set.of(input.categoryId()));
+      }
+      List<Long> photoIds = input.mediaIds() == null ? List.of() : input.mediaIds().stream().distinct().toList();
+      if (!photoIds.isEmpty()) {
+         media.requireUsable(photoIds, List.of(buyerId), Set.of(MediaPurpose.REQUEST));
       }
       Instant now = clock.instant();
       checkLimits(buyerId, now);
 
+      RequestDuration duration = input.duration() == null ? RequestDuration.MIN_30 : input.duration();
       PartRequest request = requests.save(new PartRequest(buyerId, car.getId(), car.getBrand().getId(),
-            car.getModel().getId(), car.getYear(), input.text().trim(), input.categoryId(), input.target(),
-            input.target() == RequestTarget.ROW ? input.targetRowId() : null,
-            input.target() == RequestTarget.SHOP ? input.targetShopId() : null, now));
-      dispatch(request, finder.find(buyerId, request.getBrandId(), input.target(), input.targetRowId(),
-            input.targetShopId()), Set.of(), now);
+            car.getModel().getId(), car.getYear(), input.text().trim(), input.categoryId(), targets.target(),
+            targets.rowIds(), targets.containerIds(), photoIds, duration, now));
+      dispatch(request, finder.find(buyerId, request.getBrandId(), targets.target(), targets.rowIds(),
+            targets.containerIds()), Set.of(), now);
       return mapper.detail(request, 0, lang);
    }
 
-   /** «Отправить всему рынку» (20): добавляются боксы марки, которым запрос ещё не приходил. */
+   /**
+    * «Отправить всему рынку» (20, 32): добавляются боксы марки, которым запрос ещё не приходил, им — пуш;
+    * срок отсчитывается заново, истёкший запрос снова активен.
+    */
    @Transactional
-   public WidenResultDto widen(AuthPrincipal principal, Long requestId) {
-      PartRequest request = requests.findForUpdate(requestId)
-            .filter(found -> found.getBuyerId().equals(principal.userId()))
-            .orElseThrow(RequestService::notFound);
+   public WidenResultDto widen(AuthPrincipal principal, Long requestId, RequestInputs.Widen input) {
+      if (input != null && input.target() != null && input.target() != RequestTarget.MARKET) {
+         throw new BadRequestException("WIDEN_TARGET", "Расширить запрос можно только до всего рынка");
+      }
+      PartRequest request = ownForUpdate(principal, requestId);
       requireOpen(request);
       Instant now = clock.instant();
+      reactivate(request, now);
       Set<Long> already = recipients.findShopIds(requestId);
       request.widenToMarket(now);
       int added = dispatch(request, finder.find(request.getBuyerId(), request.getBrandId(), RequestTarget.MARKET,
-            null, null), already, now);
-      return new WidenResultDto(added, request.getRecipientsCount());
+            List.of(), List.of()), already, now);
+      return new WidenResultDto(added, request.getRecipientsCount(), request.getExpiresAt());
+   }
+
+   /** «Продлить» (32) на 30, 60 или 180 минут — до 3 раз. Истёкший запрос снова активен. */
+   @Transactional
+   public RequestDetailDto extend(AuthPrincipal principal, Long requestId, RequestInputs.Extend input, Lang lang) {
+      if (!EXTEND_MINUTES.contains(input.minutes())) {
+         throw new BadRequestException("BAD_EXTEND", "Продлить можно на 30, 60 или 180 минут");
+      }
+      PartRequest request = ownForUpdate(principal, requestId);
+      requireOpen(request);
+      if (!request.canExtend()) {
+         throw new ConflictException("EXTEND_LIMIT",
+               "Продлить можно не больше " + PartRequest.MAX_EXTENSIONS + " раз — отправьте запрос заново");
+      }
+      Instant now = clock.instant();
+      reactivate(request, now);
+      request.extend(Duration.ofMinutes(input.minutes()), now);
+      events.publishEvent(new RequestEvents.StatsChanged(requestId));
+      return mapper.detail(request, recipients.countByRequestIdAndSeenAtIsNotNull(requestId), lang);
+   }
+
+   /** Истёкший запрос снова активен: проверка лимита, продавцы без ответа снова его видят. */
+   private void reactivate(PartRequest request, Instant now) {
+      if (request.isActive()) {
+         return;
+      }
+      checkActiveLimit(request.getBuyerId());
+      recipients.revive(request.getId());
    }
 
    private int dispatch(PartRequest request, List<Shop> found, Set<Long> already, Instant now) {
-      List<Long> shopIds = found.stream().map(Shop::getId).filter(id -> !already.contains(id)).toList();
-      recipients.saveAll(shopIds.stream().map(shopId -> new RequestRecipient(request.getId(), shopId, now)).toList());
-      request.dispatched(shopIds.size(), now);
+      MarketSnapshot snapshot = market.snapshot();
+      List<RequestRecipient> added = found.stream()
+            .filter(shop -> !already.contains(shop.getId()))
+            .map(shop -> {
+               Long rowId = snapshot.container(shop.getContainerId())
+                     .map(container -> container.row().row().getId()).orElse(null);
+               return new RequestRecipient(request.getId(), shop.getId(), rowId, shop.getContainerId(), now);
+            })
+            .toList();
+      recipients.saveAll(added);
+      List<Long> shopIds = added.stream().map(RequestRecipient::getShopId).toList();
+      request.dispatched(shopIds.size());
       events.publishEvent(new RequestEvents.Dispatched(request.getId(), shopIds));
+      events.publishEvent(new RequestEvents.StatsChanged(request.getId()));
       log.info("Запрос {} разослан {} боксам", request.getId(), shopIds.size());
       return shopIds.size();
    }
 
-   private void requireTarget(RequestTarget target, Long rowId, Long shopId) {
-      switch (target) {
-         case MARKET -> {
-         }
-         case ROW -> {
-            if (rowId == null) {
-               throw new BadRequestException("ROW_REQUIRED", "Выберите ряд");
+   /** «Рядам» — 1–10 рядов, «Контейнерам» — 1–30 контейнеров; все должны быть на текущей схеме рынка. */
+   private Targets targets(RequestTarget target, Collection<Long> rowIds, Collection<Long> containerIds) {
+      MarketSnapshot snapshot = market.snapshot();
+      return switch (target) {
+         case MARKET -> new Targets(target, List.of(), List.of());
+         case ROWS -> {
+            List<Long> rows = distinct(rowIds);
+            if (rows.isEmpty()) {
+               throw new BadRequestException("ROWS_REQUIRED", "Выберите ряды");
             }
-            market.snapshot().row(rowId).orElseThrow(() -> new NotFoundException("ROW_NOT_FOUND", "Ряд не найден"));
-         }
-         case SHOP -> {
-            if (shopId == null) {
-               throw new BadRequestException("SHOP_REQUIRED", "Выберите бокс");
+            if (rows.size() > RequestInputs.MAX_ROWS) {
+               throw new BadRequestException("TOO_MANY_ROWS", "Не больше " + RequestInputs.MAX_ROWS + " рядов");
             }
-            shops.findById(shopId).filter(Shop::isActive)
-                  .orElseThrow(() -> new NotFoundException("SHOP_NOT_FOUND", "Магазин не найден"));
+            if (!rows.stream().allMatch(id -> snapshot.row(id).isPresent())) {
+               throw new NotFoundException("ROW_NOT_FOUND", "Ряд не найден");
+            }
+            yield new Targets(target, rows, List.of());
          }
-      }
+         case CONTAINERS -> {
+            List<Long> containers = distinct(containerIds);
+            if (containers.isEmpty()) {
+               throw new BadRequestException("CONTAINERS_REQUIRED", "Выберите контейнеры");
+            }
+            if (containers.size() > RequestInputs.MAX_CONTAINERS) {
+               throw new BadRequestException("TOO_MANY_CONTAINERS",
+                     "Не больше " + RequestInputs.MAX_CONTAINERS + " контейнеров");
+            }
+            if (!containers.stream().allMatch(id -> snapshot.container(id).isPresent())) {
+               throw new NotFoundException("CONTAINER_NOT_FOUND", "Контейнер не найден");
+            }
+            yield new Targets(target, List.of(), containers);
+         }
+      };
    }
 
-   /** Не больше 10 открытых запросов и 20 новых за сутки (ТЗ 4.3). */
+   private static List<Long> distinct(Collection<Long> ids) {
+      return ids == null ? List.of() : ids.stream().filter(Objects::nonNull).distinct().toList();
+   }
+
+   /** Не больше 10 активных запросов и 20 новых за сутки (ТЗ 4.3). */
    private void checkLimits(Long buyerId, Instant now) {
-      if (requests.countByBuyerIdAndStatus(buyerId, RequestStatus.OPEN) >= config.maxOpen()) {
-         throw new ConflictException("OPEN_REQUESTS_LIMIT",
-               "У вас уже " + config.maxOpen() + " открытых запросов — закройте ненужные");
-      }
+      checkActiveLimit(buyerId);
       Instant dayAgo = now.minus(DAY);
       if (requests.countByBuyerIdAndCreatedAtAfter(buyerId, dayAgo) >= config.maxPerDay()) {
          long retryAfter = requests.findFirstByBuyerIdAndCreatedAtAfterOrderByCreatedAtAsc(buyerId, dayAgo)
@@ -207,9 +290,16 @@ public class RequestService {
       }
    }
 
+   private void checkActiveLimit(Long buyerId) {
+      if (requests.countByBuyerIdAndStatus(buyerId, RequestStatus.ACTIVE) >= config.maxOpen()) {
+         throw new ConflictException("OPEN_REQUESTS_LIMIT",
+               "У вас уже " + config.maxOpen() + " активных запросов — закройте ненужные");
+      }
+   }
+
    // ─────────────────────── просмотр ───────────────────────
 
-   /** «Мои запросы» (05): открытые сверху, потом закрытые и истёкшие. status — только один статус. */
+   /** «Мои запросы» (05): активные сверху, потом истёкшие и закрытые. status — только один статус. */
    @Transactional(readOnly = true)
    public CursorPage<RequestSummaryDto> mine(Long buyerId, RequestStatus status, String cursor, Integer limit) {
       int size = CursorPage.limit(limit);
@@ -224,9 +314,9 @@ public class RequestService {
             throw new BadRequestException("BAD_CURSOR", "Некорректный курсор");
          }
       }
-      List<PartRequest> rows = requests.findMine(buyerId, status, RequestStatus.OPEN, rank, beforeId,
+      List<PartRequest> rows = requests.findMine(buyerId, status, RequestStatus.ACTIVE, rank, beforeId,
             PageRequest.of(0, size + 1));
-      return CursorPage.of(rows, size, request -> (request.isOpen() ? 0 : 1) + ":" + request.getId(),
+      return CursorPage.of(rows, size, request -> (request.isActive() ? 0 : 1) + ":" + request.getId(),
             mapper::summary);
    }
 
@@ -257,6 +347,12 @@ public class RequestService {
             .toList();
    }
 
+   /** Статистика запроса (32): счётчики, «Есть» с магазинами, «Нет» — только места. */
+   @Transactional(readOnly = true)
+   public RequestStatsDto stats(AuthPrincipal principal, Long requestId) {
+      return statsView.build(visible(principal, requestId));
+   }
+
    public List<ReviewTagDto> reviewTags(Lang lang) {
       return Arrays.stream(ReviewTag.values()).map(tag -> new ReviewTagDto(tag, tag.label(lang))).toList();
    }
@@ -268,11 +364,18 @@ public class RequestService {
             .orElseThrow(RequestService::notFound);
    }
 
+   private PartRequest ownForUpdate(AuthPrincipal principal, Long requestId) {
+      return requests.findForUpdate(requestId)
+            .filter(found -> found.getBuyerId().equals(principal.userId()))
+            .orElseThrow(RequestService::notFound);
+   }
+
    // ─────────────────────── закрытие ───────────────────────
 
    /**
-    * «Купил — закрыть запрос» (09) или «Закрыть запрос» (20). С боксом — только с тем, кто ответил «Есть»;
-    * оценка ставится этому боксу и сразу пересчитывает его рейтинг. Остальные боксы запрос больше не видят.
+    * «Купил — закрыть запрос» (09) или «Закрыть запрос» (20). Можно и после истечения времени.
+    * С боксом — только с тем, кто ответил «Есть»; оценка ставится этому боксу и сразу пересчитывает
+    * его рейтинг. Остальные боксы запрос больше не видят.
     */
    @Transactional
    public RequestDetailDto close(AuthPrincipal principal, Long requestId, RequestInputs.CloseRequest input,
@@ -297,6 +400,7 @@ public class RequestService {
          recalculateRating(shopId);
       }
       events.publishEvent(new RequestEvents.Closed(requestId, shopId, input.stars()));
+      events.publishEvent(new RequestEvents.StatsChanged(requestId));
       return mapper.detail(request, recipients.countByRequestIdAndSeenAtIsNotNull(requestId), lang);
    }
 
@@ -308,34 +412,40 @@ public class RequestService {
       shop.updateRating(rating, (int) reviews.countByShopId(shopId));
    }
 
-   // ─────────────────────── таймеры ───────────────────────
+   // ─────────────────────── таймер ───────────────────────
 
-   /** 30 минут без «Есть» — пуш покупателю и экран «Пока никто не ответил» (20). Возвращает число запросов. */
+   /**
+    * Время вышло — EXPIRED: у продавцов без ответа запрос уходит в «Истёкшие», покупателю — пуш
+    * «Время вышло: 3 ответа. Продлить?» или «Пока никто не ответил». Возвращает число запросов.
+    */
    @Transactional
-   public int markNoReply() {
+   public int expireDue() {
       Instant now = clock.instant();
-      List<PartRequest> due = requests.findNoReplyDue(RequestStatus.OPEN, now.minus(config.noReplyAfter()),
-            PageRequest.of(0, JOB_BATCH));
+      List<PartRequest> due = requests.findExpiring(RequestStatus.ACTIVE, now, PageRequest.of(0, JOB_BATCH));
+      if (due.isEmpty()) {
+         return 0;
+      }
+      due.forEach(request -> request.expire(now));
+      recipients.expire(due.stream().map(PartRequest::getId).toList());
       for (PartRequest request : due) {
-         request.markNoReply(now);
-         events.publishEvent(new RequestEvents.NoReply(request.getId()));
+         events.publishEvent(new RequestEvents.Expired(request.getId(), request.getHaveCount()));
+         events.publishEvent(new RequestEvents.StatsChanged(request.getId()));
       }
       return due.size();
    }
 
-   /** 7 дней без действий — EXPIRED: у продавцов запрос пропадает из ленты. */
-   @Transactional
-   public int expireIdle() {
-      Instant now = clock.instant();
-      List<PartRequest> idle = requests.findIdle(RequestStatus.OPEN, now.minus(config.expireAfter()),
-            PageRequest.of(0, JOB_BATCH));
-      idle.forEach(request -> request.expire(now));
-      return idle.size();
-   }
-
+   /** Закрытый покупателем запрос: ни ответить, ни продлить. */
    static void requireOpen(PartRequest request) {
       if (!request.isOpen()) {
          throw new ConflictException("REQUEST_CLOSED", "Запрос уже закрыт");
+      }
+   }
+
+   /** Ответить можно только до expiresAt (спецификация 3.7а). */
+   static void requireActive(PartRequest request) {
+      requireOpen(request);
+      if (!request.isActive()) {
+         throw new ConflictException("REQUEST_EXPIRED", "Время запроса вышло — ответить уже нельзя");
       }
    }
 

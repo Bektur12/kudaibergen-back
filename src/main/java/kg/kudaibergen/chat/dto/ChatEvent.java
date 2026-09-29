@@ -6,7 +6,8 @@ import kg.kudaibergen.chat.entity.ChatSide;
  * Конверт событий Centrifugo, клиент различает по type:
  * <ul>
  *   <li>канал chat:{id}: MESSAGE — {@link MessageDto}; READ — {@link ReadPayload};</li>
- *   <li>канал inbox: CHAT — {@link ChatListItemDto} (обновлённая строка списка); UNREAD — {@link UnreadDto}.</li>
+ *   <li>канал inbox: CHAT — {@link ChatListItemDto} (обновлённая строка списка); UNREAD — {@link UnreadDto};
+ *   REQUEST_STATS — статистика своего запроса (RequestStatsDto, экран 32).</li>
  * </ul>
  * TYPING клиенты публикуют в канал чата сами, без бэкенда.
  */

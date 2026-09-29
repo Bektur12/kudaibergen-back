@@ -166,15 +166,15 @@ OTP не в БД, а в **Redis**:
 
 ### requests
 
-**part_requests** — `id`, `buyer_id`, `car_id` NULL, снимок машины `brand_id`, `model_id`, `year` (машину могут удалить из гаража), `text`, `category_id` NULL (если выбран чип «+ Колодки»), `target` (MARKET/ROW/SHOP), `target_row_id`, `target_shop_id`, `status` (OPEN/CLOSED), `closed_with_shop_id`, `closed_at`, `recipients_count`, `have_count`, `no_reply_at` (когда сработал таймер «никто не ответил»), `created_at`.
+**part_requests** — `id`, `buyer_id`, `car_id` NULL, снимок машины `brand_id`, `model_id`, `year` (машину могут удалить из гаража), `text`, `category_id` NULL (если выбран чип «+ Колодки»), `target` (MARKET/ROWS/CONTAINERS), `target_row_ids` BIGINT[] (1–10), `target_container_ids` BIGINT[] (1–30), `status` (ACTIVE/EXPIRED/CLOSED), `duration` (MIN_30/HOUR_1/HOUR_3/END_OF_DAY), `sent_at` (начало текущего окна ожидания), `expires_at`, `extended_times` (≤3), `closed_with_shop_id`, `closed_at`, `recipients_count`, `have_count`, `created_at`. END_OF_DAY — до 17:00 по Бишкеку, если уже позже — 3 часа. Раз в минуту активные с `expires_at` в прошлом становятся EXPIRED; покупатель продлевает (`extend`) или расширяет до всего рынка (`widen`) — запрос снова ACTIVE.
 
-**request_photos** — (`request_id`, `media_id`) PK, `sort`.
+**request_photos** — (`request_id`, `sort`) PK, `media_id`. ≤3.
 
-**request_recipients** — (`request_id`, `shop_id`) PK, `notified_at`, `seen_at`, `replied_at`, `shop_was_open` bool. Нужна для ленты продавца (11), «видели 12 продавцов» (20) и статистики «без ответа» (17).
+**request_recipients** — (`request_id`, `shop_id`) PK, `row_id`, `container_id` (место на момент рассылки), `status` (DELIVERED/SEEN/HAVE/NOT_HAVE/EXPIRED), `notified_at`, `seen_at`, `replied_at`. Нужна для ленты продавца (11, фильтр «Истёкшие»), статистики запроса (32) и статистики «без ответа» (17). MARKET и ROWS уходят магазинам с маркой машины, CONTAINERS — выбранным боксам без фильтра по марке.
 
 **request_replies** — `id`, `request_id`, `shop_id`, `answer` (HAVE/NOT_HAVE), `condition` NULL, `message`, `price` NULL, `created_at`; UNIQUE (`request_id`, `shop_id`).
 
-**reply_photos** — (`reply_id`, `media_id`) PK, `sort`.
+**reply_photos** — (`reply_id`, `sort`) PK, `media_id`. ≤3, только у «Есть».
 
 **reviews** — `id`, `shop_id`, `buyer_id`, `request_id` UNIQUE, `stars` 1–5, `tags` TEXT[] (FAST_REPLY / PART_OK / EASY_TO_FIND), `created_at`. Рейтинг пересчитывается в той же транзакции.
 
@@ -189,7 +189,7 @@ OTP не в БД, а в **Redis**:
 **event_outbox** — `id` UUID, `topic`, `key`, `payload` JSONB, `created_at`, `published_at`.
 **processed_events** — (`consumer`, `event_id`) PK — дедупликация в консьюмерах.
 
-Kafka-топики: `request.created`, `request.reply.created`, `request.closed`, `request.no_reply`, `chat.message.created`, `part.viewed`, `shop.status.changed`.
+Kafka-топики: `request.created`, `request.reply.created`, `request.closed`, `request.expired`, `chat.message.created`, `part.viewed`, `shop.status.changed`.
 
 Шаблоны пушей RU/KY — `messages_ru/ky.properties`, не в БД.
 
@@ -208,7 +208,7 @@ Kafka-топики: `request.created`, `request.reply.created`, `request.closed`
 | Поиск | GIN `parts(search_tsv)`; GIN trgm `parts(title)`, `parts(oem_norm)`; `parts(status, category_id, price, id)`; `parts(status, created_at DESC, id)`; `part_fitments(brand_id, model_id)`; `part_fitments(part_id)` |
 | Мои запчасти | `parts(shop_id, status, created_at DESC)` |
 | Лента продавца | `request_recipients(shop_id, notified_at DESC)` |
-| Мои запросы | `part_requests(buyer_id, created_at DESC)`; `part_requests(status, created_at)` WHERE status='OPEN' (таймер «нет ответов») |
+| Мои запросы | `part_requests(buyer_id, created_at DESC)`; `part_requests(expires_at)` WHERE status='ACTIVE' (таймер истечения) |
 | Чаты | `chats(buyer_id, last_message_at DESC)`, `chats(shop_id, last_message_at DESC)`, `messages(chat_id, id DESC)` |
 
 ---
@@ -240,7 +240,7 @@ Kafka-топики: `request.created`, `request.reply.created`, `request.closed`
 |---|---|---|
 | 04 Гараж | `GET /me/cars`, `POST /me/cars`, `PATCH /me/cars/{id}`, `DELETE /me/cars/{id}`, `POST /me/cars/{id}/primary`; справочник `GET /brands?q=&popular=`, `GET /brands/{id}/models` | `CreateCarDto {brandId, modelId, generation?, year, engine?}` ← `CarDto`; `ModelDto {id, name, generation, yearFrom, yearTo}` |
 | 05 Главная | `GET /me`, `GET /requests/my?status=&cursor=`, `GET /me/badges` | `RequestSummaryDto {id, text, carLabel, state: WAITING\|HAS_ANSWERS\|NO_ANSWERS\|CLOSED, haveCount, createdAt}`; `BadgesDto {unreadChats}` |
-| 06 Найти запчасть | `GET /me/cars`; `GET /categories?suggest=true` (чипы); `POST /media/uploads` (фото); `GET /market/rows` (Ряду); `GET /shops?q=` (Боксу); `POST /requests/recipients-preview` (живой счётчик); `POST /requests` | → `{carId?, brandId?, modelId?, year?, target, targetRowId?, targetShopId?}` ← `{count:43, brandName:"Toyota"}`; `CreateRequestDto {carId, text, categoryId?, mediaIds[], target, targetRowId?, targetShopId?}` ← `RequestCreatedDto {id, recipientsCount, brandName}` |
+| 06, 06б, 31 Найти запчасть | `GET /me/cars`; `GET /categories?suggest=true` (чипы); `POST /media/photos?purpose=REQUEST` (фото); `GET /market/rows` (Рядам, Контейнерам); `GET /requests/estimate?carId=&brandId=&target=&rowIds=&containerIds=` (живой счётчик); `POST /requests` | ← `{recipients:18, brand:"Toyota"}`; `CreateRequest {carId, text, categoryId?, target: MARKET\|ROWS\|CONTAINERS, targetRowIds[]?, targetContainerIds[]?, duration?, mediaIds[]≤3}` ← `RequestDetailDto` |
 | 07 Ответы | `GET /requests/{id}`, `GET /requests/{id}/replies`; «Написать» → `POST /chats` | `RequestDetailDto {id, text, car, photos[], target, status, state, recipientsCount, seenCount, haveCount, createdAt}`; `ReplyDto {id, shop: ShopCardDto, condition, message, price, photos[], createdAt}` (только HAVE) |
 | 08 Чат | `GET /chats/{id}`, `GET /chats/{id}/messages?cursor=`, `POST /chats/{id}/messages`, `POST /chats/{id}/read`; STOMP `SUBSCRIBE /topic/chats/{id}`; «Как пройти» → 18; «Купил — закрыть» → 09 | `ChatDto {id, shop: ShopCardDto, buyer:{id,name,avatarUrl}, request?:{id,text,carLabel,status}, part?:{id,title,price,photo}, online}`; `SendMessageDto {text?, mediaId?, quickReply?, clientId}` ← `MessageDto {id, chatId, senderId, text, photo?, quickReply, createdAt, readAt}` |
 | 09 Закрыт | `POST /requests/{id}/close`; `GET /reviews/tags` | → `{shopId?, stars?, tags[]}` ← `RequestDetailDto`; `ReviewTagDto {code, label}` |
@@ -252,7 +252,8 @@ Kafka-топики: `request.created`, `request.reply.created`, `request.closed`
 | 18 Как пройти | `GET /market/route?toContainerId=\|toShopId=&fromX=&fromY=\|fromEntrance=`; «Я на месте» → `POST /chats/{id}/messages {quickReply: ARRIVED}` | `RouteDto {target:{shopName, location}, polyline:[[x,y]], distanceM, minutes, steps:[{n, text, kind: STRAIGHT\|LEFT\|RIGHT\|ARRIVE}]}` |
 | 16 Чаты | `GET /chats?cursor=`, `GET /me/badges` | `ChatListItemDto {id, counterpart:{name, avatarUrl}, location?, requestTitle, requestClosed, lastMessage:{text, fromMe, at}, unread}` |
 | 19 Профиль | `GET /me`, `PATCH /me {name, lang, avatarMediaId}`, `GET/PATCH /me/settings`, `GET /me/favorite-shops`, `GET /requests/my`, `PUT /me/role`, `POST /auth/logout` | `SettingsDto {notifyReplies, notifyChat, newRequestSound, theme}` |
-| 20 Пусто | `GET /requests/{id}` (state=NO_ANSWERS), `POST /requests/{id}/widen`, `POST /requests/{id}/close` | `WidenDto {target: MARKET}` ← `{recipientsAdded, recipientsCount}` |
+| 20 Пусто | `GET /requests/{id}` (state=NO_ANSWERS — время вышло без «Есть»), `POST /requests/{id}/widen`, `POST /requests/{id}/close` | `{target: MARKET}` ← `{recipientsAdded, recipientsCount, expiresAt}` |
+| 32 Статистика запроса | `GET /requests/{id}/stats`; `POST /requests/{id}/extend {minutes: 30\|60\|180}` (до 3 раз); `POST /requests/{id}/widen`; живое — событие `REQUEST_STATS` в `inbox:{userId}#{userId}` | `RequestStatsDto {status, expiresAt, durationMin, remainingMin, canExtend, counts:{delivered, seen, have, notHave, silent}, have:[{shop, row, container, answeredAt, price, chatId}], notHave:[{row, container}]}` |
 
 ### Продавец
 
@@ -263,8 +264,8 @@ Kafka-топики: `request.created`, `request.reply.created`, `request.closed`
 | 10 Мой бокс | `GET /my/shop`, `PATCH /my/shop`, `PUT /my/shop/brands`, `PUT /my/shop/categories`, «Изменить» место → `POST /my/shop/relocation` | `MyShopDto {id, name, avatarUrl, status, location, pendingLocation?, openFrom, openTo, isOpen, isOpenNow, rating, reviewsCount, brands[], categories[], photos[]}`; `UpdateShopDto {name?, openFrom?, openTo?, avatarMediaId?}`; `{brandIds[]}`; `{categoryIds[]}`; `{containerId}` |
 | 22 Фото места | `POST /media/uploads`, `POST /my/shop/photos`, `PATCH /my/shop/photos/{id}`, `PUT /my/shop/photos/order`, `DELETE /my/shop/photos/{id}`, аватар → `PATCH /my/shop` | `{mediaId}` ← `ShopPhotoDto {id, photo, isCover, sort}`; `{ids[]}` |
 | 23 Марки | `GET /brands?q=`, `PUT /my/shop/brands` | `BrandDto {…BrandShortDto, popular}` |
-| 11 Запросы | `GET /my/shop/requests?filter=NEW\|ANSWERED\|UNANSWERED&cursor=`, `PATCH /my/shop/open`, `POST /my/shop/requests/{id}/seen`, «Нет» → `POST /requests/{id}/replies {answer: NOT_HAVE}` | `IncomingRequestDto {id, text, carLabel, year, photos[], buyerName, createdAt, myAnswer?}`; `{isOpen}` |
-| 12 Ответ | `GET /my/shop/requests/{id}`, `POST /requests/{id}/replies` | `CreateReplyDto {answer: HAVE\|NOT_HAVE, condition?, message?, price?, mediaIds[]}` ← `ReplyDto`; 409 `REQUEST_CLOSED`, `ALREADY_REPLIED` |
+| 11 Запросы | `GET /my/shop/requests?filter=NEW\|ANSWERED\|EXPIRED\|UNANSWERED&cursor=`, `PATCH /my/shop/open`, `POST /my/shop/requests/{id}/seen`, «Нет» → `POST /requests/{id}/replies {answer: NOT_HAVE}` | `IncomingRequestDto {id, text, car, photos[], buyerName, createdAt, expiresAt, myReply?}`; `{isOpen}` |
+| 12 Ответ | `GET /my/shop/requests/{id}`, `POST /requests/{id}/replies` | `CreateReplyDto {answer: HAVE\|NOT_HAVE, condition?, message?, price?, partId?, mediaIds[]≤3}` ← `ReplyDto`; 409 `REQUEST_CLOSED`, `REQUEST_EXPIRED`, `ALREADY_REPLIED` |
 | 13 Чат продавца | как 08 + `GET /chats/quick-replies` | `QuickReplyDto {code, text}` |
 | 16 Чаты (прод.) | `GET /chats?as=shop&cursor=` | `ChatListItemDto` |
 | 24 Мои запчасти | `GET /my/parts?status=&q=&cursor=`, `GET /my/parts/summary`, `PATCH /parts/{id}` (наличие) | `MyPartItemDto {id, title, photo, fitmentLabels[], brandLogos[], price, quantity, status}`; `{all, inStock, outOfStock, viewsWeek}` |
@@ -303,7 +304,7 @@ UI админки — не в этом репозитории (или миним
 ## 4. Ключевые алгоритмы (кратко)
 
 - **Рассылка** (`POST /requests`): бренд из машины → `shops` ACTIVE ∧ `is_open` ∧ сейчас в `open_from..open_to` ∧ `brand ∈ shop_brands` ∧ (ROW: контейнер в ряду / SHOP: конкретный магазин) → batch insert в `request_recipients` → outbox `request.created` → Kafka → пуши. Счётчик в ответе = число вставленных строк.
-- **Нет ответов** (экран 20): шедулер раз в минуту берёт OPEN-запросы старше N мин (конфиг, предлагаю 15) без HAVE и `no_reply_at IS NULL` → ставит `no_reply_at`, событие `request.no_reply` → пуш покупателю.
+- **Время вышло** (экраны 20, 32): шедулер раз в минуту берёт ACTIVE-запросы с `expires_at` в прошлом → EXPIRED, получатели без ответа → EXPIRED («Истёкшие» у продавца), пуш покупателю: без «Есть» — «Пока никто не ответил», с ответами — «Время вышло: 3 ответа. Продлить?».
 - **Маршрут**: граф — вершины в концах/изломах проходов и в их пересечениях (сегменты режем по точкам пересечения); старт — проекция точки пользователя на ближайший сегмент (или вход); цель — проекция центра контейнера на ближайший проход вдоль ряда. Dijkstra. Метры = пиксели × `metersPerPx` (из гео-калибровки; до неё — константа в конфиге). Минуты = м / 70 м/мин. Шаги — склейка коллинеарных рёбер, поворот по знаку векторного произведения, «по левую/правую руку» — сторона контейнера относительно направления движения.
 - **GPS → x,y**: аффинное преобразование МНК по ≥3 опорным точкам; `radius` = accuracy × масштаб.
 - **Поиск**: `search_tsv @@ websearch_to_tsquery` ИЛИ `similarity(title, q) > 0.3` ИЛИ `oem_norm % q_norm`; ранжирование ts_rank + similarity; `fits` = EXISTS по `part_fitments` для машины (brand, model NULL или =, годы NULL или покрывают). NEAREST — расстояние от (x,y) до центра контейнера магазина.
@@ -343,7 +344,7 @@ auth → users/garage → market (+ гео-привязка, админка ка
 | shops | `shops`: `phone_visible` (по умолчанию false), `work_days` SMALLINT (битовая маска Пн–Вс, выходные), `closed_until` (показывать «Откроется в 08:00»), `block_reason`. Название 2–60 символов, без телефонов и ссылок. `shop_members.role` OWNER/STAFF, приглашение по номеру с SMS. `reviews`: `reply_text`, `replied_at` (один ответ на отзыв). |
 | complaints | Новая таблица `complaints(id, author_id, type CONTAINER_CLAIM/PART/PHOTO/REVIEW/SHOP, target_id, text, status OPEN/RESOLVED/REJECTED, resolved_by, created_at)`. «Это мой контейнер» → CONTAINER_CLAIM. Модерация через админку. |
 | catalog | `parts`: `manufacturer`, `side`, `position` — для поиска и карточки. Лимит 500 активных товаров на магазин. Без фитментов товар не публикуется; фитментов не больше 20. Синонимы — таблица `search_synonyms(term, synonym)`, например «стойка = амортизатор», раскрываются в запросе. `favorites` + `favorite_shops`: список «Избранные магазины и запчасти». Фильтр «только открытые боксы». В выдаче сначала точное совпадение модели, потом совпадение по марке. |
-| requests | Статусы OPEN / CLOSED / EXPIRED. Текст 3–200 символов, до 3 фото. Лимиты: не больше 10 открытых запросов и 20 новых в сутки. Экран «Никто не ответил» — через **30 мин** без ответа «Есть» (вместо 15). Через 7 дней без действий — EXPIRED. Получатели: ACTIVE ∧ не закрыт вручную ∧ рабочий день и часы ∧ марка ∈ марки магазина ∧ ряд или бокс, если выбран. |
+| requests | Статусы ACTIVE / EXPIRED / CLOSED (спецификация 3.7а заменила «30 минут без ответа» и «7 дней без действий»). Текст 3–200 символов, до 3 фото. Лимиты: не больше 10 активных запросов и 20 новых в сутки. Срок выбирает покупатель: 30 мин / 1 ч / 3 ч / до 17:00. Получатели: ACTIVE ∧ не закрыт вручную ∧ рабочий день и часы ∧ (марка ∈ марки магазина ∧ ряд из выбранных — для MARKET и ROWS) или контейнер из выбранных — для CONTAINERS. |
 | chat | **Остаётся как в v1**: Centrifugo, фото, голосовые и видео, прямой чат с магазином. Модели v1 переносятся на Shop. Код v1 восстанавливается из коммита `21c77cf`. Сервис Centrifugo возвращается в docker-compose. Добавляются быстрые ответы и системное сообщение «Покупатель подошёл» (кнопка «Я на месте»). |
 | market | Улицы вокруг рынка (Билим, Садыгалиева, П. Лумумбы) лежат в `map_versions.streets` JSONB. `GET /market/rows/{id}` — контейнеры ряда с магазинами; для пустого контейнера `shop = null`, на экране «Нет продавца в приложении». Без геолокации маршрут строится от главного входа. |
 | admin | `broadcasts(id, author_id, audience, title_ru, title_kg, body_ru, body_kg, sent_at)`: рассылки всем пользователям (админ рынка и суперадмин). |
@@ -360,22 +361,25 @@ auth → users/garage → market (+ гео-привязка, админка ка
 
 ### Запросы и ответы — реализовано (модуль request)
 
-- **Эндпоинты покупателя:** `POST /requests/recipients-preview`, `POST /requests` (Idempotency-Key), `GET /requests/my`, `GET /requests/{id}`, `GET /requests/{id}/replies?afterId=`, `POST /requests/{id}/close`, `POST /requests/{id}/widen`, `GET /reviews/tags`.
-- **Эндпоинты продавца:** `GET /my/shop/requests?filter=NEW|ANSWERED|UNANSWERED`, `GET /my/shop/requests/{id}`, `POST /my/shop/requests/{id}/seen`, `POST /requests/{id}/replies` (Idempotency-Key), `PATCH /requests/{id}/replies/mine` (10 минут).
-- **Получатели** выбираются в момент отправки: ACTIVE ∧ `is_open` ∧ марка ∈ `shop_brands` — в SQL; рабочие часы и ряд — в памяти (до 2 000 магазинов). Свой бокс покупателю не шлём. «Отправить всему рынку» добавляет только новых получателей и перезапускает 30-минутный таймер (`sent_at`).
-- **Лимиты:** 10 открытых — 409 `OPEN_REQUESTS_LIMIT`; 20 за скользящие сутки — 429 `DAILY_REQUESTS_LIMIT` с `retryAfter`.
-- **Ответ:** один на бокс (UNIQUE + блокировка строки запроса). «Есть» требует состояние. Правка в течение 10 минут, в том числе «Нет» ↔ «Есть». «Нет» не продлевает жизнь запроса.
+- **Эндпоинты покупателя:** `GET /requests/estimate`, `POST /requests` (Idempotency-Key), `GET /requests/my`, `GET /requests/{id}`, `GET /requests/{id}/replies?afterId=`, `GET /requests/{id}/stats`, `POST /requests/{id}/extend`, `POST /requests/{id}/close`, `POST /requests/{id}/widen`, `GET /reviews/tags`.
+- **Эндпоинты продавца:** `GET /my/shop/requests?filter=NEW|ANSWERED|EXPIRED|UNANSWERED`, `GET /my/shop/requests/{id}`, `POST /my/shop/requests/{id}/seen`, `POST /requests/{id}/replies` (Idempotency-Key), `PATCH /requests/{id}/replies/mine` (10 минут).
+- **Адресаты:** MARKET; ROWS — 1–10 рядов; CONTAINERS — 1–30 контейнеров. Ряды и контейнеры должны быть на текущей схеме рынка (404 `ROW_NOT_FOUND` / `CONTAINER_NOT_FOUND`).
+- **Получатели** выбираются в момент отправки: ACTIVE ∧ `is_open` ∧ (марка ∈ `shop_brands` для MARKET и ROWS | `container_id` ∈ выбранных для CONTAINERS) — в SQL; рабочие часы и ряд — в памяти (до 2 000 магазинов). Свой бокс покупателю не шлём. «Отправить всему рынку» добавляет только новых получателей.
+- **Срок:** `duration` → `expires_at` (END_OF_DAY — до 17:00 по Бишкеку, после 17:00 — 3 часа). После `expires_at` ответить и изменить ответ нельзя — 409 `REQUEST_EXPIRED`. Продление `extend {minutes: 30|60|180}` — до 3 раз (409 `EXTEND_LIMIT`): активному сдвигает срок, истёкший снова делает активным на `minutes` от сейчас. `widen` отсчитывает `duration` заново. Истёкший запрос можно закрыть «Купил».
+- **Лимиты:** 10 активных — 409 `OPEN_REQUESTS_LIMIT` (проверяется и при возврате истёкшего в активные); 20 за скользящие сутки — 429 `DAILY_REQUESTS_LIMIT` с `retryAfter`.
+- **Ответ:** один на бокс (UNIQUE + блокировка строки запроса). «Есть» требует состояние, может нести до 3 фото (purpose REPLY). Правка в течение 10 минут, в том числе «Нет» ↔ «Есть».
+- **Статистика (32):** статус получателя в `request_recipients.status`; счётчики — одним запросом; «Есть» — с магазином, местом, ценой и чатом, «Нет» — только ряд и контейнер. Живое обновление — событие `REQUEST_STATS` в личном канале покупателя (`RequestRealtime`, после коммита), а не STOMP, как в спецификации: Centrifugo уже есть.
 - **Закрытие:** с боксом — только с ответившим «Есть»; оценка сразу пересчитывает `shops.rating`/`reviews_count`. Суперадмин может закрыть чужой запрос, но без оценки.
-- **Таймеры:** `RequestTimeoutJob` раз в минуту (`FOR UPDATE SKIP LOCKED`, пачки по 200): 30 минут без «Есть» → `no_reply_at` + пуш; 7 дней без действий → EXPIRED.
+- **Таймер:** `RequestTimeoutJob` раз в минуту (`FOR UPDATE SKIP LOCKED`, пачки по 200): ACTIVE с `expires_at` в прошлом → EXPIRED, получатели без ответа → EXPIRED, пуш покупателю «Время вышло: N ответов. Продлить?» или «Пока никто не ответил».
 - **Пуши** — через события Spring после коммита (`RequestEvents` → `RequestNotifier`, асинхронно), пока нет outbox → Kafka. Новый запрос уходит всем людям бокса с `category = NEW_REQUEST` (кнопки «Есть / Нет»). С 22:00 до 07:00 и при выключенном «Звуке нового запроса» — без звука. «Уведомления об ответах» выключены — покупатель пушей не получает.
-- **Ещё не сделано:** фото запроса и ответа (ждут модуль media), товар из каталога в ответе (catalog), живая доставка ответов на экран 07 (сейчас опрос с `afterId`).
+- **Ещё не сделано:** живая доставка ответов на экран 07 отдельным событием (сейчас опрос с `afterId` или `REQUEST_STATS`), `GET /market/rows/{id}/containers?brandId=` для экрана 31.
 - **Часы работы.** Убран `hibernate.jdbc.time_zone: UTC`: из-за него `LocalTime` сдвигался на пояс JVM (08:00 ложилось в базу как 02:00, а часы с 00:00 до 06:00 ломали `CHECK open_from < open_to`). Instant по-прежнему пишется в UTC.
 
 ### Чат — реализовано (модуль chat, Centrifugo)
 
 - **Модель.** Чат покупателя с **магазином**: владелец и сотрудники пишут и читают от имени бокса (`messages.side` = BUYER / SHOP / SYSTEM, `sender_id` — кто именно). Чат по запросу уникален на (покупатель, бокс, запрос); прямой чат из профиля магазина уникален на (покупатель, бокс).
 - **Создание.** Ответ «Есть» создаёт чат в той же транзакции: плашка `PAY_AT_BOX` и карточка ответа (`REPLY`: replyId, condition, price). `ReplyDto.chatId` нужен для кнопки «Написать». `POST /chats {shopId, requestId?}` открывает существующий чат по запросу или прямой чат. Пустой прямой чат бокс не видит до первого сообщения.
-- **Сообщения:** TEXT; PHOTO / VOICE / VIDEO (multipart, голосовые до 60 секунд, волна до 100 точек); QUICK; SYSTEM (`REQUEST_CLOSED` при закрытии запроса с этим боксом). `clientId` — идемпотентность очереди без сети. Сообщение в чате по запросу продлевает жизнь запроса.
+- **Сообщения:** TEXT; PHOTO / VOICE / VIDEO (multipart, голосовые до 60 секунд, волна до 100 точек); QUICK; SYSTEM (`REQUEST_CLOSED` при закрытии запроса с этим боксом). `clientId` — идемпотентность очереди без сети.
 - **Прочтение.** По сторонам: `buyer_read_message_id` / `shop_read_message_id`. Галочка «прочитано» = противоположная сторона дочитала до id. Бейдж — `GET /chats/unread` (как покупатель и как бокс).
 - **Быстрые ответы** (`GET /chats/{id}/quick-replies`). Покупатель: ROUTE_TO_BOX и CLOSE_REQUEST — действия клиента; ARRIVED («Я на месте» с экрана 18) — сообщение. Продавец: RESERVED, ROUTE (карточка с `location`), SOLD. Текст быстрого ответа сохраняется на языке отправителя.
 - **Шаблоны бокса:** `GET/POST/PUT/DELETE /my/shop/reply-templates`, до 30, ведут владелец и сотрудники; в быстрых ответах идут с `templateId` — клиент подставляет текст.
@@ -387,7 +391,7 @@ auth → users/garage → market (+ гео-привязка, админка ка
 
 ### Фото и каталог — реализовано (модули media и catalog)
 
-- **Фото.** `POST /media/photos` (multipart, purpose PART / SHOP / AVATAR / REQUEST). Сервер декодирует картинку (размер кадра проверяется до декодирования, до 50 Мп), пережимает в JPEG 1080 и 320 px и тем самым убирает EXIF и геометку. В `media` хранятся два ключа. Хранилище общее с чатом: `MediaStorage` (local — `/media/**`, s3 — MinIO и presigned-ссылки). **Отличие от раздела 3:** вместо presigned PUT и `/complete` — загрузка через бэкенд, потому что без неё сервер не может пережать фото и убрать EXIF. HEIC сервер не читает, телефон отправляет JPEG (ТЗ 9.2: телефон сжимает фото перед отправкой).
+- **Фото.** `POST /media/photos` (multipart, purpose PART / SHOP / AVATAR / REQUEST / REPLY). Сервер декодирует картинку (размер кадра проверяется до декодирования, до 50 Мп), пережимает в JPEG 1080 и 320 px и тем самым убирает EXIF и геометку. В `media` хранятся два ключа. Хранилище общее с чатом: `MediaStorage` (local — `/media/**`, s3 — MinIO и presigned-ссылки). **Отличие от раздела 3:** вместо presigned PUT и `/complete` — загрузка через бэкенд, потому что без неё сервер не может пережать фото и убрать EXIF. HEIC сервер не читает, телефон отправляет JPEG (ТЗ 9.2: телефон сжимает фото перед отправкой).
 - **Запчасть.** DRAFT / ACTIVE / ARCHIVED; «Нет в наличии» = `quantity = 0`. Черновик сохраняется неполным (`POST /parts`, `PATCH /parts/{id}`). Публикация (`?publish=true` или `POST /parts/{id}/publish`) требует название (3–120), категорию, состояние, цену, 1–6 фото и 1–20 машин; иначе 400 `PART_INCOMPLETE` с полем `missing`. Опубликованную правкой «сломать» нельзя. Не больше 500 опубликованных — 409 `ACTIVE_PARTS_LIMIT`. Фото — только загруженные людьми этого бокса. Удаляет только владелец, админ рынка — через `DELETE /admin/parts/{id}`.
 - **Поиск** (`GET /parts/search`, `/parts/search/count`, `/shops/{id}/parts`): полнотекстовый поиск по `search_tsv` (russian + simple), синонимы из `search_synonyms` сравниваются по основе слова, опечатки — `word_similarity ≥ 0.45` (pg_trgm), номер детали — по началу `oem_norm`. Машина: `carId` или `brandId` + `modelId?` + `year?`; сначала точное совпадение модели. Фильтры: категория, состояние, цена, «только в наличии» (по умолчанию), «только открытые боксы». Сортировки: цена, новые, NEAREST — по прямой от точки x,y (или от главного входа) до контейнера. Страницы — по смещению, `total` для «24 запчасти для Camry 50».
 - **Карточка** (`GET /parts/{id}`): плашка `fit` для машины. Просмотр засчитывается не чаще раза в час на человека (Redis `pv:`), пишется в `views_count` и `part_views_daily`: «посмотрели N раз за неделю» на экране 24.
@@ -400,7 +404,7 @@ auth → users/garage → market (+ гео-привязка, админка ка
 - **Фото места и аватар.** `PUT/DELETE /my/shop/avatar`; `GET/POST /my/shop/photos`, `PUT /my/shop/photos/order`, `POST /my/shop/photos/{mediaId}/cover`, `DELETE /my/shop/photos/{mediaId}`. Фото места — до 8, первое — «Обложка». Меняет только владелец, снимать фото может любой человек бокса. Аватар магазина отдаётся в `ShopCardDto`, на карте, в чатах и профиле. Аватар пользователя: `PATCH /me {avatarMediaId}`, `DELETE /me/avatar`, поле `avatarUrl` в `/me`.
 - **Профиль для покупателя (30):** `photos`, `counts {parts, photos, reviews}`, `GET /shops/{id}/photos`, `GET /shops/{id}/reviews`. На карточке запчасти — `shopPhotos` (3 фото места).
 - **Отзывы:** `GET /my/shop/reviews`; `POST /my/shop/reviews/{id}/reply` — владелец, один раз (409 `ALREADY_REPLIED`).
-- **Чистка фото:** `MediaCleanupJob` раз в сутки (03:45) удаляет фото старше 24 часов, на которые не ссылаются товары, фото места, аватары и карточки товара в чате. Сначала удаляются файлы, потом строка; сбой хранилища — повтор в следующем проходе.
+- **Чистка фото:** `MediaCleanupJob` раз в сутки (03:45) удаляет фото старше 24 часов, на которые не ссылаются товары, фото места, аватары, запросы, ответы «Есть» и карточки товара в чате. Сначала удаляются файлы, потом строка; сбой хранилища — повтор в следующем проходе.
 - **Номер детали с фото:** `POST /ocr/oem` (multipart). `app.ocr.provider`: `none` — 503 `OCR_UNAVAILABLE`; `google` — Cloud Vision TEXT_DETECTION по ключу `OCR_GOOGLE_API_KEY`. Кандидаты в номер разбирает `OemExtractor`, у каждого — сколько таких запчастей продаётся. Не больше 30 распознаваний в час на пользователя.
 - **Импорт из Excel:** `GET /my/parts/import/template`, `POST /my/parts/import` (.xlsx до 5 МБ и 500 запчастей). Строка — запчасть, строка без названия — ещё одна машина. Создаются черновики (фото добавляются в приложении), ошибки — в отчёте с номером строки.
 - **Пуши по избранному:** цена опубликованной запчасти снизилась — «Подешевело»; количество стало 0 — «Закончилось». Людям бокса не шлём; одному человеку — не чаще раза в сутки на запчасть и вид.

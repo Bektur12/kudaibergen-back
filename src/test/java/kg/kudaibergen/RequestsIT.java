@@ -13,8 +13,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
 /**
- * Запрос «Найти запчасть»: рассылка по марке → «Есть» / «Нет» → ответы покупателю → закрытие с оценкой;
- * таймеры «никто не ответил» и «истёк», «Отправить всему рынку», лимиты, окно правки ответа.
+ * Запрос «Найти запчасть»: рассылка по марке → «Есть» / «Нет» → ответы и статистика покупателю → закрытие
+ * с оценкой; истечение времени, продление, «Отправить всему рынку», контейнеры без фильтра по марке,
+ * лимиты, окно правки ответа.
  * У каждого теста свои марки (в других классах их нет) — счётчики получателей точные при любом порядке.
  */
 class RequestsIT extends AbstractIntegrationTest {
@@ -39,19 +40,21 @@ class RequestsIT extends AbstractIntegrationTest {
       long carId = forester(buyer);
 
       // счётчик под выбором адресата: только проверенные открытые боксы марки, ряд сужает
-      JsonNode all = call(authed(jsonPost("/api/v1/requests/recipients-preview",
-            "{\"carId\":" + carId + ",\"target\":\"MARKET\"}"), buyer), 200);
-      assertThat(all.get("count").asInt()).isEqualTo(2);
-      assertThat(all.get("brandName").asText()).isEqualTo("Subaru");
-      JsonNode row = call(authed(jsonPost("/api/v1/requests/recipients-preview",
-            "{\"carId\":" + carId + ",\"target\":\"ROW\",\"targetRowId\":" + rowId("16") + "}"), buyer), 200);
-      assertThat(row.get("count").asInt()).isEqualTo(1);
+      JsonNode all = call(authed(get("/api/v1/requests/estimate").param("carId", String.valueOf(carId))
+            .param("target", "MARKET"), buyer), 200);
+      assertThat(all.get("recipients").asInt()).isEqualTo(2);
+      assertThat(all.get("brand").asText()).isEqualTo("Subaru");
+      JsonNode row = call(authed(get("/api/v1/requests/estimate").param("carId", String.valueOf(carId))
+            .param("target", "ROWS").param("rowIds", String.valueOf(rowId("16"))), buyer), 200);
+      assertThat(row.get("recipients").asInt()).isEqualTo(1);
 
       JsonNode created = call(authed(jsonPost("/api/v1/requests",
             "{\"carId\":" + carId + ",\"text\":\"Стойки передние, пара\",\"target\":\"MARKET\"}"), buyer), 201);
       long requestId = created.get("id").asLong();
       assertThat(created.get("recipientsCount").asInt()).isEqualTo(2);
       assertThat(created.get("state").asText()).isEqualTo("WAITING");
+      assertThat(created.get("duration").asText()).isEqualTo("MIN_30");
+      assertThat(created.get("canExtend").asBoolean()).isTrue();
       assertThat(created.get("car").get("label").asText()).isEqualTo("Subaru Forester SH · 2010");
 
       // лента: у получателей есть, у другой марки, непроверенного и закрытого — нет
@@ -90,6 +93,17 @@ class RequestsIT extends AbstractIntegrationTest {
       assertThat(detail.get("state").asText()).isEqualTo("HAS_ANSWERS");
       assertThat(detail.get("haveCount").asInt()).isEqualTo(1);
       assertThat(detail.get("seenCount").asInt()).isEqualTo(2);
+
+      // статистика (32): «Есть» — с магазином и ценой, «Нет» — только место
+      JsonNode stats = call(authed(get("/api/v1/requests/" + requestId + "/stats"), buyer), 200);
+      assertThat(stats.get("counts").get("delivered").asInt()).isEqualTo(2);
+      assertThat(stats.get("counts").get("have").asInt()).isEqualTo(1);
+      assertThat(stats.get("counts").get("notHave").asInt()).isEqualTo(1);
+      assertThat(stats.get("counts").get("silent").asInt()).isZero();
+      assertThat(stats.get("have").get(0).get("shop").get("name").asText()).isEqualTo("Субару Центр");
+      assertThat(stats.get("have").get(0).get("price").asInt()).isEqualTo(4500);
+      assertThat(stats.get("notHave").get(0).get("row").asText()).isEqualTo("18");
+      assertThat(stats.get("notHave").get(0).has("shop")).isFalse();
       String stranger = accessToken("+996700500511", "BUYER");
       call(authed(get("/api/v1/requests/" + requestId), stranger), 404);
 
@@ -128,31 +142,40 @@ class RequestsIT extends AbstractIntegrationTest {
    }
 
    @Test
-   void никтоНеОтветилРасширениеИИстечение() throws Exception {
+   void времяВышлоРасширениеИПродление() throws Exception {
       activeShop("+996700500521", "16", 4, "audi", "Субару Юг");
       String rowSeller = activeShop("+996700500522", "18", 4, "audi", "Субару Север");
       String buyer = accessToken("+996700500530", "BUYER");
       long carId = car(buyer, "audi", "A6", "C6", 2008);
 
       JsonNode created = call(authed(jsonPost("/api/v1/requests", "{\"carId\":" + carId
-            + ",\"text\":\"Фара левая\",\"target\":\"ROW\",\"targetRowId\":" + rowId("18") + "}"), buyer), 201);
+            + ",\"text\":\"Фара левая\",\"target\":\"ROWS\",\"targetRowIds\":[" + rowId("18")
+            + "],\"duration\":\"HOUR_1\"}"), buyer), 201);
       long requestId = created.get("id").asLong();
       int rowRecipients = created.get("recipientsCount").asInt();
       assertThat(rowRecipients).isPositive();
 
-      // 30 минут без «Есть» → экран «Пока никто не ответил»
-      jdbc.update("update part_requests set sent_at = now() - interval '31 minutes' where id = ?", requestId);
-      requestService.markNoReply();
-      assertThat(call(authed(get("/api/v1/requests/" + requestId), buyer), 200).get("state").asText())
-            .isEqualTo("NO_ANSWERS");
+      // время вышло без «Есть» → экран «Пока никто не ответил», ответить уже нельзя
+      jdbc.update("update part_requests set expires_at = now() - interval '1 minute' where id = ?", requestId);
+      assertThat(requestService.expireDue()).isPositive();
+      JsonNode expired = call(authed(get("/api/v1/requests/" + requestId), buyer), 200);
+      assertThat(expired.get("status").asText()).isEqualTo("EXPIRED");
+      assertThat(expired.get("state").asText()).isEqualTo("NO_ANSWERS");
+      JsonNode late = call(authed(jsonPost("/api/v1/requests/" + requestId + "/replies",
+            "{\"answer\":\"NOT_HAVE\"}"), rowSeller), 409);
+      assertThat(late.get("code").asText()).isEqualTo("REQUEST_EXPIRED");
+      assertThat(call(authed(get("/api/v1/my/shop/requests").param("filter", "EXPIRED"), rowSeller), 200)
+            .get("items").findValuesAsText("id")).contains(String.valueOf(requestId));
 
-      // «Отправить всему рынку» — добавляются боксы из других рядов, таймер заново
-      JsonNode widened = call(authed(post("/api/v1/requests/" + requestId + "/widen"), buyer), 200);
+      // «Отправить всему рынку» — добавляются боксы из других рядов, срок заново, запрос снова активен
+      JsonNode widened = call(authed(jsonPost("/api/v1/requests/" + requestId + "/widen",
+            "{\"target\":\"MARKET\"}"), buyer), 200);
       assertThat(widened.get("recipientsAdded").asInt()).isPositive();
       assertThat(widened.get("recipientsCount").asInt()).isEqualTo(rowRecipients + widened.get("recipientsAdded").asInt());
       JsonNode afterWiden = call(authed(get("/api/v1/requests/" + requestId), buyer), 200);
       assertThat(afterWiden.get("state").asText()).isEqualTo("WAITING");
       assertThat(afterWiden.get("target").asText()).isEqualTo("MARKET");
+      assertThat(afterWiden.get("status").asText()).isEqualTo("ACTIVE");
 
       // «Нет» → в течение 10 минут можно передумать на «Есть», потом — нет
       call(authed(jsonPost("/api/v1/requests/" + requestId + "/replies", "{\"answer\":\"NOT_HAVE\"}"), rowSeller),
@@ -169,23 +192,46 @@ class RequestsIT extends AbstractIntegrationTest {
             .contentType(MediaType.APPLICATION_JSON).content("{\"answer\":\"NOT_HAVE\"}"), rowSeller), 409);
       assertThat(expiredEdit.get("code").asText()).isEqualTo("REPLY_EDIT_EXPIRED");
 
-      // 7 дней без действий → EXPIRED, из ленты продавца пропадает
-      jdbc.update("update part_requests set last_activity_at = now() - interval '8 days' where id = ?", requestId);
-      requestService.expireIdle();
-      assertThat(call(authed(get("/api/v1/requests/" + requestId), buyer), 200).get("status").asText())
+      // время вышло с ответом → «Время вышло», продлить можно 3 раза
+      jdbc.update("update part_requests set expires_at = now() - interval '1 minute' where id = ?", requestId);
+      requestService.expireDue();
+      assertThat(call(authed(get("/api/v1/requests/" + requestId), buyer), 200).get("state").asText())
             .isEqualTo("EXPIRED");
-      assertThat(call(authed(get("/api/v1/my/shop/requests").param("filter", "ANSWERED"), rowSeller), 200)
-            .get("items").findValuesAsText("id")).doesNotContain(String.valueOf(requestId));
+      JsonNode badExtend = call(authed(jsonPost("/api/v1/requests/" + requestId + "/extend", "{\"minutes\":45}"),
+            buyer), 400);
+      assertThat(badExtend.get("code").asText()).isEqualTo("BAD_EXTEND");
+      JsonNode extended = call(authed(jsonPost("/api/v1/requests/" + requestId + "/extend", "{\"minutes\":30}"),
+            buyer), 200);
+      assertThat(extended.get("status").asText()).isEqualTo("ACTIVE");
+      assertThat(extended.get("extendedTimes").asInt()).isEqualTo(1);
+      call(authed(jsonPost("/api/v1/requests/" + requestId + "/extend", "{\"minutes\":60}"), buyer), 200);
+      JsonNode third = call(authed(jsonPost("/api/v1/requests/" + requestId + "/extend", "{\"minutes\":180}"),
+            buyer), 200);
+      assertThat(third.get("canExtend").asBoolean()).isFalse();
+      JsonNode limit = call(authed(jsonPost("/api/v1/requests/" + requestId + "/extend", "{\"minutes\":30}"),
+            buyer), 409);
+      assertThat(limit.get("code").asText()).isEqualTo("EXTEND_LIMIT");
    }
 
    @Test
-   void лимитОткрытыхЗапросовИСвойБокс() throws Exception {
+   void лимитОткрытыхЗапросовСвойБоксИКонтейнеры() throws Exception {
       // продавец в режиме покупателя: свой бокс запрос не получает
       String seller = activeShop("+996700500541", "16", 5, "ford", "Сам себе продавец");
       long carId = car(seller, "ford", "Focus", "II", 2008);
-      JsonNode preview = call(authed(jsonPost("/api/v1/requests/recipients-preview", "{\"carId\":" + carId
-            + ",\"target\":\"SHOP\",\"targetShopId\":" + shopIdOf("+996700500541") + "}"), seller), 200);
-      assertThat(preview.get("count").asInt()).isZero();
+      JsonNode preview = call(authed(get("/api/v1/requests/estimate").param("carId", String.valueOf(carId))
+            .param("target", "CONTAINERS").param("containerIds", String.valueOf(containerOf("+996700500541"))),
+            seller), 200);
+      assertThat(preview.get("recipients").asInt()).isZero();
+
+      // «Контейнерам» — без фильтра по марке: бокс, торгующий другой маркой, тоже получает
+      activeShop("+996700500542", "16", 6, "opel", "Опель, но выбран вручную");
+      JsonNode chosen = call(authed(get("/api/v1/requests/estimate").param("carId", String.valueOf(carId))
+            .param("target", "CONTAINERS").param("containerIds", String.valueOf(containerOf("+996700500542"))),
+            seller), 200);
+      assertThat(chosen.get("recipients").asInt()).isEqualTo(1);
+      JsonNode noRows = call(authed(get("/api/v1/requests/estimate").param("carId", String.valueOf(carId))
+            .param("target", "ROWS"), seller), 400);
+      assertThat(noRows.get("code").asText()).isEqualTo("ROWS_REQUIRED");
 
       String buyer = accessToken("+996700500550", "BUYER");
       long buyerCar = car(buyer, "ford", "Focus", "II", 2008);
@@ -248,6 +294,11 @@ class RequestsIT extends AbstractIntegrationTest {
    private long shopIdOf(String ownerPhone) {
       return jdbc.queryForObject("select s.id from shops s join users u on u.id = s.owner_id where u.phone = ?",
             Long.class, ownerPhone);
+   }
+
+   private long containerOf(String ownerPhone) {
+      return jdbc.queryForObject("select s.container_id from shops s join users u on u.id = s.owner_id"
+            + " where u.phone = ?", Long.class, ownerPhone);
    }
 
    private long rowId(String code) {

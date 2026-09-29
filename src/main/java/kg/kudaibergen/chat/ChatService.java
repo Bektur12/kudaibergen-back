@@ -366,10 +366,6 @@ public class ChatService {
       if (message.getSide() != ChatSide.SYSTEM) {
          chat.messageAdded(message);
       }
-      if (chat.getRequestId() != null && message.getSide() != ChatSide.SYSTEM) {
-         requests.findById(chat.getRequestId()).filter(PartRequest::isOpen)
-               .ifPresent(request -> request.touch(message.getCreatedAt()));
-      }
       events.publishEvent(new ChatEvents.MessageAdded(chat.getId(), message.getId(), push));
    }
 

@@ -43,8 +43,9 @@ public class IncomingRequestController {
 
    @GetMapping("/my/shop/requests")
    @Operation(summary = "Запросы бокса (11)", description = """
-         NEW — новые без ответа (сверху), ANSWERED — «Вы ответили «есть»» (ниже), UNANSWERED — без ответа
-         за всё время (из статистики 17). Закрытый покупателем запрос остаётся только у бокса, где купили.""")
+         NEW — активные без ответа (сверху, expiresAt — таймер «осталось 12 мин»), ANSWERED — «Вы ответили «есть»»
+         (ниже), EXPIRED — время вышло без ответа, UNANSWERED — без ответа за всё время (из статистики 17).
+         Закрытый покупателем запрос остаётся только у бокса, где купили.""")
    public CursorPage<IncomingRequestDto> feed(@AuthenticationPrincipal AuthPrincipal principal,
                                               @RequestParam(defaultValue = "NEW") IncomingRequestService.Filter filter,
                                               @RequestParam(required = false) String cursor,
@@ -71,7 +72,7 @@ public class IncomingRequestController {
 
    @PostMapping("/my/shop/requests/{id}/seen")
    @ResponseStatus(HttpStatus.NO_CONTENT)
-   @Operation(summary = "Продавец открыл запрос", description = "Для «видели N продавцов» у покупателя")
+   @Operation(summary = "Продавец открыл запрос или нажал на пуш", description = "Для «посмотрели» в статистике покупателя (32)")
    public void seen(@AuthenticationPrincipal AuthPrincipal principal, @PathVariable Long id) {
       incoming.seen(principal.userId(), id);
    }
@@ -80,9 +81,10 @@ public class IncomingRequestController {
    @ResponseStatus(HttpStatus.CREATED)
    @Idempotent
    @Operation(summary = "Ответить «Есть» или «Нет» (12, кнопки пуша 14)", description = """
-         «Есть» требует condition; message до 300 символов, price — по желанию. Покупатель получает пуш.
-         «Нет» — запрос скрывается, покупатель ничего не получает. Первый ответ бокса засчитывается за магазин.""")
-   @ApiResponse(responseCode = "409", description = "REQUEST_CLOSED, ALREADY_REPLIED")
+         «Есть» требует condition; message до 300 символов, price и mediaIds (до 3 фото, purpose=REPLY) — по желанию.
+         Покупатель получает пуш. «Нет» — запрос скрывается, покупатель видит только место в статистике.
+         Первый ответ бокса засчитывается за магазин. После expiresAt ответить нельзя.""")
+   @ApiResponse(responseCode = "409", description = "REQUEST_CLOSED, REQUEST_EXPIRED, ALREADY_REPLIED")
    @ApiResponse(responseCode = "403", description = "SHOP_NOT_ACTIVE — бокс не проверен или заблокирован")
    public ReplyDto reply(@AuthenticationPrincipal AuthPrincipal principal, @PathVariable Long id,
                          @Valid @RequestBody RequestInputs.Reply request) {
@@ -91,7 +93,7 @@ public class IncomingRequestController {
 
    @PatchMapping("/requests/{id}/replies/mine")
    @Operation(summary = "Изменить ответ бокса", description = "В течение 10 минут после ответа, потом — только в чате")
-   @ApiResponse(responseCode = "409", description = "REPLY_EDIT_EXPIRED, REQUEST_CLOSED")
+   @ApiResponse(responseCode = "409", description = "REPLY_EDIT_EXPIRED, REQUEST_CLOSED, REQUEST_EXPIRED")
    public ReplyDto editReply(@AuthenticationPrincipal AuthPrincipal principal, @PathVariable Long id,
                              @Valid @RequestBody RequestInputs.Reply request) {
       return incoming.editReply(principal.userId(), id, request);

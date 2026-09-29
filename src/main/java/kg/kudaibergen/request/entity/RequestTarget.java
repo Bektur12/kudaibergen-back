@@ -1,8 +1,8 @@
 package kg.kudaibergen.request.entity;
 
-/** «Кому отправить» на экране 06: всему рынку, одному ряду или одному боксу. */
+/** «Кому отправить» (06б, 31): всему рынку, 1–10 рядам или 1–30 контейнерам. */
 public enum RequestTarget {
    MARKET,
-   ROW,
-   SHOP
+   ROWS,
+   CONTAINERS
 }

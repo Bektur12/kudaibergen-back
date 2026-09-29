@@ -30,11 +30,10 @@ public record AppProperties(Jwt jwt, Otp otp, Sms sms, Fcm fcm, Market market, R
    }
 
    /**
-    * Запросы «Найти запчасть» (ТЗ 4.3–4.5, 10.2): лимиты покупателя, таймер «никто не ответил»,
-    * срок жизни без действий, окно правки ответа продавцом.
+    * Запросы «Найти запчасть» (ТЗ 4.3–4.5, 10.2): лимиты покупателя (активных одновременно и новых за сутки),
+    * окно правки ответа продавцом. Срок жизни запроса выбирает покупатель (RequestDuration).
     */
-   public record Requests(int maxOpen, int maxPerDay, Duration noReplyAfter, Duration expireAfter,
-                          Duration replyEditWindow) {
+   public record Requests(int maxOpen, int maxPerDay, Duration replyEditWindow) {
    }
 
    /** qrBaseUrl — префикс ссылки в QR-наклейках: {qrBaseUrl}{token} открывает приложение. */

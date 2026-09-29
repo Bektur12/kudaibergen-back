@@ -5,7 +5,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-/** Раз в минуту: «Пока никто не ответил» через 30 минут без «Есть» и EXPIRED через 7 дней без действий. */
+/** Раз в минуту: запросы, у которых вышло время, становятся EXPIRED, покупателю — пуш «Продлить?». */
 @Component
 public class RequestTimeoutJob {
 
@@ -19,10 +19,9 @@ public class RequestTimeoutJob {
 
    @Scheduled(fixedDelayString = "PT1M", initialDelayString = "PT1M")
    public void run() {
-      int noReply = requests.markNoReply();
-      int expired = requests.expireIdle();
-      if (noReply > 0 || expired > 0) {
-         log.info("Запросы: без ответа {}, истекли {}", noReply, expired);
+      int expired = requests.expireDue();
+      if (expired > 0) {
+         log.info("Запросы: истекли {}", expired);
       }
    }
 }

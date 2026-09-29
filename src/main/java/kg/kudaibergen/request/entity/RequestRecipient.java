@@ -4,11 +4,16 @@ import java.time.Instant;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.IdClass;
 import jakarta.persistence.Table;
 
-/** Запрос доставлен боксу: лента продавца (11) и статистика «без ответа», «время ответа» (17). */
+/**
+ * Запрос доставлен боксу: лента продавца (11), статистика запроса для покупателя (32) и статистика
+ * бокса «без ответа», «время ответа» (17). Ряд и контейнер — на момент рассылки: бокс может переехать.
+ */
 @Entity
 @Table(name = "request_recipients")
 @IdClass(RequestRecipientId.class)
@@ -22,6 +27,16 @@ public class RequestRecipient {
    @Column(name = "shop_id")
    private Long shopId;
 
+   @Column(name = "row_id", updatable = false)
+   private Long rowId;
+
+   @Column(name = "container_id", updatable = false)
+   private Long containerId;
+
+   @Enumerated(EnumType.STRING)
+   @Column(nullable = false, length = 8)
+   private RecipientStatus status = RecipientStatus.DELIVERED;
+
    @Column(name = "notified_at", nullable = false, updatable = false)
    private Instant notifiedAt;
 
@@ -34,21 +49,33 @@ public class RequestRecipient {
    protected RequestRecipient() {
    }
 
-   public RequestRecipient(Long requestId, Long shopId, Instant notifiedAt) {
+   public RequestRecipient(Long requestId, Long shopId, Long rowId, Long containerId, Instant notifiedAt) {
       this.requestId = requestId;
       this.shopId = shopId;
+      this.rowId = rowId;
+      this.containerId = containerId;
       this.notifiedAt = notifiedAt;
    }
 
-   public void seen(Instant at) {
-      if (seenAt == null) {
-         seenAt = at;
+   /** Продавец открыл карточку или нажал на пуш. Возвращает true, если это первый раз. */
+   public boolean seen(Instant at) {
+      if (seenAt != null) {
+         return false;
       }
+      seenAt = at;
+      if (status == RecipientStatus.DELIVERED) {
+         status = RecipientStatus.SEEN;
+      }
+      return true;
    }
 
-   public void replied(Instant at) {
+   /** Ответ или его правка «Нет» ↔ «Есть». */
+   public void answered(ReplyAnswer answer, Instant at) {
       seen(at);
-      repliedAt = at;
+      if (repliedAt == null) {
+         repliedAt = at;
+      }
+      status = answer == ReplyAnswer.HAVE ? RecipientStatus.HAVE : RecipientStatus.NOT_HAVE;
    }
 
    public Long getRequestId() {
@@ -57,6 +84,18 @@ public class RequestRecipient {
 
    public Long getShopId() {
       return shopId;
+   }
+
+   public Long getRowId() {
+      return rowId;
+   }
+
+   public Long getContainerId() {
+      return containerId;
+   }
+
+   public RecipientStatus getStatus() {
+      return status;
    }
 
    public Instant getNotifiedAt() {

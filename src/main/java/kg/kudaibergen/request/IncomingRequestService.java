@@ -6,6 +6,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -21,6 +22,8 @@ import kg.kudaibergen.common.error.ConflictException;
 import kg.kudaibergen.common.error.ForbiddenException;
 import kg.kudaibergen.common.error.NotFoundException;
 import kg.kudaibergen.common.web.CursorPage;
+import kg.kudaibergen.media.MediaPurpose;
+import kg.kudaibergen.media.MediaService;
 import kg.kudaibergen.request.dto.IncomingRequestDto;
 import kg.kudaibergen.request.dto.ReplyDto;
 import kg.kudaibergen.request.dto.RequestInputs;
@@ -41,6 +44,7 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * Входящие запросы бокса (ТЗ 10): общая лента владельца и сотрудников, ответ «Есть» / «Нет» из списка
  * или из пуша. Первый ответ засчитывается за магазин, второй невозможен; изменить можно 10 минут.
+ * Ответить и изменить ответ можно только пока запрос активен (до expiresAt).
  */
 @Service
 public class IncomingRequestService {
@@ -59,6 +63,7 @@ public class IncomingRequestService {
    private final ChatRepository chats;
    private final MyPartsService myParts;
    private final CatalogView catalogView;
+   private final MediaService media;
    private final ApplicationEventPublisher events;
    private final AppProperties.Requests config;
    private final Clock clock;
@@ -67,7 +72,7 @@ public class IncomingRequestService {
                                  RequestReplyRepository replies, ShopAccess access, ShopMapper shopMapper,
                                  RequestMapper mapper, UserRepository users, ChatService chatService,
                                  ChatRepository chats, MyPartsService myParts, CatalogView catalogView,
-                                 ApplicationEventPublisher events,
+                                 MediaService media, ApplicationEventPublisher events,
                                  AppProperties properties, Clock clock) {
       this.requests = requests;
       this.recipients = recipients;
@@ -80,15 +85,20 @@ public class IncomingRequestService {
       this.chats = chats;
       this.myParts = myParts;
       this.catalogView = catalogView;
+      this.media = media;
       this.events = events;
       this.config = properties.requests();
       this.clock = clock;
    }
 
-   /** Какую часть ленты показать (11): новые, «Вы ответили «есть»», без ответа (из статистики 17). */
+   /**
+    * Какую часть ленты показать (11): новые, «Вы ответили «есть»», истёкшие без ответа,
+    * без ответа за всё время (из статистики 17).
+    */
    public enum Filter {
       NEW,
       ANSWERED,
+      EXPIRED,
       UNANSWERED
    }
 
@@ -112,6 +122,7 @@ public class IncomingRequestService {
       List<RequestRecipient> rows = switch (filter) {
          case NEW -> recipients.findNew(shop.getId(), at, beforeId, size + 1);
          case ANSWERED -> recipients.findAnswered(shop.getId(), at, beforeId, size + 1);
+         case EXPIRED -> recipients.findExpired(shop.getId(), at, beforeId, size + 1);
          case UNANSWERED -> recipients.findUnanswered(shop.getId(), at, beforeId, size + 1);
       };
       List<Long> ids = rows.stream().map(RequestRecipient::getRequestId).toList();
@@ -144,11 +155,13 @@ public class IncomingRequestService {
             lang);
    }
 
-   /** Продавец открыл запрос — покупатель видит «видели N продавцов». */
+   /** Продавец открыл запрос или нажал на пуш — у покупателя растёт «посмотрели» (32). */
    @Transactional
    public void seen(Long userId, Long requestId) {
       Shop shop = access.requireMember(userId).shop();
-      recipient(requestId, shop.getId()).seen(clock.instant());
+      if (recipient(requestId, shop.getId()).seen(clock.instant())) {
+         events.publishEvent(new RequestEvents.StatsChanged(requestId));
+      }
    }
 
    // ─────────────────────── ответ ───────────────────────
@@ -162,29 +175,32 @@ public class IncomingRequestService {
       Shop shop = activeShop(userId);
       PartRequest request = requests.findForUpdate(requestId).orElseThrow(RequestService::notFound);
       RequestRecipient recipient = recipient(requestId, shop.getId());
-      RequestService.requireOpen(request);
+      RequestService.requireActive(request);
       if (replies.findByRequestIdAndShopId(requestId, shop.getId()).isPresent()) {
          throw new ConflictException("ALREADY_REPLIED", "Бокс уже ответил на этот запрос");
       }
       requireCondition(input);
       requirePart(shop, input);
+      List<Long> photoIds = photos(userId, input);
 
       Instant now = clock.instant();
       RequestReply reply = new RequestReply(requestId, shop.getId(), userId, now);
-      reply.fill(input.answer(), input.condition(), trimToNull(input.message()), input.price(), input.partId(), now);
+      reply.fill(input.answer(), input.condition(), trimToNull(input.message()), input.price(), input.partId(),
+            photoIds, now);
       try {
          replies.saveAndFlush(reply);
       } catch (DataIntegrityViolationException parallel) {
          throw new ConflictException("ALREADY_REPLIED", "Бокс уже ответил на этот запрос");
       }
-      recipient.replied(now);
+      recipient.answered(reply.getAnswer(), now);
       Long chatId = null;
       if (reply.isHave()) {
-         request.haveCountChanged(1, now);
+         request.haveCountChanged(1);
          // чат с карточкой ответа первым сообщением (ТЗ 10.2)
          chatId = chatService.openForReply(request, reply, userId);
          events.publishEvent(new RequestEvents.HaveReceived(requestId, reply.getId()));
       }
+      events.publishEvent(new RequestEvents.StatsChanged(requestId));
       return mapper.reply(reply, shopMapper.card(shop), chatId, partCard(reply, request));
    }
 
@@ -195,7 +211,7 @@ public class IncomingRequestService {
       PartRequest request = requests.findForUpdate(requestId).orElseThrow(RequestService::notFound);
       RequestReply reply = replies.findByRequestIdAndShopId(requestId, shop.getId())
             .orElseThrow(() -> new NotFoundException("REPLY_NOT_FOUND", "Бокс ещё не отвечал на этот запрос"));
-      RequestService.requireOpen(request);
+      RequestService.requireActive(request);
       Instant now = clock.instant();
       if (now.isAfter(reply.getCreatedAt().plus(config.replyEditWindow()))) {
          throw new ConflictException("REPLY_EDIT_EXPIRED", "Ответ можно изменить только в течение "
@@ -203,11 +219,15 @@ public class IncomingRequestService {
       }
       requireCondition(input);
       requirePart(shop, input);
+      List<Long> photoIds = photos(userId, input);
       boolean wasHave = reply.isHave();
-      reply.fill(input.answer(), input.condition(), trimToNull(input.message()), input.price(), input.partId(), now);
+      reply.fill(input.answer(), input.condition(), trimToNull(input.message()), input.price(), input.partId(),
+            photoIds, now);
       if (wasHave != reply.isHave()) {
-         request.haveCountChanged(reply.isHave() ? 1 : -1, now);
+         request.haveCountChanged(reply.isHave() ? 1 : -1);
+         recipient(requestId, shop.getId()).answered(reply.getAnswer(), now);
       }
+      events.publishEvent(new RequestEvents.StatsChanged(requestId));
       if (!wasHave && reply.isHave()) {
          chatService.openForReply(request, reply, userId);
          events.publishEvent(new RequestEvents.HaveReceived(requestId, reply.getId()));
@@ -234,6 +254,16 @@ public class IncomingRequestService {
       recipient(requestId, shop.getId());
       PartRequest request = requests.findById(requestId).orElseThrow(RequestService::notFound);
       return myParts.suggestions(shop.getId(), mapper.carFilter(request), request.getText());
+   }
+
+   /** Фото к «Есть» — загруженные этим продавцом с purpose=REPLY; к «Нет» не прикрепляются. */
+   private List<Long> photos(Long userId, RequestInputs.Reply input) {
+      if (input.answer() != ReplyAnswer.HAVE || input.mediaIds() == null || input.mediaIds().isEmpty()) {
+         return List.of();
+      }
+      List<Long> ids = input.mediaIds().stream().distinct().toList();
+      media.requireUsable(ids, List.of(userId), Set.of(MediaPurpose.REPLY));
+      return ids;
    }
 
    private void requirePart(Shop shop, RequestInputs.Reply input) {

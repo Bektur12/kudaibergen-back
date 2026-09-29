@@ -11,7 +11,7 @@ public interface MediaRepository extends JpaRepository<Media, Long> {
 
    /**
     * Фото, которые так и не прикрепили (или открепили) и которые старше порога: ни товар, ни фото места,
-    * ни аватар магазина или пользователя, ни карточка товара в чате на них не ссылаются.
+    * ни аватар магазина или пользователя, ни запрос или ответ «Есть», ни карточка товара в чате на них не ссылаются.
     */
    @Query(nativeQuery = true, value = """
          select m.* from media m
@@ -20,6 +20,8 @@ public interface MediaRepository extends JpaRepository<Media, Long> {
            and not exists (select 1 from shop_photos sp where sp.media_id = m.id)
            and not exists (select 1 from shops s where s.avatar_media_id = m.id)
            and not exists (select 1 from users u where u.avatar_media_id = m.id)
+           and not exists (select 1 from request_photos rp where rp.media_id = m.id)
+           and not exists (select 1 from reply_photos rep where rep.media_id = m.id)
            and not exists (select 1 from messages msg
                            where msg.type = 'PART' and (msg.payload ->> 'mediaId')::bigint = m.id)
          order by m.id

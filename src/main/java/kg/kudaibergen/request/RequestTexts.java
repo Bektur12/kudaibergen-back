@@ -32,6 +32,31 @@ final class RequestTexts {
       return lang == Lang.KG ? "«" + text + "» — бүт базарга жөнөтөсүзбү?" : "«" + text + "» — отправить всему рынку?";
    }
 
+   /** «Время вышло: 3 ответа». */
+   static String expiredTitle(int have, Lang lang) {
+      if (lang == Lang.KG) {
+         return "Убакыт бүттү: " + have + " жооп";
+      }
+      return "Время вышло: " + have + " " + answers(have);
+   }
+
+   static String expiredBody(String text, Lang lang) {
+      return lang == Lang.KG ? "«" + text + "» — узартасызбы?" : "«" + text + "» — продлить?";
+   }
+
+   /** 1 ответ, 2 ответа, 5 ответов, 11 ответов, 21 ответ. */
+   static String answers(int count) {
+      int mod100 = count % 100;
+      int mod10 = count % 10;
+      if (mod100 >= 11 && mod100 <= 14) {
+         return "ответов";
+      }
+      if (mod10 == 1) {
+         return "ответ";
+      }
+      return mod10 >= 2 && mod10 <= 4 ? "ответа" : "ответов";
+   }
+
    /** «Продажа засчитана, оценка ★ 5». */
    static String saleTitle(Integer stars, Lang lang) {
       String sale = lang == Lang.KG ? "Сатуу эсептелди" : "Продажа засчитана";

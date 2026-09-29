@@ -89,13 +89,22 @@ public class RequestNotifier {
             null, !quietHours.now()));
    }
 
+   /**
+    * Время вышло. Без «Есть» — «Пока никто не ответил» с предложением отправить всему рынку (20),
+    * с ответами — «Время вышло: 3 ответа. Продлить?» (32).
+    */
    @Async("appTaskExecutor")
    @TransactionalEventListener
-   public void on(RequestEvents.NoReply event) {
+   public void on(RequestEvents.Expired event) {
       PartRequest request = requests.findById(event.requestId()).orElseThrow();
+      int have = event.haveCount();
       toBuyer(request, user -> new PushMessage(
-            RequestTexts.noReplyTitle(user.getLang()), RequestTexts.noReplyBody(request.getText(), user.getLang()),
-            Map.of("type", "NO_REPLY", "requestId", request.getId().toString()), null, !quietHours.now()));
+            have == 0 ? RequestTexts.noReplyTitle(user.getLang()) : RequestTexts.expiredTitle(have, user.getLang()),
+            have == 0 ? RequestTexts.noReplyBody(request.getText(), user.getLang())
+                  : RequestTexts.expiredBody(request.getText(), user.getLang()),
+            Map.of("type", have == 0 ? "NO_REPLY" : "REQUEST_EXPIRED", "requestId", request.getId().toString(),
+                  "haveCount", String.valueOf(have)),
+            null, !quietHours.now()));
    }
 
    @Async("appTaskExecutor")

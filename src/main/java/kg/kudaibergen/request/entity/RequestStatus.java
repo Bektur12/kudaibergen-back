@@ -1,8 +1,11 @@
 package kg.kudaibergen.request.entity;
 
-/** OPEN — ждёт ответов; CLOSED — покупатель закрыл («Купил» или вручную); EXPIRED — 7 дней без действий. */
+/**
+ * ACTIVE — продавцы видят и отвечают до expiresAt; EXPIRED — время вышло, покупатель может продлить
+ * или расширить адресатов; CLOSED — покупатель закрыл («Купил» или вручную).
+ */
 public enum RequestStatus {
-   OPEN,
-   CLOSED,
-   EXPIRED
+   ACTIVE,
+   EXPIRED,
+   CLOSED
 }
