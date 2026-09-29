@@ -113,6 +113,8 @@ app:
   shops:
     # проверка места продавца (QR, SMS арендатора, админ). false — магазин действует сразу после регистрации
     verification-required: ${SHOP_VERIFICATION_REQUIRED:false}
+    # только для разработки: боксы «открыты» в любое время, запросы доходят и ночью. В проде — false
+    ignore-working-hours: ${SHOP_IGNORE_WORKING_HOURS:false}
   ocr:
     # распознавание номера детали (второй этап): none — выключено, google — Google Cloud Vision
     provider: ${OCR_PROVIDER:none}

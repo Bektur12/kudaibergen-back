@@ -266,11 +266,13 @@ class RequestsIT extends AbstractIntegrationTest {
             + ",\"text\":\"Бампер передний\",\"target\":\"CONTAINERS\",\"targetContainerIds\":["
             + containerOf("+996700500542") + "]}"), seller), 201);
       assertThat(sentToContainer.get("recipientsCount").asInt()).isEqualTo(chosen.get("recipients").asInt());
-      JsonNode sentToMarket = call(authed(jsonPost("/api/v1/requests", "{\"carId\":" + carId
-            + ",\"text\":\"Бампер задний\",\"target\":\"MARKET\"}"), seller), 201);
+      // всему рынку Ford продаёт только свой бокс — отправлять некому: 409, а не «пустой» запрос
       JsonNode marketEstimate = call(authed(get("/api/v1/requests/estimate").param("carId", String.valueOf(carId))
             .param("target", "MARKET"), seller), 200);
-      assertThat(sentToMarket.get("recipientsCount").asInt()).isEqualTo(marketEstimate.get("recipients").asInt());
+      assertThat(marketEstimate.get("recipients").asInt()).isZero();
+      JsonNode nobody = call(authed(jsonPost("/api/v1/requests", "{\"carId\":" + carId
+            + ",\"text\":\"Бампер задний\",\"target\":\"MARKET\"}"), seller), 409);
+      assertThat(nobody.get("code").asText()).isEqualTo("NO_RECIPIENTS");
 
       // экран 31: у контейнеров ряда — есть ли продавец и продаёт ли он марку
       JsonNode grid = call(authed(get("/api/v1/market/rows/" + rowId("16") + "/containers")

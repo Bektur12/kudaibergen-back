@@ -171,14 +171,28 @@ public class RequestService {
       }
       Instant now = clock.instant();
       checkLimits(buyerId, now);
+      List<Shop> found = finder.find(buyerId, car.getBrand().getId(), targets.target(), targets.rowIds(),
+            targets.containerIds());
+      if (found.isEmpty()) {
+         // запрос, который никто не увидит, только занимает лимит и ждёт впустую — клиент предлагает другой выбор
+         throw new ConflictException("NO_RECIPIENTS", noRecipientsMessage(targets.target()));
+      }
 
       RequestDuration duration = input.duration() == null ? RequestDuration.MIN_30 : input.duration();
       PartRequest request = requests.save(new PartRequest(buyerId, car.getId(), car.getBrand().getId(),
             car.getModel().getId(), car.getYear(), input.text().trim(), categoryId, input.hintId(), targets.target(),
             targets.rowIds(), targets.containerIds(), photoIds, duration, now));
-      dispatch(request, finder.find(buyerId, request.getBrandId(), targets.target(), targets.rowIds(),
-            targets.containerIds()), Set.of(), now);
+      dispatch(request, found, Set.of(), now);
       return mapper.detail(request, 0, lang);
+   }
+
+   /** Почему запрос некому отправить — текст для показа. */
+   private static String noRecipientsMessage(RequestTarget target) {
+      return switch (target) {
+         case MARKET -> "Сейчас запрос никому не уйдёт: боксы с вашей маркой закрыты. Попробуйте в рабочее время";
+         case ROWS -> "В выбранных рядах сейчас нет открытых боксов с вашей маркой — выберите другие ряды или весь рынок";
+         case CONTAINERS -> "Выбранные боксы сейчас закрыты — выберите другие или отправьте всему рынку";
+      };
    }
 
    /**
