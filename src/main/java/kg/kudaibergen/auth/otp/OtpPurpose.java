@@ -5,7 +5,11 @@ public enum OtpPurpose {
    LOGIN("login"),
    DELETE_ACCOUNT("delete"),
    /** Код на номер арендатора контейнера — проверка продавца (ТЗ 7.2). */
-   SHOP_VERIFY("shop");
+   SHOP_VERIFY("shop"),
+   /** Второй шаг входа в админку — после верного пароля. */
+   ADMIN_LOGIN("admin"),
+   /** Задать или сменить пароль админки. */
+   ADMIN_PASSWORD("admin-pwd");
 
    private final String key;
 

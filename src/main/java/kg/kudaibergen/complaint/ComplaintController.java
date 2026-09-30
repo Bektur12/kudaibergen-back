@@ -7,9 +7,11 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+import kg.kudaibergen.admin.audit.Audited;
 import kg.kudaibergen.common.security.AuthPrincipal;
 import kg.kudaibergen.market.MarketMapService;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -44,12 +46,15 @@ public class ComplaintController {
    }
 
    @GetMapping("/admin/complaints")
+   @PreAuthorize("hasAuthority('COMPLAINTS_VIEW')")
    @Operation(summary = "Открытые жалобы (админ рынка)")
    public List<ComplaintDto> open(@RequestParam(defaultValue = "100") int limit) {
       return complaints.open(Math.min(Math.max(limit, 1), 500));
    }
 
    @PostMapping("/admin/complaints/{id}/resolve")
+   @PreAuthorize("hasAuthority('COMPLAINTS_RESOLVE')")
+   @Audited(action = "COMPLAINT_RESOLVE", entity = "COMPLAINT", id = "#id", comment = "#request.resolution")
    @Operation(summary = "Закрыть жалобу", description = "RESOLVED — меры приняты, REJECTED — жалоба необоснованна")
    public ComplaintDto resolve(@PathVariable Long id, @AuthenticationPrincipal AuthPrincipal admin,
                                @Valid @RequestBody ResolveRequest request) {

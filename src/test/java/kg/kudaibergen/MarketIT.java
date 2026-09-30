@@ -110,7 +110,7 @@ class MarketIT extends AbstractIntegrationTest {
    void админкаКонтейнерыQrИКалибровка() throws Exception {
       String buyer = accessToken("+996700300301", "BUYER");
       String marketAdmin = admin("+996700300302", "MARKET_ADMIN");
-      String superadmin = admin("+996700300303", "SUPERADMIN");
+      String superadmin = admin("+996700300303", "SUPER_ADMIN");
       long rowSh = rowId("Ш");
 
       // обычному пользователю админка закрыта
@@ -136,14 +136,13 @@ class MarketIT extends AbstractIntegrationTest {
       assertThat(sheet.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8))
             .contains("Ряд Ш · Бокс 6", "data:image/png;base64,");
 
-      // калибровка — только суперадмин
+      // калибровка — право MARKET_MAP_PUBLISH; отказ без права проверяет AdminAccessIT
       String anchors = """
             {"anchors":[
               {"lat":42.8890,"lon":74.6200,"x":80,"y":38,"label":"СЗ угол"},
               {"lat":42.8890,"lon":74.6285,"x":835,"y":35,"label":"СВ угол"},
               {"lat":42.8780,"lon":74.6320,"x":1330,"y":843,"label":"В угол"},
               {"lat":42.8770,"lon":74.6215,"x":238,"y":1375,"label":"ЮЗ угол"}]}""";
-      call(authed(jsonPut("/api/v1/admin/market/geo-anchors", anchors), marketAdmin), 403);
       JsonNode calibration = call(authed(jsonPut("/api/v1/admin/market/geo-anchors", anchors), superadmin), 200);
       assertThat(calibration.get("anchors")).hasSize(4);
       assertThat(calibration.get("metersPerPx").asDouble()).isPositive();
@@ -155,10 +154,7 @@ class MarketIT extends AbstractIntegrationTest {
    }
 
    private String admin(String phone, String role) throws Exception {
-      login(phone, "BUYER");
-      jdbc.update("update users set admin_role = ? where phone = ?", role, phone);
-      // роль администрации попадает в новый access-токен
-      return accessToken(phone, "BUYER");
+      return adminToken(phone, role);
    }
 
    private long rowId(String code) {

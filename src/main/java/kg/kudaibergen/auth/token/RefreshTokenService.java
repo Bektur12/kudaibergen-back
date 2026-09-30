@@ -19,7 +19,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Ротация refresh-токенов: каждый обмен гасит старый и выдаёт новый.
- * Предъявление уже погашенного токена = признак утечки: гасим все сессии пользователя.
+ * Предъявление уже погашенного токена = признак утечки: гасим все сессии пользователя этого вида
+ * (приложение или админка). Токен другого вида считается неизвестным.
  */
 @Service
 public class RefreshTokenService {
@@ -38,24 +39,37 @@ public class RefreshTokenService {
 
    @Transactional
    public String issue(Long userId) {
+      return issue(userId, TokenAudience.APP, ttl);
+   }
+
+   @Transactional
+   public String issue(Long userId, TokenAudience audience, Duration lifetime) {
       byte[] raw = new byte[TOKEN_BYTES];
       RANDOM.nextBytes(raw);
       String token = Base64.getUrlEncoder().withoutPadding().encodeToString(raw);
-      tokens.save(new RefreshToken(userId, sha256(token), Instant.now().plus(ttl)));
+      tokens.save(new RefreshToken(userId, sha256(token), Instant.now().plus(lifetime), audience));
       return token;
    }
 
-   /** Гасит предъявленный токен и возвращает id владельца. Новый токен выпускает вызывающий. */
+   /** Гасит предъявленный токен приложения и возвращает id владельца. Новый токен выпускает вызывающий. */
    @Transactional(noRollbackFor = UnauthorizedException.class)
    public Long consume(String token) {
+      return consume(token, TokenAudience.APP);
+   }
+
+   @Transactional(noRollbackFor = UnauthorizedException.class)
+   public Long consume(String token, TokenAudience audience) {
       Instant now = Instant.now();
-      RefreshToken stored = tokens.findByTokenHash(sha256(token)).orElseThrow(RefreshTokenService::invalid);
+      RefreshToken stored = tokens.findByTokenHash(sha256(token))
+            .filter(found -> found.getAudience() == audience)
+            .orElseThrow(RefreshTokenService::invalid);
       if (stored.isExpired(now)) {
          throw invalid();
       }
       if (stored.isRevoked() || tokens.revoke(stored.getId(), now) == 0) {
-         log.warn("Повторное использование refresh-токена пользователя {} — гасим все сессии", stored.getUserId());
-         tokens.revokeAllOfUser(stored.getUserId(), now);
+         log.warn("Повторное использование refresh-токена ({}) пользователя {} — гасим эти сессии", audience,
+               stored.getUserId());
+         tokens.revokeAllOfUser(stored.getUserId(), audience, now);
          throw invalid();
       }
       return stored.getUserId();
@@ -69,9 +83,23 @@ public class RefreshTokenService {
             .ifPresent(stored -> tokens.revoke(stored.getId(), Instant.now()));
    }
 
+   /** Выход по одному refresh-токену (cookie админки): гасим, если он этого вида. */
+   @Transactional
+   public void revoke(String token, TokenAudience audience) {
+      tokens.findByTokenHash(sha256(token))
+            .filter(stored -> stored.getAudience() == audience)
+            .ifPresent(stored -> tokens.revoke(stored.getId(), Instant.now()));
+   }
+
+   /** Все сессии пользователя — и приложения, и админки (удаление аккаунта, блокировка). */
    @Transactional
    public void revokeAll(Long userId) {
       tokens.revokeAllOfUser(userId, Instant.now());
+   }
+
+   @Transactional
+   public void revokeAll(Long userId, TokenAudience audience) {
+      tokens.revokeAllOfUser(userId, audience, Instant.now());
    }
 
    @Scheduled(cron = "0 30 3 * * *")

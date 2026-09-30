@@ -37,4 +37,18 @@ public final class SmsTexts {
          case KG -> "Кудайберген: аккаунтту өчүрүү коду " + code + ". Бул сиз болбосоңуз, SMSке көңүл бурбаңыз.";
       };
    }
+
+   public static String adminLoginCode(String code, Lang lang) {
+      return switch (lang) {
+         case RU -> "Кудайберген, админка: код входа " + code + ". Никому его не сообщайте.";
+         case KG -> "Кудайберген, админка: кирүү коду " + code + ". Аны эч кимге айтпаңыз.";
+      };
+   }
+
+   public static String adminPasswordCode(String code, Lang lang) {
+      return switch (lang) {
+         case RU -> "Кудайберген, админка: код для смены пароля " + code + ". Если это не вы — сообщите руководству.";
+         case KG -> "Кудайберген, админка: сырсөздү алмаштыруу коду " + code + ". Бул сиз болбосоңуз, жетекчиликке кабарлаңыз.";
+      };
+   }
 }

@@ -14,6 +14,7 @@ MinIO/S3 (фото) · FCM (пуши) · springdoc-openapi · JUnit 5 + Testcont
 | --- | --- |
 | [docs/BACKEND_SPEC.md](docs/BACKEND_SPEC.md) | контракт API для фронта: пути, поля, енамы, ошибки, Centrifugo, пуши |
 | [docs/FRONTEND_PROMPT.md](docs/FRONTEND_PROMPT.md) | промпт для подключения мобильного приложения, контракт внутри |
+| [docs/ADMIN_API.md](docs/ADMIN_API.md) | API веб-админки: вход, роли и права, журнал, эндпоинты по фазам |
 | [docs/BACKEND_DESIGN.md](docs/BACKEND_DESIGN.md) | устройство бэкенда: схема данных, модули, решения |
 | [docs/SPEC_GAPS.md](docs/SPEC_GAPS.md) | сверка спецификации по дизайну с кодом и принятые решения |
 
@@ -69,6 +70,18 @@ python3 scripts/demo_seed.py --yes     # нужны psycopg2 и Pillow
 
 Проверить запросы ночью: `SHOP_IGNORE_WORKING_HOURS=true` — боксы считаются открытыми в любое время.
 
+### Админка: первый суперадмин
+
+```bash
+ADMIN_BOOTSTRAP_PHONE=+996555000099 ADMIN_BOOTSTRAP_NAME="Имя Фамилия" mvn spring-boot:run
+```
+
+При старте, если активного суперадмина нет, этот номер становится `SUPER_ADMIN`. Пароль он задаёт сам по SMS-коду:
+`POST /api/v1/admin/auth/password/code {phone}`, затем `POST /api/v1/admin/auth/password {phone, code, password}`.
+Вход в админку: `POST /api/v1/admin/auth/login {phone, password}` → SMS-код → `POST /api/v1/admin/auth/verify`.
+Роли: `SUPER_ADMIN` — все права, `MARKET_ADMIN` — все, кроме управления сотрудниками. Таблица прав — в
+[docs/ADMIN_API.md](docs/ADMIN_API.md).
+
 ### Переменные окружения
 
 | Переменная | Назначение | По умолчанию |
@@ -83,6 +96,9 @@ python3 scripts/demo_seed.py --yes     # нужны psycopg2 и Pillow
 | `CENTRIFUGO_TOKEN_SECRET` | HMAC токенов клиента Centrifugo, тот же в самом Centrifugo | dev-значение, **в проде обязателен** |
 | `SHOP_IGNORE_WORKING_HOURS` | только для разработки: боксы открыты в любое время, запросы доходят и ночью | `false` |
 | `SHOP_VERIFICATION_REQUIRED` | проверять место продавца (QR, SMS арендатора, админ) до того, как магазин начнёт работать | `false` — магазин действует сразу |
+| `ADMIN_ORIGINS` | домены веб-админки для CORS, через запятую | `http://localhost:*,http://127.0.0.1:*` |
+| `ADMIN_BOOTSTRAP_PHONE`, `ADMIN_BOOTSTRAP_NAME` | первый суперадмин (создаётся при старте, если его нет) | пусто |
+| `ADMIN_COOKIE_SECURE`, `ADMIN_COOKIE_SAMESITE` | атрибуты cookie `admin_refresh`; админка на другом домене — `None` (и Secure) | `true`, `Strict` |
 | `OCR_PROVIDER`, `OCR_GOOGLE_API_KEY` | распознавание номера детали: `none` или `google` (Cloud Vision) | `none` |
 | `MEDIA_STORAGE` | вложения чата: `local` или `s3` | `local` |
 | `S3_ENDPOINT`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_BUCKET` | MinIO/S3 при `MEDIA_STORAGE=s3` | localhost:9000, бакет kudaibergen |
@@ -111,6 +127,7 @@ kg.kudaibergen
 ├── request       — запросы «Найти запчасть», ответы, статистика запроса, отзывы
 ├── chat          — чаты, Centrifugo, быстрые ответы
 ├── stats         — статистика бокса
+├── admin         — веб-админка: сотрудники и права, вход, журнал (@Audited), поиск
 ├── media         — загрузка и хранение фото
 ├── ocr           — распознавание номера детали
 ├── complaint     — жалобы

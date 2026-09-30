@@ -52,7 +52,7 @@ class RefreshTokenServiceTest {
       when(repository.revoke(eq(stored.getId()), any())).thenReturn(1);
 
       assertThat(service.consume("t")).isEqualTo(7L);
-      verify(repository, never()).revokeAllOfUser(anyLong(), any());
+      verify(repository, never()).revokeAllOfUser(anyLong(), any(TokenAudience.class), any());
    }
 
    @Test
@@ -65,7 +65,19 @@ class RefreshTokenServiceTest {
       assertThatThrownBy(() -> service.consume("t"))
             .isInstanceOf(UnauthorizedException.class)
             .extracting("code").isEqualTo("REFRESH_TOKEN_INVALID");
-      verify(repository).revokeAllOfUser(eq(7L), any());
+      verify(repository).revokeAllOfUser(eq(7L), eq(TokenAudience.APP), any());
+   }
+
+   @Test
+   void токенАдминкиНеОбмениваетсяВПриложенииИНаоборот() {
+      when(repository.findByTokenHash(RefreshTokenService.sha256("admin")))
+            .thenReturn(Optional.of(new RefreshToken(7L, "hash", Instant.now().plusSeconds(60), TokenAudience.ADMIN)));
+      when(repository.findByTokenHash(RefreshTokenService.sha256("app")))
+            .thenReturn(Optional.of(stored(7L, Instant.now().plusSeconds(60))));
+
+      assertThatThrownBy(() -> service.consume("admin")).isInstanceOf(UnauthorizedException.class);
+      assertThatThrownBy(() -> service.consume("app", TokenAudience.ADMIN)).isInstanceOf(UnauthorizedException.class);
+      verify(repository, never()).revoke(anyLong(), any());
    }
 
    @Test

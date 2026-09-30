@@ -115,6 +115,21 @@ app:
     verification-required: ${SHOP_VERIFICATION_REQUIRED:false}
     # только для разработки: боксы «открыты» в любое время, запросы доходят и ночью. В проде — false
     ignore-working-hours: ${SHOP_IGNORE_WORKING_HOURS:false}
+  admin:
+    # домены веб-админки для CORS, через запятую; в проде — точный адрес, например https://admin.kudaibergen.kg
+    origins: ${ADMIN_ORIGINS:http://localhost:*,http://127.0.0.1:*}
+    access-ttl: 15m
+    # сессия админки: refresh-токен в httpOnly-cookie admin_refresh
+    refresh-ttl: 12h
+    cookie-secure: ${ADMIN_COOKIE_SECURE:true}
+    # Strict — админка и API на одном сайте; None — на разных доменах (тогда только с Secure)
+    cookie-same-site: ${ADMIN_COOKIE_SAMESITE:Strict}
+    # первый суперадмин: создаётся при старте, если активного суперадмина нет; пароль он задаёт сам по SMS
+    bootstrap-phone: ${ADMIN_BOOTSTRAP_PHONE:}
+    bootstrap-name: ${ADMIN_BOOTSTRAP_NAME:Суперадмин}
+    # попыток входа на номер за окно; на IP — втрое больше
+    login-limit: 10
+    login-window: 15m
   ocr:
     # распознавание номера детали (второй этап): none — выключено, google — Google Cloud Vision
     provider: ${OCR_PROVIDER:none}

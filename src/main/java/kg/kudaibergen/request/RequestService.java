@@ -397,10 +397,10 @@ public class RequestService {
       return Arrays.stream(ReviewTag.values()).map(tag -> new ReviewTagDto(tag, tag.label(lang))).toList();
    }
 
-   /** Свой запрос видит покупатель, любой — суперадмин (ТЗ, раздел 2). Остальным — 404. */
+   /** Запрос видит только покупатель; админка смотрит запросы через свои эндпоинты. Остальным — 404. */
    private PartRequest visible(AuthPrincipal principal, Long requestId) {
       return requests.findById(requestId)
-            .filter(request -> request.getBuyerId().equals(principal.userId()) || principal.isSuperadmin())
+            .filter(request -> request.getBuyerId().equals(principal.userId()))
             .orElseThrow(RequestService::notFound);
    }
 
@@ -421,7 +421,7 @@ public class RequestService {
    public RequestDetailDto close(AuthPrincipal principal, Long requestId, RequestInputs.CloseRequest input,
                                  Lang lang) {
       PartRequest request = requests.findForUpdate(requestId)
-            .filter(found -> found.getBuyerId().equals(principal.userId()) || principal.isSuperadmin())
+            .filter(found -> found.getBuyerId().equals(principal.userId()))
             .orElseThrow(RequestService::notFound);
       requireOpen(request);
       boolean byBuyer = request.getBuyerId().equals(principal.userId());

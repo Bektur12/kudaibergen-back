@@ -8,6 +8,9 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
+import kg.kudaibergen.admin.access.MaskedPhone;
+import kg.kudaibergen.admin.audit.AuditTrail;
+import kg.kudaibergen.admin.audit.Audited;
 import kg.kudaibergen.common.security.AuthPrincipal;
 import kg.kudaibergen.market.dto.LocationDto;
 import kg.kudaibergen.shop.entity.Shop;
@@ -18,6 +21,7 @@ import kg.kudaibergen.shop.entity.VerificationStatus;
 import kg.kudaibergen.user.UserRepository;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.lang.Nullable;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -52,6 +56,7 @@ public class AdminShopController {
    }
 
    @GetMapping
+   @PreAuthorize("hasAuthority('SELLERS_VIEW')")
    @Transactional(readOnly = true)
    @Operation(summary = "Магазины по статусу", description = "PENDING_VERIFICATION — ждут проверки, BLOCKED — заблокированы")
    public List<AdminShopDto> list(@RequestParam(defaultValue = "PENDING_VERIFICATION") ShopStatus status) {
@@ -59,6 +64,7 @@ public class AdminShopController {
    }
 
    @GetMapping("/verification-queue")
+   @PreAuthorize("hasAuthority('SELLERS_VIEW')")
    @Transactional(readOnly = true)
    @Operation(summary = "Заявки «подтвердите меня»", description = "Сверить со списком арендаторов и подтвердить")
    public List<AdminShopDto> queue() {
@@ -71,30 +77,42 @@ public class AdminShopController {
    }
 
    @PostMapping("/{id}/approve")
+   @PreAuthorize("hasAuthority('SELLERS_VERIFY')")
+   @Audited(action = "SHOP_APPROVE", entity = "SHOP", id = "#id")
    @Operation(summary = "Подтвердить место продавца", description = "Новый магазин становится видимым; при переезде — занимает новое место")
    public AdminShopDto approve(@PathVariable Long id, @AuthenticationPrincipal AuthPrincipal admin) {
+      AuditTrail.before(reload(id));
       verification.adminApprove(id, admin.userId());
       return reload(id);
    }
 
    @PostMapping("/{id}/reject")
+   @PreAuthorize("hasAuthority('SELLERS_VERIFY')")
+   @Audited(action = "SHOP_REJECT", entity = "SHOP", id = "#id", comment = "#request.reason")
    @Operation(summary = "Отказать в подтверждении", description = "Продавец увидит причину")
    public AdminShopDto reject(@PathVariable Long id, @AuthenticationPrincipal AuthPrincipal admin,
                               @Valid @RequestBody ReasonRequest request) {
+      AuditTrail.before(reload(id));
       verification.adminReject(id, admin.userId(), request.reason());
       return reload(id);
    }
 
    @PostMapping("/{id}/block")
+   @PreAuthorize("hasAuthority('SELLERS_BLOCK')")
+   @Audited(action = "SHOP_BLOCK", entity = "SHOP", id = "#id", comment = "#request.reason")
    @Operation(summary = "Заблокировать магазин", description = "Скрывает магазин и товары, запросы не приходят")
    public AdminShopDto block(@PathVariable Long id, @Valid @RequestBody ReasonRequest request) {
+      AuditTrail.before(reload(id));
       verification.block(id, request.reason());
       return reload(id);
    }
 
    @PostMapping("/{id}/unblock")
+   @PreAuthorize("hasAuthority('SELLERS_BLOCK')")
+   @Audited(action = "SHOP_UNBLOCK", entity = "SHOP", id = "#id")
    @Operation(summary = "Снять блокировку")
    public AdminShopDto unblock(@PathVariable Long id) {
+      AuditTrail.before(reload(id));
       verification.unblock(id);
       return reload(id);
    }
@@ -118,7 +136,7 @@ public class AdminShopController {
 
    /** Магазин для админки: место, куда переезжает, телефон владельца, последняя проверка. */
    public record AdminShopDto(Long id, String name, ShopStatus status, @Nullable String blockReason, LocationDto location,
-                              @Nullable LocationDto pendingLocation, String ownerPhone, @Nullable VerificationMethod lastMethod,
+                              @Nullable LocationDto pendingLocation, @MaskedPhone String ownerPhone, @Nullable VerificationMethod lastMethod,
                               @Nullable VerificationStatus lastStatus, Instant createdAt) {
    }
 }

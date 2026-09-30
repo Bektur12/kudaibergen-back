@@ -199,9 +199,7 @@ class ShopsIT extends AbstractIntegrationTest {
    }
 
    private String admin(String phone) throws Exception {
-      login(phone, "BUYER");
-      jdbc.update("update users set admin_role = 'MARKET_ADMIN' where phone = ?", phone);
-      return accessToken(phone, "BUYER");
+      return adminToken(phone, "MARKET_ADMIN");
    }
 
    @Autowired

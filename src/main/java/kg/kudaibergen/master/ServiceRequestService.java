@@ -318,7 +318,7 @@ public class ServiceRequestService {
 
    private ServiceRequest visible(AuthPrincipal principal, Long requestId) {
       return requests.findById(requestId)
-            .filter(request -> request.getBuyerId().equals(principal.userId()) || principal.isSuperadmin())
+            .filter(request -> request.getBuyerId().equals(principal.userId()))
             .orElseThrow(ServiceRequestService::notFound);
    }
 

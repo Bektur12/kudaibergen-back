@@ -143,7 +143,7 @@ class AuthServiceTest {
    private AuthService service(boolean exposeCode) {
       AppProperties properties = new AppProperties(null, new AppProperties.Otp(Duration.ofMinutes(2),
             Duration.ofSeconds(42), 5, Duration.ofMinutes(15), 5, 20, Duration.ofHours(1), "secret", exposeCode, null), null, null, null, null, null, null);
-      return new AuthService(otp, sms, userService, users, devices, jwt, refreshTokens, new MeView(mock(MediaService.class), userId -> Optional.empty(), userId -> Optional.empty()),
+      return new AuthService(otp, sms, userService, users, devices, jwt, refreshTokens, new MeView(mock(MediaService.class), userId -> Optional.empty(), userId -> Optional.empty(), userId -> Optional.empty()),
             properties);
    }
 

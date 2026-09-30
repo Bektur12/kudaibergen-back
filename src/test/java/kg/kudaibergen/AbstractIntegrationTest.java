@@ -8,6 +8,8 @@ import kg.kudaibergen.support.FakeCentrifugo;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -49,6 +51,12 @@ public abstract class AbstractIntegrationTest {
 
    @Autowired
    protected StringRedisTemplate redis;
+
+   @Autowired
+   protected JdbcTemplate adminJdbc;
+
+   protected static final String ADMIN_PASSWORD = "admin-pass-2026";
+   private static final String ADMIN_PASSWORD_HASH = new BCryptPasswordEncoder().encode(ADMIN_PASSWORD);
 
    @DynamicPropertySource
    static void containers(DynamicPropertyRegistry registry) {
@@ -111,5 +119,32 @@ public abstract class AbstractIntegrationTest {
 
    protected String accessToken(String phone, String role) throws Exception {
       return login(phone, role).get("accessToken").asText();
+   }
+
+   /** Сотрудник админки с ролью SUPER_ADMIN / MARKET_ADMIN: пароль → SMS-код → ответ verify. */
+   protected MvcResult adminLogin(String phone, String adminRole) throws Exception {
+      login(phone, "BUYER");
+      adminJdbc.update("""
+            insert into admin_members (user_id, admin_role, full_name, title, password_hash)
+            select id, ?, 'Сотрудник', 'Администратор рынка', ? from users where phone = ?
+            on conflict (user_id) do update set admin_role = excluded.admin_role, is_active = true,
+                                                password_hash = excluded.password_hash""",
+            adminRole, ADMIN_PASSWORD_HASH, phone);
+      redis.delete("otp:cooldown:admin:" + phone);
+      redis.delete("rl:admin-login:phone:" + phone);
+      JsonNode sent = call(jsonPost("/api/v1/admin/auth/login",
+            "{\"phone\":\"" + phone + "\",\"password\":\"" + ADMIN_PASSWORD + "\"}"), 200);
+      MvcResult verified = mvc.perform(jsonPost("/api/v1/admin/auth/verify",
+            "{\"phone\":\"" + phone + "\",\"code\":\"" + sent.get("debugCode").asText() + "\"}")).andReturn();
+      if (verified.getResponse().getStatus() != 200) {
+         throw new AssertionError("Вход в админку: " + verified.getResponse().getContentAsString(StandardCharsets.UTF_8));
+      }
+      return verified;
+   }
+
+   protected String adminToken(String phone, String adminRole) throws Exception {
+      MvcResult verified = adminLogin(phone, adminRole);
+      return json.readTree(verified.getResponse().getContentAsString(StandardCharsets.UTF_8))
+            .get("accessToken").asText();
    }
 }

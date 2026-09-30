@@ -37,10 +37,6 @@ public class User {
    @Column(nullable = false, length = 2)
    private Lang lang = Lang.RU;
 
-   @Enumerated(EnumType.STRING)
-   @Column(name = "admin_role", length = 12)
-   private AdminRole adminRole;
-
    @Column(name = "is_blocked", nullable = false)
    private boolean blocked;
 
@@ -133,14 +129,6 @@ public class User {
 
    public void setLang(Lang lang) {
       this.lang = lang;
-   }
-
-   public AdminRole getAdminRole() {
-      return adminRole;
-   }
-
-   public void setAdminRole(AdminRole adminRole) {
-      this.adminRole = adminRole;
    }
 
    public boolean isBlocked() {

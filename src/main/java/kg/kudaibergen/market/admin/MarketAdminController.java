@@ -5,6 +5,7 @@ import java.util.List;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import kg.kudaibergen.admin.audit.Audited;
 import kg.kudaibergen.market.admin.AdminMarketDtos.AdminContainerDto;
 import kg.kudaibergen.market.admin.AdminMarketDtos.CalibrationDto;
 import kg.kudaibergen.market.admin.AdminMarketDtos.ContainerCountsRequest;
@@ -25,10 +26,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-/**
- * Админка карты. /api/v1/admin/** пускает админов рынка и суперадминов (SecurityConfig);
- * схема и GPS-точки — только суперадмин.
- */
+/** Админка карты: контейнеры — MARKET_EDIT, схема и GPS-точки — MARKET_MAP_PUBLISH, QR — MARKET_VIEW. */
 @RestController
 @RequestMapping("/api/v1/admin/market")
 @Tag(name = "Админка: карта")
@@ -41,6 +39,8 @@ public class MarketAdminController {
    }
 
    @PutMapping("/rows/{id}/containers")
+   @PreAuthorize("hasAuthority('MARKET_EDIT')")
+   @Audited(action = "ROW_CONTAINERS_SET", entity = "ROW", id = "#id")
    @Operation(summary = "Число мест на сторонах ряда",
          description = "Недостающие места создаются, лишние выключаются (если там нет магазина)")
    public List<AdminContainerDto> setCounts(@PathVariable Long id, @Valid @RequestBody ContainerCountsRequest request) {
@@ -48,6 +48,8 @@ public class MarketAdminController {
    }
 
    @PatchMapping("/containers/{id}")
+   @PreAuthorize("hasAuthority('MARKET_EDIT')")
+   @Audited(action = "CONTAINER_UPDATE", entity = "CONTAINER", id = "#id")
    @Operation(summary = "Номер арендатора и активность контейнера")
    public AdminContainerDto updateContainer(@PathVariable Long id,
                                             @Valid @RequestBody UpdateContainerRequest request) {
@@ -55,28 +57,32 @@ public class MarketAdminController {
    }
 
    @GetMapping(value = "/qr/{token}.png", produces = MediaType.IMAGE_PNG_VALUE)
+   @PreAuthorize("hasAuthority('MARKET_VIEW')")
    @Operation(summary = "QR-код ряда или контейнера (PNG)")
    public ResponseEntity<byte[]> qr(@PathVariable String token) {
       return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(admin.qrPng(token));
    }
 
    @GetMapping(value = "/qr/sheet", produces = MediaType.TEXT_HTML_VALUE)
+   @PreAuthorize("hasAuthority('MARKET_VIEW')")
    @Operation(summary = "Лист QR-наклеек ряда для печати", description = "Табличка ряда + наклейки всех контейнеров")
    public String qrSheet(@RequestParam Long rowId) {
       return admin.qrSheet(rowId);
    }
 
    @PutMapping("/geo-anchors")
-   @PreAuthorize("hasRole('SUPERADMIN')")
-   @Operation(summary = "Опорные GPS-точки (суперадмин)",
+   @PreAuthorize("hasAuthority('MARKET_MAP_PUBLISH')")
+   @Audited(action = "GEO_ANCHORS_SET", entity = "MAP")
+   @Operation(summary = "Опорные GPS-точки",
          description = "3–4 угла рынка: GPS ↔ точка схемы. Пересчитывает матрицу; невязка > 10 м — точку сняли неточно")
    public CalibrationDto geoAnchors(@Valid @RequestBody GeoAnchorsRequest request) {
       return admin.setGeoAnchors(request);
    }
 
    @PutMapping("/map")
-   @PreAuthorize("hasRole('SUPERADMIN')")
-   @Operation(summary = "Опубликовать новую версию схемы (суперадмин)",
+   @PreAuthorize("hasAuthority('MARKET_MAP_PUBLISH')")
+   @Audited(action = "MAP_PUBLISH", entity = "MAP")
+   @Operation(summary = "Опубликовать новую версию схемы",
          description = "Формат market-map.json + ряды с кодами. Ряды сопоставляются по коду; приложения скачают новую версию")
    public PublishedMapDto publish(@Valid @RequestBody MapUploadRequest request) {
       return admin.publishMap(request);
