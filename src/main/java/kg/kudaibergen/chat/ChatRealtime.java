@@ -44,9 +44,11 @@ public class ChatRealtime {
    private final CentrifugoClient centrifugo;
    private final UserPushes pushes;
    private final QuietHours quietHours;
+   private final ChatProviders providers;
 
    public ChatRealtime(ChatRepository chats, MessageRepository messages, ShopRepository shops, UserRepository users,
-                       ChatView view, CentrifugoClient centrifugo, UserPushes pushes, QuietHours quietHours) {
+                       ChatView view, CentrifugoClient centrifugo, UserPushes pushes, QuietHours quietHours,
+                       ChatProviders providers) {
       this.chats = chats;
       this.messages = messages;
       this.shops = shops;
@@ -55,6 +57,7 @@ public class ChatRealtime {
       this.centrifugo = centrifugo;
       this.pushes = pushes;
       this.quietHours = quietHours;
+      this.providers = providers;
    }
 
    @Async("appTaskExecutor")
@@ -94,10 +97,10 @@ public class ChatRealtime {
       centrifugo.publishAll(publications);
    }
 
-   /** Строка списка и бейдж каждому: покупателю — с его стороны, людям бокса — со стороны магазина. */
+   /** Строка списка и бейдж каждому: покупателю — с его стороны, людям исполнителя — с его стороны. */
    private void inboxes(Chat chat, List<Publication> publications) {
-      List<Long> shopUsers = view.shopUserIds(chat.getShopId());
-      List<Long> everyone = new ArrayList<>(shopUsers);
+      List<Long> providerUsers = providers.userIds(chat);
+      List<Long> everyone = new ArrayList<>(providerUsers);
       everyone.add(chat.getBuyerId());
       Map<Long, User> byId = new LinkedHashMap<>();
       users.findAllById(everyone).forEach(user -> byId.put(user.getId(), user));
@@ -108,24 +111,27 @@ public class ChatRealtime {
             continue;
          }
          ChatSide side = userId.equals(chat.getBuyerId()) ? ChatSide.BUYER : ChatSide.SHOP;
-         // пустой прямой чат бокс ещё не видит
+         // пустой прямой чат исполнитель ещё не видит
          if (side == ChatSide.SHOP && chat.getLastMessageId() == null) {
             continue;
          }
          String inbox = ChatChannels.inbox(userId);
          Lang lang = user.getLang();
          publications.add(new Publication(inbox, ChatEvent.chat(view.rows(List.of(chat), side, lang).get(0))));
-         publications.add(new Publication(inbox, ChatEvent.unread(unread(userId, view.shopIdOf(userId)))));
+         publications.add(new Publication(inbox, ChatEvent.unread(unread(userId))));
       }
    }
 
-   private UnreadDto unread(Long userId, Long shopId) {
-      return new UnreadDto(chats.totalUnreadForBuyer(userId), shopId == null ? 0 : chats.totalUnreadForShop(shopId));
+   private UnreadDto unread(Long userId) {
+      Long shopId = view.shopIdOf(userId);
+      Long masterId = providers.masterIdOf(userId);
+      return new UnreadDto(chats.totalUnreadForBuyer(userId), shopId == null ? 0 : chats.totalUnreadForShop(shopId),
+            masterId == null ? 0 : chats.totalUnreadForMaster(masterId));
    }
 
    private void push(Chat chat, Message message) {
       List<Long> recipients = message.getSide() == ChatSide.BUYER
-            ? view.shopUserIds(chat.getShopId()) : List.of(chat.getBuyerId());
+            ? providers.userIds(chat) : List.of(chat.getBuyerId());
       Set<Long> watching = centrifugo.presence(List.of(ChatChannels.chat(chat.getId())))
             .getOrDefault(ChatChannels.chat(chat.getId()), Set.of());
       List<Long> away = recipients.stream()
@@ -134,14 +140,14 @@ public class ChatRealtime {
       if (away.isEmpty()) {
          return;
       }
-      Shop shop = shops.findById(chat.getShopId()).orElseThrow();
+      String providerName = providers.name(chat);
       User buyer = users.findById(chat.getBuyerId()).orElse(null);
       boolean quiet = quietHours.now();
       pushes.send(away, (user, settings) -> {
          if (!settings.isNotifyChat()) {
             return null;
          }
-         String title = message.getSide() == ChatSide.SHOP ? shop.getName()
+         String title = message.getSide() == ChatSide.SHOP ? providerName
                : buyer == null || buyer.getName() == null ? ChatTexts.buyer(user.getLang()) : buyer.getName();
          return new PushMessage(title, ChatTexts.preview(message, user.getLang()),
                Map.of("type", "CHAT_MESSAGE", "chatId", chat.getId().toString(),

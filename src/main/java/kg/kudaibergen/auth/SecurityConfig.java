@@ -36,6 +36,8 @@ public class SecurityConfig {
          "/api/v1/categories/**",
          "/api/v1/parts/**",
          "/api/v1/shops/**",
+         "/api/v1/masters/**",
+         "/api/v1/service-types",
          "/api/v1/reviews/tags"
    };
 

@@ -22,6 +22,9 @@ public interface MediaRepository extends JpaRepository<Media, Long> {
            and not exists (select 1 from users u where u.avatar_media_id = m.id)
            and not exists (select 1 from request_photos rp where rp.media_id = m.id)
            and not exists (select 1 from reply_photos rep where rep.media_id = m.id)
+           and not exists (select 1 from masters ms where ms.avatar_media_id = m.id)
+           and not exists (select 1 from master_photos mp where mp.media_id = m.id)
+           and not exists (select 1 from service_request_photos sp2 where sp2.media_id = m.id)
            and not exists (select 1 from messages msg
                            where msg.type = 'PART' and (msg.payload ->> 'mediaId')::bigint = m.id)
          order by m.id

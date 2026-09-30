@@ -26,6 +26,31 @@ public interface ChatRepository extends JpaRepository<Chat, Long> {
 
    List<Chat> findByRequestId(Long requestId);
 
+   List<Chat> findByServiceRequestId(Long serviceRequestId);
+
+   List<Chat> findByMasterIdAndServiceRequestIdIn(Long masterId, Collection<Long> serviceRequestIds);
+
+   Optional<Chat> findByBuyerIdAndMasterIdAndServiceRequestId(Long buyerId, Long masterId, Long serviceRequestId);
+
+   @Query("select c from Chat c where c.buyerId = :buyerId and c.masterId = :masterId and c.serviceRequestId is null")
+   Optional<Chat> findDirectWithMaster(@Param("buyerId") Long buyerId, @Param("masterId") Long masterId);
+
+   /** Чаты мастера (вкладка «Чаты» мастера). Пустые чаты мастер не видит. */
+   @Query(nativeQuery = true, value = """
+         select * from chats
+         where master_id = :masterId and last_message_id is not null
+           and (last_message_at, id) < (:at, :id)
+         order by last_message_at desc, id desc
+         limit :limit""")
+   List<Chat> findMasterPage(@Param("masterId") Long masterId, @Param("at") Instant at, @Param("id") long id,
+                             @Param("limit") int limit);
+
+   @Query(nativeQuery = true, value = """
+         select count(m.id) from chats c
+         join messages m on m.chat_id = c.id and m.id > c.shop_read_message_id and m.side = 'BUYER'
+         where c.master_id = :masterId and not c.blocked_by_shop""")
+   long totalUnreadForMaster(@Param("masterId") Long masterId);
+
    List<Chat> findByShopIdAndRequestIdIn(Long shopId, Collection<Long> requestIds);
 
    /**

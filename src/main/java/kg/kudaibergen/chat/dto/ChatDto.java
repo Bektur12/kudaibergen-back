@@ -3,16 +3,19 @@ package kg.kudaibergen.chat.dto;
 import java.time.Instant;
 
 import kg.kudaibergen.chat.entity.ChatSide;
+import kg.kudaibergen.master.dto.MasterCardDto;
 import kg.kudaibergen.shop.dto.ShopCardDto;
 import org.springframework.lang.Nullable;
 
 /**
  * Открытый чат (08 — покупатель, 13 — продавец). Шапка: магазин «Ряд 14 · Бокс 12 · в сети» или покупатель
- * «имя · запрос · машина». request — закреплённый запрос. mySide — от чьего имени пишет текущий пользователь.
+ * «имя · запрос · машина». У чата с мастером shop = null, master — карточка мастера, serviceRequest — заявка.
+ * request — закреплённый запрос на запчасть. mySide — от чьего имени пишет текущий пользователь (SHOP — исполнитель).
  * otherReadMessageId — до какого сообщения прочитала другая сторона (галочки). channel — канал Centrifugo,
  * подписка на него — по токену из GET /chats/{id}/subscription-token.
  */
-public record ChatDto(Long id, ChatSide mySide, ShopCardDto shop, BuyerDto buyer, @Nullable PinnedRequestDto request,
+public record ChatDto(Long id, ChatSide mySide, @Nullable ShopCardDto shop, @Nullable MasterCardDto master, BuyerDto buyer,
+                      @Nullable PinnedRequestDto request, @Nullable PinnedRequestDto serviceRequest,
                       boolean online, @Nullable Instant lastSeenAt, boolean blockedByMe, boolean blockedByOther,
                       boolean canWrite, long unread, long otherReadMessageId, String channel) {
 

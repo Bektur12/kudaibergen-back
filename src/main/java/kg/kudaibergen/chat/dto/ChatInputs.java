@@ -1,7 +1,6 @@
 package kg.kudaibergen.chat.dto;
 
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import kg.kudaibergen.chat.entity.QuickReply;
 
@@ -12,11 +11,11 @@ public final class ChatInputs {
    }
 
    /**
-    * «Написать» (07, 29, 30): чат покупателя с магазином. requestId — чат по запросу (он уже создан
-    * ответом «Есть»), без него — прямой чат из профиля магазина. partId — с карточки запчасти (29):
-    * прямой чат, в который уходит карточка товара.
+    * «Написать» (07, 29, 30, 37): чат покупателя с магазином (shopId) или мастером (masterId) — одно из двух.
+    * requestId — чат по запросу (создан ответом «Есть»), serviceRequestId — по заявке (создан откликом «Могу помочь»),
+    * без них — прямой чат из профиля. partId — с карточки запчасти (29): в чат уходит карточка товара.
     */
-   public record OpenChat(@NotNull(message = "Выберите магазин") Long shopId, Long requestId, Long partId) {
+   public record OpenChat(Long shopId, Long requestId, Long partId, Long masterId, Long serviceRequestId) {
    }
 
    /**

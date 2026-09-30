@@ -13,6 +13,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import kg.kudaibergen.catalog.PartRepository;
 import kg.kudaibergen.catalog.entity.Part;
 import kg.kudaibergen.chat.dto.ChatDto;
+import kg.kudaibergen.master.entity.ServiceRequest;
+import kg.kudaibergen.master.entity.ServiceOffer;
+import kg.kudaibergen.master.entity.Master;
+import kg.kudaibergen.master.MasterRepository;
+import kg.kudaibergen.chat.dto.ChatListAs;
 import kg.kudaibergen.chat.dto.ChatInputs;
 import kg.kudaibergen.chat.dto.ChatListItemDto;
 import kg.kudaibergen.chat.dto.MessageDto;
@@ -84,13 +89,15 @@ public class ChatService {
    private final ObjectMapper json;
    private final AppProperties.Media mediaConfig;
    private final Clock clock;
+   private final ChatProviders providers;
+   private final MasterRepository masters;
 
    public ChatService(ChatRepository chats, MessageRepository messages, ReplyTemplateRepository templates,
                       ChatAccess access, ChatView view, ChatAttachments media, CentrifugoTokens tokens,
                       ShopRepository shops, ShopAccess shopAccess, ShopMapper shopMapper,
                       PartRequestRepository requests, PartRepository parts, UserRepository users, ComplaintService complaints,
                       ApplicationEventPublisher events, TransactionTemplate tx, ObjectMapper json,
-                      AppProperties properties, Clock clock) {
+                      AppProperties properties, Clock clock, ChatProviders providers, MasterRepository masters) {
       this.chats = chats;
       this.messages = messages;
       this.templates = templates;
@@ -110,6 +117,8 @@ public class ChatService {
       this.json = json;
       this.mediaConfig = properties.media();
       this.clock = clock;
+      this.providers = providers;
+      this.masters = masters;
    }
 
    // ─────────────────────── открыть чат ───────────────────────
@@ -120,6 +129,12 @@ public class ChatService {
     */
    @Transactional
    public ChatDto open(Long buyerId, ChatInputs.OpenChat input, Lang lang) {
+      if ((input.shopId() == null) == (input.masterId() == null)) {
+         throw new BadRequestException("PROVIDER_REQUIRED", "Укажите магазин или мастера");
+      }
+      if (input.masterId() != null) {
+         return openWithMaster(buyerId, input, lang);
+      }
       Shop shop = shops.findById(input.shopId()).filter(Shop::isActive)
             .orElseThrow(() -> new NotFoundException("SHOP_NOT_FOUND", "Магазин не найден"));
       if (shop.getId().equals(view.shopIdOf(buyerId))) {
@@ -140,6 +155,52 @@ public class ChatService {
          }
       }
       return view.chat(chat, ChatSide.BUYER, lang);
+   }
+
+   /** Чат с мастером: по заявке — созданный откликом «Могу помочь», без заявки — прямой из профиля мастера. */
+   private ChatDto openWithMaster(Long buyerId, ChatInputs.OpenChat input, Lang lang) {
+      Master master = masters.findById(input.masterId()).filter(Master::isActive)
+            .orElseThrow(() -> new NotFoundException("MASTER_NOT_FOUND", "Мастер не найден"));
+      if (master.getOwnerId().equals(buyerId)) {
+         throw new BadRequestException("SELF_CHAT", "Нельзя написать самому себе");
+      }
+      Chat chat;
+      if (input.serviceRequestId() != null) {
+         chat = chats.findByBuyerIdAndMasterIdAndServiceRequestId(buyerId, master.getId(), input.serviceRequestId())
+               .orElseThrow(() -> new BadRequestException("MASTER_NOT_OFFERED",
+                     "Этот мастер не откликался на заявку"));
+      } else {
+         chat = chats.findDirectWithMaster(buyerId, master.getId())
+               .orElseGet(() -> createMasterChat(buyerId, master.getId(), null));
+      }
+      return view.chat(chat, ChatSide.BUYER, lang);
+   }
+
+   /**
+    * Мастер ответил «Могу помочь» (39): чат по заявке и первым сообщением — карточка отклика
+    * (REPLY с payload offerId, priceFrom, availableAt). Вызывается в транзакции отклика. Возвращает id чата.
+    */
+   @Transactional(propagation = Propagation.MANDATORY)
+   public Long openForServiceOffer(ServiceRequest request, ServiceOffer offer, Master master, Long authorId) {
+      Chat chat = chats.findByBuyerIdAndMasterIdAndServiceRequestId(request.getBuyerId(), master.getId(), request.getId())
+            .orElseGet(() -> createMasterChat(request.getBuyerId(), master.getId(), request.getId()));
+      Map<String, Object> card = new LinkedHashMap<>();
+      card.put("offerId", offer.getId());
+      card.put("priceFrom", offer.getPriceFrom());
+      card.put("availableAt", offer.getAvailableAt() == null ? null : offer.getAvailableAt().toString());
+      // о «Могу помочь» клиенту уже пришёл пуш модуля заявок — второй не нужен
+      add(chat, Message.reply(chat.getId(), authorId, offer.getMessage(), card, clock.instant()), false);
+      return chat.getId();
+   }
+
+   private Chat createMasterChat(Long buyerId, Long masterId, Long serviceRequestId) {
+      Instant now = clock.instant();
+      try {
+         return chats.saveAndFlush(Chat.withMaster(buyerId, masterId, serviceRequestId, now));
+      } catch (DataIntegrityViolationException parallel) {
+         return (serviceRequestId == null ? chats.findDirectWithMaster(buyerId, masterId)
+               : chats.findByBuyerIdAndMasterIdAndServiceRequestId(buyerId, masterId, serviceRequestId)).orElseThrow();
+      }
    }
 
    /**
@@ -214,9 +275,9 @@ public class ChatService {
 
    // ─────────────────────── просмотр ───────────────────────
 
-   /** Список чатов (16). as = BUYER — мои чаты покупателя, SHOP — чаты моего бокса. */
+   /** Список чатов (16). as = BUYER — мои чаты покупателя, SHOP — чаты моего бокса, MASTER — мои как мастера. */
    @Transactional(readOnly = true)
-   public CursorPage<ChatListItemDto> list(Long userId, ChatSide as, String cursor, Integer limit, Lang lang) {
+   public CursorPage<ChatListItemDto> list(Long userId, ChatListAs as, String cursor, Integer limit, Lang lang) {
       int size = CursorPage.limit(limit);
       Instant at = LIST_START;
       long beforeId = Long.MAX_VALUE;
@@ -229,9 +290,17 @@ public class ChatService {
             throw new BadRequestException("BAD_CURSOR", "Некорректный курсор");
          }
       }
-      List<Chat> rows = as == ChatSide.SHOP
-            ? chats.findShopPage(shopAccess.requireMember(userId).shop().getId(), at, beforeId, size + 1)
-            : chats.findBuyerPage(userId, at, beforeId, size + 1);
+      List<Chat> rows = switch (as) {
+         case SHOP -> chats.findShopPage(shopAccess.requireMember(userId).shop().getId(), at, beforeId, size + 1);
+         case MASTER -> {
+            Long masterId = providers.masterIdOf(userId);
+            if (masterId == null) {
+               throw new NotFoundException("NO_MASTER", "Вы ещё не зарегистрированы как мастер");
+            }
+            yield chats.findMasterPage(masterId, at, beforeId, size + 1);
+         }
+         case BUYER -> chats.findBuyerPage(userId, at, beforeId, size + 1);
+      };
       boolean more = rows.size() > size;
       List<Chat> page = more ? rows.subList(0, size) : rows;
       String next = null;
@@ -240,7 +309,7 @@ public class ChatService {
          Instant key = last.getLastMessageAt() == null ? last.getCreatedAt() : last.getLastMessageAt();
          next = CursorPage.encode(key + "|" + last.getId());
       }
-      return new CursorPage<>(view.rows(page, as, lang), next);
+      return new CursorPage<>(view.rows(page, as == ChatListAs.BUYER ? ChatSide.BUYER : ChatSide.SHOP, lang), next);
    }
 
    @Transactional(readOnly = true)
@@ -263,7 +332,9 @@ public class ChatService {
    @Transactional(readOnly = true)
    public UnreadDto unread(Long userId) {
       Long shopId = view.shopIdOf(userId);
-      return new UnreadDto(chats.totalUnreadForBuyer(userId), shopId == null ? 0 : chats.totalUnreadForShop(shopId));
+      Long masterId = providers.masterIdOf(userId);
+      return new UnreadDto(chats.totalUnreadForBuyer(userId), shopId == null ? 0 : chats.totalUnreadForShop(shopId),
+            masterId == null ? 0 : chats.totalUnreadForMaster(masterId));
    }
 
    /** Токен подписки на канал чата — только участнику. */
@@ -311,6 +382,9 @@ public class ChatService {
       Lang lang = users.findById(participant.userId()).map(user -> user.getLang()).orElse(Lang.RU);
       Map<String, Object> payload = null;
       if (reply == QuickReply.ROUTE) {
+         if (chat.withMaster()) {
+            throw new BadRequestException("QUICK_REPLY_NOT_ALLOWED", "Этот быстрый ответ здесь недоступен");
+         }
          Shop shop = shops.findById(chat.getShopId()).orElseThrow();
          payload = new LinkedHashMap<>();
          payload.put("location", json.convertValue(shopMapper.location(shop.getContainerId()),
@@ -378,9 +452,9 @@ public class ChatService {
       if (chat.isBlocked()) {
          throw new ForbiddenException("CHAT_BLOCKED", "Переписка заблокирована");
       }
-      Shop shop = shops.findById(chat.getShopId()).orElseThrow();
-      if (!shop.isActive()) {
-         throw new ForbiddenException("SHOP_NOT_ACTIVE", "Магазин не принимает сообщения");
+      if (!providers.active(chat)) {
+         throw new ForbiddenException(chat.withMaster() ? "MASTER_NOT_ACTIVE" : "SHOP_NOT_ACTIVE",
+               chat.withMaster() ? "Мастер не принимает сообщения" : "Магазин не принимает сообщения");
       }
    }
 
@@ -443,6 +517,9 @@ public class ChatService {
       ChatAccess.Participant participant = access.require(userId, chatId);
       Chat chat = participant.chat();
       List<QuickReplyDto> result = new ArrayList<>();
+      if (participant.side() == ChatSide.BUYER && chat.withMaster()) {
+         return result;
+      }
       if (participant.side() == ChatSide.BUYER) {
          result.add(quick(QuickReply.ROUTE_TO_BOX, lang));
          boolean requestOpen = chat.getRequestId() != null
@@ -450,6 +527,9 @@ public class ChatService {
          if (requestOpen) {
             result.add(quick(QuickReply.CLOSE_REQUEST, lang));
          }
+         return result;
+      }
+      if (chat.withMaster()) {
          return result;
       }
       result.add(quick(QuickReply.RESERVED, lang));

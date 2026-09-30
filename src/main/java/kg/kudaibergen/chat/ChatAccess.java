@@ -1,27 +1,23 @@
 package kg.kudaibergen.chat;
 
-import java.util.Objects;
-
 import kg.kudaibergen.chat.entity.Chat;
 import kg.kudaibergen.chat.entity.ChatSide;
 import kg.kudaibergen.common.error.NotFoundException;
-import kg.kudaibergen.shop.ShopMemberRepository;
-import kg.kudaibergen.shop.entity.ShopMember;
 import org.springframework.stereotype.Component;
 
 /**
- * Кто пишет в чат: покупатель — сам, продавец — любой человек бокса (владелец или сотрудник, ТЗ 2).
- * Посторонним — 404, как будто чата нет.
+ * Кто пишет в чат: покупатель — сам, исполнитель — любой человек бокса (владелец или сотрудник, ТЗ 2)
+ * или мастер. Посторонним — 404, как будто чата нет.
  */
 @Component
 public class ChatAccess {
 
    private final ChatRepository chats;
-   private final ShopMemberRepository members;
+   private final ChatProviders providers;
 
-   public ChatAccess(ChatRepository chats, ShopMemberRepository members) {
+   public ChatAccess(ChatRepository chats, ChatProviders providers) {
       this.chats = chats;
-      this.members = members;
+      this.providers = providers;
    }
 
    public Participant require(Long userId, Long chatId) {
@@ -37,11 +33,7 @@ public class ChatAccess {
       if (chat.getBuyerId().equals(userId)) {
          return new Participant(chat, ChatSide.BUYER, userId);
       }
-      boolean member = members.findByUserId(userId)
-            .map(ShopMember::getShopId)
-            .filter(shopId -> Objects.equals(shopId, chat.getShopId()))
-            .isPresent();
-      if (member) {
+      if (providers.isProviderUser(userId, chat)) {
          return new Participant(chat, ChatSide.SHOP, userId);
       }
       throw notFound();

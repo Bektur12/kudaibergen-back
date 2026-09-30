@@ -9,6 +9,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import kg.kudaibergen.chat.dto.ChatDto;
 import kg.kudaibergen.chat.dto.ChatInputs;
+import kg.kudaibergen.chat.dto.ChatListAs;
 import kg.kudaibergen.chat.dto.ChatListItemDto;
 import kg.kudaibergen.chat.dto.MessageDto;
 import kg.kudaibergen.chat.dto.QuickReplyDto;
@@ -63,10 +64,11 @@ public class ChatController {
 
    @GetMapping
    @Operation(summary = "Список чатов (16)", description = """
-         as=BUYER — мои чаты как покупателя, as=SHOP — чаты моего бокса (общие для владельца и сотрудников).
+         as=BUYER — мои чаты как покупателя, as=SHOP — чаты моего бокса (общие для владельца и сотрудников),
+         as=MASTER — мои чаты как мастера.
          Свежие сверху; closed-запросы — requestClosed=true (рисовать серым).""")
    public CursorPage<ChatListItemDto> list(@AuthenticationPrincipal AuthPrincipal principal,
-                                           @RequestParam(defaultValue = "BUYER") ChatSide as,
+                                           @RequestParam(defaultValue = "BUYER") ChatListAs as,
                                            @RequestParam(required = false) String cursor,
                                            @RequestParam(required = false) Integer limit,
                                            @Parameter(hidden = true) @RequestHeader(

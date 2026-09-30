@@ -63,6 +63,9 @@ public class GarageService {
       car.setEngine(blankToNull(request.engine()));
       car.setVin(normalizeVin(request.vin()));
       car.setName(blankToNull(request.name()));
+      car.setEngineVolume(request.engineVolume());
+      car.setFuel(request.fuel());
+      car.setOrigin(request.origin() != null ? request.origin() : CarOrigins.of(brand.getSlug()));
       boolean makePrimary = count == 0 || Boolean.TRUE.equals(request.isPrimary());
       if (makePrimary) {
          cars.clearPrimary(userId);
@@ -88,6 +91,15 @@ public class GarageService {
       }
       if (request.name() != null) {
          car.setName(blankToNull(request.name()));
+      }
+      if (request.engineVolume() != null) {
+         car.setEngineVolume(request.engineVolume());
+      }
+      if (request.fuel() != null) {
+         car.setFuel(request.fuel());
+      }
+      if (request.origin() != null) {
+         car.setOrigin(request.origin());
       }
       return car;
    }

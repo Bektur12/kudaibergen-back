@@ -9,7 +9,10 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
-/** Чат покупателя с магазином (08, 13, 16). Все люди бокса пишут и читают от имени магазина. */
+/**
+ * Чат покупателя с исполнителем (08, 13, 16): с магазином — все люди бокса пишут и читают от имени магазина —
+ * или с мастером по заявке на услугу (37). Сторона исполнителя в сообщениях — SHOP.
+ */
 @Entity
 @Table(name = "chats")
 public class Chat {
@@ -21,11 +24,17 @@ public class Chat {
    @Column(name = "buyer_id", nullable = false, updatable = false)
    private Long buyerId;
 
-   @Column(name = "shop_id", nullable = false, updatable = false)
+   @Column(name = "shop_id", updatable = false)
    private Long shopId;
 
    @Column(name = "request_id", updatable = false)
    private Long requestId;
+
+   @Column(name = "master_id", updatable = false)
+   private Long masterId;
+
+   @Column(name = "service_request_id", updatable = false)
+   private Long serviceRequestId;
 
    @Column(name = "last_message_id")
    private Long lastMessageId;
@@ -59,6 +68,26 @@ public class Chat {
       this.shopId = shopId;
       this.requestId = requestId;
       this.createdAt = now;
+   }
+
+   /** Чат с мастером: по заявке на услугу или прямой (serviceRequestId = null). */
+   public static Chat withMaster(Long buyerId, Long masterId, Long serviceRequestId, Instant now) {
+      Chat chat = new Chat(buyerId, null, null, now);
+      chat.masterId = masterId;
+      chat.serviceRequestId = serviceRequestId;
+      return chat;
+   }
+
+   public boolean withMaster() {
+      return masterId != null;
+   }
+
+   public Long getMasterId() {
+      return masterId;
+   }
+
+   public Long getServiceRequestId() {
+      return serviceRequestId;
    }
 
    /** Новое сообщение: оно последнее в списке чатов и прочитано своей стороной. */

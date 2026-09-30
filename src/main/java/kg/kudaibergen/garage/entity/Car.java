@@ -1,9 +1,12 @@
 package kg.kudaibergen.garage.entity;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.EnumType;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -47,6 +50,18 @@ public class Car {
 
    @Column(name = "is_primary", nullable = false)
    private boolean primary;
+
+   /** Объём двигателя, л: 1.5, 2.5 (34). */
+   @Column(name = "engine_volume", precision = 2, scale = 1)
+   private BigDecimal engineVolume;
+
+   @Enumerated(EnumType.STRING)
+   @Column(length = 10)
+   private FuelType fuel;
+
+   @Enumerated(EnumType.STRING)
+   @Column(length = 7)
+   private CarOrigin origin;
 
    @Column(name = "created_at", nullable = false, updatable = false)
    private Instant createdAt = Instant.now();
@@ -128,6 +143,30 @@ public class Car {
 
    public void setPrimary(boolean primary) {
       this.primary = primary;
+   }
+
+   public BigDecimal getEngineVolume() {
+      return engineVolume;
+   }
+
+   public void setEngineVolume(BigDecimal engineVolume) {
+      this.engineVolume = engineVolume;
+   }
+
+   public FuelType getFuel() {
+      return fuel;
+   }
+
+   public void setFuel(FuelType fuel) {
+      this.fuel = fuel;
+   }
+
+   public CarOrigin getOrigin() {
+      return origin;
+   }
+
+   public void setOrigin(CarOrigin origin) {
+      this.origin = origin;
    }
 
    public Instant getCreatedAt() {
