@@ -32,7 +32,7 @@
 ## 1. Енамы
 
 ```java
-enum UserRole        { BUYER, SELLER }                              // [03]
+enum UserRole        { BUYER, SELLER, MASTER }                      // [03]; MASTER — мастер / СТО (раздел 12)
 enum Lang            { RU, KG }                                     // [01, 19, 21]
 enum Theme           { LIGHT, DARK, SYSTEM }                        // [19]
 
@@ -63,7 +63,19 @@ enum ContainerState  { HAS_SELLER, NO_SELLER }                      // [31]
 enum MapFilterKind   { BRAND, CATEGORY }                            // «Марка / Запчасть» [15]
 enum StatsPeriod     { WEEK, MONTH }                                // [17] — последние 7 / 30 дней
 
-enum MediaPurpose    { PART, SHOP, AVATAR, REQUEST, REPLY }         // для POST /media/photos
+enum MediaPurpose    { PART, SHOP, AVATAR, REQUEST, REPLY, MASTER, SERVICE } // для POST /media/photos
+
+// раздел 12: заявки на услуги
+enum CarOrigin       { JAPAN, USA, EUROPE, KOREA, UAE, UNKNOWN }    // «японец / американец / европеец / кореец / эмиратец / не знаю» [35]
+enum FuelType        { PETROL, DIESEL, LPG_PETROL, HYBRID, ELECTRIC } // [35]
+enum ServiceWhen     { NOW, TODAY, TOMORROW, AT_TIME }              // [36]
+enum ServiceWhere    { I_COME, MASTER_COMES, PICKUP_POINT }         // поеду сам / мастер выезжает / эвакуатор забирает [36]
+enum ServiceDuration { MIN_15, MIN_30, HOUR_1, HOUR_3, END_OF_DAY } // по умолчанию — из справочника услуги (эвакуатор — 15 мин)
+enum OfferAnswer     { CAN_HELP, NOT_MINE }                         // «Могу помочь» / «Не моё» [39]
+enum ServiceRecipientStatus { DELIVERED, SEEN, CAN_HELP, NOT_MINE, EXPIRED }
+enum ServiceRequestState { WAITING, HAS_OFFERS, NO_OFFERS, EXPIRED, CLOSED }
+// ServiceType — справочник GET /service-types: CAR_REPAIR, TIRE_SERVICE, LPG, TOW_TRUCK, CAR_WASH, AUTO_ELECTRIC,
+// BODY_PAINT, DIAGNOSTICS, OIL_CHANGE, WHEEL_ALIGNMENT, TINTING, MOBILE_MASTER
 enum ChatSide        { BUYER, SHOP, SYSTEM }
 enum MessageType     { TEXT, PHOTO, VOICE, VIDEO, REPLY, PART, QUICK, SYSTEM }
 enum QuickReply {                                                   // быстрые ответы [08, 13]
@@ -87,6 +99,11 @@ enum QuickReply {                                                   // быст�
 | `SALE` | людям бокса | запрос закрыт «Купил» у этого бокса |
 | `CHAT_MESSAGE` | собеседнику | [08] / [13] |
 | `PRICE_DROP`, `OUT_OF_STOCK` | у кого запчасть в избранном | [29] |
+| `NEW_SERVICE_REQUEST` | мастеру | [39]; category `NEW_SERVICE_REQUEST` — кнопки «Могу помочь / Не моё» |
+| `SERVICE_OFFER` | клиенту | [37] — мастер ответил «Могу помочь» |
+| `SERVICE_NO_OFFERS` | клиенту | [37] время вышло без откликов — «Расширить радиус» |
+| `SERVICE_EXPIRED` | клиенту | [37] время вышло, отклики есть — «Продлить» |
+| `SERVICE_DEAL` | мастеру | клиент выбрал его («Договорились») |
 
 ---
 
@@ -109,10 +126,10 @@ enum QuickReply {                                                   // быст�
 
 ## 3. Пользователь и гараж
 
-- `GET /me` → `{id, phone, name?, avatarUrl?, role, lang, adminRole?, onboarded, hasShop, shop? {id, name, status, role}, createdAt}` (тот же объект — `user` в ответе `POST /auth/otp/verify`). **Роль ещё не выбрана — `onboarded = false`** (в ответе входа это же — `isNewUser = true`): вести на [03], даже если человек уже входил и закрыл приложение на выборе роли. `role` до выбора — `BUYER` по умолчанию, по нему не ориентироваться. `hasShop = false` — продавца ведут на регистрацию [10а]; `shop.status` — `PENDING_VERIFICATION` / `ACTIVE` / `BLOCKED`, `shop.role` — `OWNER` / `STAFF`; `PATCH /me {name?, lang?, avatarMediaId?}`; `DELETE /me/avatar`; `PUT /me/role {role}` [03].
+- `GET /me` → `{id, phone, name?, avatarUrl?, role, lang, adminRole?, onboarded, hasShop, shop? {id, name, status, role}, createdAt}` (тот же объект — `user` в ответе `POST /auth/otp/verify`). **Роль ещё не выбрана — `onboarded = false`** (в ответе входа это же — `isNewUser = true`): вести на [03], даже если человек уже входил и закрыл приложение на выборе роли. `role` до выбора — `BUYER` по умолчанию, по нему не ориентироваться. `hasShop = false` — продавца ведут на регистрацию [10а]; `hasMaster` / `master? {id, name, status}` — профиль мастера, нет — в режиме мастера вести на [38]; `shop.status` — `PENDING_VERIFICATION` / `ACTIVE` / `BLOCKED`, `shop.role` — `OWNER` / `STAFF`; `PATCH /me {name?, lang?, avatarMediaId?}`; `DELETE /me/avatar`; `PUT /me/role {role}` [03].
 - `GET/PATCH /me/settings` → `{notifyReplies, notifyChat, newRequestSound, theme}` [19, 21].
 - `POST /devices {token, platform}` / `DELETE /devices/{token}` — FCM.
-- Гараж [04]: `GET /me/cars`, `POST /me/cars {modelId, year, engine?, vin?, …}`, `PATCH /me/cars/{id}`, `POST /me/cars/{id}/primary`, `DELETE /me/cars/{id}`. Машина: `brand`, модель, `year`, `isPrimary`; подпись «Camry 50 · 2012».
+- Гараж [04]: `GET /me/cars`, `POST /me/cars {modelId, year, engine?, vin?, engineVolume?, fuel?, origin?, …}`, `PATCH /me/cars/{id}`, `POST /me/cars/{id}/primary`, `DELETE /me/cars/{id}`. Машина: `brand`, модель, `year`, `isPrimary`, `engineVolume?`, `fuel?`, `origin` (по умолчанию — по стране марки: Toyota — `JAPAN`); подпись «Camry 50 · 2012».
 - Избранное: `GET /me/favorite-parts`, `GET /me/favorite-shops`.
 
 ---
@@ -244,8 +261,9 @@ enum QuickReply {                                                   // быст�
 
 ## 8. Чат [08, 13, 16]
 
-- `POST /chats {shopId, requestId?, partId?}` — открыть (по запросу, прямой из профиля, с карточкой товара). Ответ «Есть» открывает чат сам (`chatId` в ответе).
-- `GET /chats?cursor=` [16] — строки `{id, mySide, title, avatarUrl?, subtitle, requestId?, requestClosed, lastMessage?, unread, online, blocked, updatedAt}`; `GET /chats/unread` — бейдж.
+- `POST /chats {shopId? | masterId?, requestId?, serviceRequestId?, partId?}` — открыть чат с магазином или мастером (одно из двух): по запросу / заявке, прямой из профиля, с карточкой товара. Ответ «Есть» и отклик «Могу помочь» открывают чат сами (`chatId` в ответе).
+- У чата с мастером в `GET /chats/{id}`: `shop = null`, `master` — карточка мастера, `serviceRequest` — закреплённая заявка; сторона мастера в сообщениях — `SHOP`. Отклик приходит первым сообщением `REPLY` с `payload {offerId, priceFrom, availableAt}`. Быстрых ответов в чате с мастером нет.
+- `GET /chats?as=BUYER|SHOP|MASTER&cursor=` [16] — строки `{id, mySide, title, avatarUrl?, subtitle, requestId?, serviceRequestId?, masterId?, requestClosed, lastMessage?, unread, online, blocked, updatedAt}`; `GET /chats/unread` → `{asBuyer, asShop, asMaster}`.
 - `GET /chats/{id}`, `GET /chats/{id}/messages?cursor=`, `POST /chats/{id}/messages {text?|quick?, clientId}`, `POST /chats/{id}/messages/media` (фото, голосовое до 60 с, видео), `POST /chats/{id}/read`.
 - `GET /chats/{id}/quick-replies` — быстрые ответы для своей стороны.
 - `PUT/DELETE /chats/{id}/block`, `POST /chats/{id}/complaints`.
@@ -289,10 +307,54 @@ enum QuickReply {                                                   // быст�
 | канал | type | payload |
 | --- | --- | --- |
 | `inbox:{userId}#{userId}` | `CHAT` | обновлённая строка списка чатов [16] |
-| `inbox:{userId}#{userId}` | `UNREAD` | `{asBuyer, asShop}` — бейджи непрочитанных |
+| `inbox:{userId}#{userId}` | `UNREAD` | `{asBuyer, asShop, asMaster}` — бейджи непрочитанных |
 | `inbox:{userId}#{userId}` | `REQUEST_STATS` | статистика своего запроса — как `GET /requests/{id}/stats` [32] |
+| `inbox:{userId}#{userId}` | `SERVICE_REQUEST_STATS` | статистика своей заявки на услугу — как `GET /service-requests/{id}/stats` [37] |
 | `chat:{chatId}` | `MESSAGE` | сообщение |
 | `chat:{chatId}` | `READ` | `{chatId, side, readMessageId}` |
 | `chat:{chatId}` | `TYPING` | публикует сам клиент |
 
 Источник истины — REST: после переподключения клиент перечитывает открытый экран (история каналов 10 минут догоняет короткие обрывы).
+
+---
+
+## 12. Заявки на услуги и роль «Мастер» [05б, 33–39]
+
+Отдельный поток рядом с запросами на запчасти: клиент описывает проблему с машиной, заявку получают мастера нужной услуги, которые работают с этой маркой и страной машины и находятся рядом; они отвечают «Могу помочь» или «Не моё». Время, продление и статистика — как у запросов (раздел 7).
+
+### 12.1 Справочник услуг — `GET /service-types`
+`[{code, name, icon, needsLocation, urgent, defaultDuration}]` в порядке плиток [33, 38]. `needsLocation` — заявке нужна точка на карте (эвакуатор, выездной мастер); `urgent` — «Срочно» (эвакуатор, 15 минут).
+
+### 12.2 Профиль мастера [38]
+- `POST /my/master` → стать мастером, пользователь переходит в режим `MASTER`:
+```json
+{ "name": "СТО «Ходовик»", "services": ["CAR_REPAIR", "DIAGNOSTICS"], "allBrands": false, "brandIds": [1, 2],
+  "origins": ["JAPAN", "KOREA"], "address": "ул. Садыгалиева 41, бокс 3", "lat": 42.845, "lng": 74.625,
+  "radiusKm": 5, "mobile": false, "openFrom": "09:00", "openTo": "19:00", "workDays": ["TUESDAY", "…"], "phone": "+996…" }
+```
+  `origins` пусто — любые машины; `allBrands` — все марки; радиус 1–30 км (по умолчанию 5). Проверка мастера — как у магазинов: сейчас выключена, профиль сразу `ACTIVE`.
+- `GET /my/master` (нет — 404 `NO_MASTER` → вести на [38]), `PATCH /my/master` (null — не менять), `PATCH /my/master/accepting {accepting}` — «● Принимаю», `PUT/DELETE /my/master/avatar {mediaId}`, `PUT /my/master/photos {mediaIds}` (до 8, первое — обложка, `purpose=MASTER`).
+- Для клиента: `GET /masters/{id}` → `{id, publicId, name, avatarUrl?, rating, reviewsCount, services[], allBrands, brands[], origins[], address, lat, lng, radiusKm, mobile, open {openNow, …}, phone?, photos[]}`; `GET /masters/public/{publicId}` — ссылка «Поделиться»; `GET /masters/{id}/reviews`.
+- Один человек может быть и продавцом, и мастером. Вкладки мастера: Заявки · Чаты (`GET /chats?as=MASTER`) · Статистика · Профиль.
+
+### 12.3 Заявка клиента [33–37]
+- `GET /service-requests/estimate?service=&carId=|brandId=&origin=&lat=&lng=&radiusKm=` → `{recipients: 12, label: "СТО и ремонт · Toyota"}` [36].
+- `POST /service-requests` (Idempotency-Key):
+```json
+{ "service": "TOW_TRUCK", "carId": 12, "description": "Не заводится, стартер щёлкает",
+  "mediaIds": [81], "when": "NOW", "atTime": null, "where": "PICKUP_POINT",
+  "lat": 42.851, "lng": 74.63, "address": "ул. Ахунбаева 98", "radiusKm": 5, "duration": null }
+```
+  Машина — `carId` из гаража или `brandId` + `modelId?` + `year?` + `engineVolume?` + `fuel?` + `origin?` (страна по умолчанию — по марке). Описание 10–500 символов, до 5 фото (`purpose=SERVICE`). `atTime` — только при `when = AT_TIME`. `lat/lng` обязательны всегда: от этой точки считается расстояние до мастеров. Некому отправить — 409 `NO_RECIPIENTS`.
+- **Кому уходит:** мастер `ACTIVE`, «Принимаю» включено, сейчас его рабочее время, услуга в его списке, марка — в его марках (или «Все марки»), страна — в его списке (или список пуст, или «не знаю»), расстояние от мастера до точки клиента ≤ меньшего из радиусов заявки и мастера.
+- `GET /service-requests/my?cursor=` [05б] → `{id, service, description, carLabel, status, state, canHelpCount, createdAt, expiresAt}`. `state`: `WAITING` / `HAS_OFFERS` — активна, `NO_OFFERS` — время вышло без откликов (предложить «Расширить радиус»), `EXPIRED` — время вышло, отклики есть, `CLOSED`.
+- `GET /service-requests/{id}` → `{…, service, car {brand, modelLabel?, year?, engineVolume?, fuel?, origin, label}, photos[], when, atTime?, where, lat, lng, address?, radiusKm, status, state, duration, expiresAt, extendedTimes, canExtend, canWiden, recipientsCount, seenCount, canHelpCount, closedWithMasterId?, urgent}`.
+- `GET /service-requests/{id}/offers?afterId=` [37] — отклики «Могу помочь» по времени: `{id, master {id, name, avatarUrl?, rating, reviewsCount, address, mobile, isOpenNow, phone?}, priceFrom?, availableAt?, message?, distanceM, chatId}` — «★ 4.9 · 1,2 км · от 1 500 сом · сегодня 15:00», «Позвонить», «Написать».
+- `GET /service-requests/{id}/stats` → `{status, expiresAt, durationMin, remainingMin, canExtend, extendedTimes, radiusKm, counts {delivered, seen, canHelp, notMine, silent}}` — «Получили / Посмотрели / Могут / Не их профиль». Живое — `SERVICE_REQUEST_STATS` (раздел 11).
+- `POST /service-requests/{id}/extend {minutes: 30|60|180}` — до 3 раз; `POST /service-requests/{id}/widen` — радиус +5 км (до 50), новым мастерам пуш, срок заново; `POST /service-requests/{id}/close {masterId?, stars?, tags[]?}` — «Договорились» (оценка только откликнувшемуся мастеру).
+
+### 12.4 Мастер [39]
+- `GET /my/master/requests?filter=NEW|ANSWERED|EXPIRED&cursor=` → `{id, service, car, description, photos[], when, atTime?, where, address?, lat, lng, distanceM, buyerName?, status, dealHere, urgent, createdAt, notifiedAt, expiresAt, seen, myOffer?}` — «Шиномонтаж · Toyota Camry 50 · 1,2 км · осталось 12 мин».
+- `GET /my/master/requests/{id}`, `POST /my/master/requests/{id}/seen`.
+- `POST /my/master/requests/{id}/offer {answer: CAN_HELP|NOT_MINE, priceFrom?, availableAt?, message?}` (Idempotency-Key) — один раз; после срока — 409 `REQUEST_EXPIRED`, повтор — 409 `ALREADY_ANSWERED`. «Могу помочь» → клиенту пуш и чат (`chatId` в ответе).
+- `GET /my/master/stats?period=WEEK|MONTH` → `{received, canHelp, notMine, wroteInChat, deals, unanswered, avgReplyMinutes?, topServices[{code, name, count}]}`.
