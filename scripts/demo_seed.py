@@ -113,6 +113,9 @@ SERVICE_TEXTS = {
     "WHEEL_ALIGNMENT": ["Тянет вправо после ямы", "Развал-схождение после замены рычагов"],
 }
 
+# bcrypt от «Kudaibergen2026» — пароль тестовых сотрудников админки (только для локальной базы)
+ADMIN_PASSWORD_HASH = "$2b$10$e22AUDpCmLw1EpijeKNhbOz221vooyIwAcPKeDjpTgvVZtxH0uhxq"
+
 # ─────────────────────────── каталог ───────────────────────────
 # (название, производители, цена от–до, сторона, позиция, б/у возможно)
 CATALOG = {
@@ -874,6 +877,14 @@ def main():
     cur.execute("insert into shop_brands (shop_id, brand_id) select %s, id from brands", (box_id,))
     cur.execute("insert into shop_categories (shop_id, category_id) select %s, id from categories", (box_id,))
 
+    # сотрудники админки, пароль Kudaibergen2026 (bcrypt), второй шаг — код из debugCode
+    for admin_phone, admin_role, full_name, title in (
+            ("+996555000010", "SUPER_ADMIN", "Суперадмин", "Суперадмин"),
+            ("+996555000011", "MARKET_ADMIN", "Айбек Т.", "Администратор рынка")):
+        admin_user = add_user(admin_phone, full_name, "BUYER", NOW - timedelta(days=30))
+        cur.execute("""insert into admin_members (user_id, admin_role, full_name, title, password_hash, password_changed_at)
+                       values (%s, %s, %s, %s, %s, now())""", (admin_user, admin_role, full_name, title, ADMIN_PASSWORD_HASH))
+
     # избранное Бакыта
     for p in RNG.sample([p for p in all_parts if p["shop"] in (azamat["id"], japan["id"])], 3):
         cur.execute("insert into favorite_parts (user_id, part_id, created_at) values (%s, %s, now())", (bakyt, p["id"]))
@@ -892,6 +903,7 @@ def main():
     print("Тестовые: клиент +996555000001 (Camry 50 · 2014), продавец +996555000002 («Мой бокс», открыт всегда, все марки),")
     print("          мастер +996555000003 («Мой сервис», все услуги и марки, радиус 30 км, круглосуточно)")
     print("Мастера: +996701100001…+996701100014")
+    print("Админка: суперадмин +996555000010, админ рынка +996555000011, пароль Kudaibergen2026")
     print("Продавцы (вход по коду из debugCode):")
     cur.execute("""select u.phone, s.name, r.code, c.number, s.rating, s.reviews_count,
                           (select count(*) from parts p where p.shop_id = s.id)
