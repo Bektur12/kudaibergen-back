@@ -83,6 +83,36 @@ POPULAR_MODELS = {
 # Машины покупателя из макета: под них должно находиться много запчастей
 DEMO_CARS = {"toyota": "Camry 50", "honda": "Fit GE", "lexus": "ES XV40"}
 
+# ─────────────────────────── мастера (раздел 12) ───────────────────────────
+# Рынок «Кудайберген» — около (42.847, 74.620); мастера — на соседних улицах, в 0,5–4 км
+MARKET_POINT = (42.847, 74.620)
+# (название, адрес, услуги, марки (None — все), страны (пусто — любые), радиус, выезд, часы, имя владельца)
+MASTERS = [
+    ("СТО «Ходовик»", "ул. Садыгалиева 41, бокс 3", ["CAR_REPAIR", "DIAGNOSTICS", "WHEEL_ALIGNMENT"], ["toyota", "lexus", "honda", "nissan"], ["JAPAN"], 5, False, ("09:00", "19:00"), "Эрлан"),
+    ("Шиномонтаж 24/7", "ул. Ахунбаева 98", ["TIRE_SERVICE", "WHEEL_ALIGNMENT"], None, [], 8, False, ("00:00", "23:59"), "Нурбол"),
+    ("Эвакуатор Бишкек", "ул. Токтоналиева 12", ["TOW_TRUCK"], None, [], 20, True, ("00:00", "23:59"), "Руслан"),
+    ("Автоэлектрик Максат", "ул. Суюмбаева 150", ["AUTO_ELECTRIC", "DIAGNOSTICS"], None, [], 6, True, ("09:00", "20:00"), "Максат"),
+    ("ГБО Центр", "ул. Жибек Жолу 505", ["LPG", "CAR_REPAIR"], None, ["JAPAN", "KOREA"], 10, False, ("09:00", "18:00"), "Азамат"),
+    ("Мойка «Капля»", "ул. Льва Толстого 36", ["CAR_WASH", "TINTING"], None, [], 4, False, ("08:00", "22:00"), "Бекжан"),
+    ("Кузовной цех «Ремикс»", "ул. Ден Сяопина 18", ["BODY_PAINT"], None, [], 10, False, ("09:00", "19:00"), "Талгат"),
+    ("Корея Сервис", "ул. Байтик Баатыра 81", ["CAR_REPAIR", "DIAGNOSTICS", "OIL_CHANGE"], ["hyundai", "kia", "daewoo"], ["KOREA"], 7, False, ("09:00", "19:00"), "Тимур"),
+    ("Мерс-Бавария Техцентр", "ул. Кулиева 23", ["CAR_REPAIR", "DIAGNOSTICS", "AUTO_ELECTRIC"], ["mercedes-benz", "bmw", "audi", "volkswagen"], ["EUROPE"], 10, False, ("10:00", "19:00"), "Данияр"),
+    ("Экспресс-масло", "Южная магистраль 12/1", ["OIL_CHANGE"], None, [], 5, False, ("08:00", "21:00"), "Айбек"),
+    ("Выездной мастер Кубат", "ул. Садыгалиева 7", ["MOBILE_MASTER", "AUTO_ELECTRIC", "TIRE_SERVICE"], None, [], 15, True, ("08:00", "22:00"), "Кубат"),
+    ("Развал-схождение 3D", "ул. Ахунбаева 119", ["WHEEL_ALIGNMENT", "TIRE_SERVICE"], None, [], 6, False, ("09:00", "19:00"), "Алмаз"),
+    ("Японец Сервис", "ул. Токтоналиева 44", ["CAR_REPAIR", "OIL_CHANGE", "DIAGNOSTICS"], ["toyota", "lexus", "honda", "nissan", "mazda", "mitsubishi", "subaru"], ["JAPAN", "USA"], 8, False, ("09:00", "19:00"), "Замир"),
+    ("Тонировка Pro", "ул. Жибек Жолу 480", ["TINTING", "BODY_PAINT"], None, [], 8, False, ("10:00", "20:00"), "Самат"),
+]
+SERVICE_TEXTS = {
+    "CAR_REPAIR": ["Стук в передней подвеске на кочках", "Троит двигатель на холодную", "Скрип при повороте руля"],
+    "TIRE_SERVICE": ["Пробил колесо, нужна замена на запаску", "Переобуть на зимнюю резину, R17"],
+    "TOW_TRUCK": ["Не заводится, нужно довезти до СТО", "Сел аккумулятор и заглохла на перекрёстке"],
+    "AUTO_ELECTRIC": ["Не работают поворотники и аварийка", "Садится аккумулятор за ночь"],
+    "DIAGNOSTICS": ["Горит чек, посмотреть ошибки", "Компьютерная диагностика перед покупкой"],
+    "OIL_CHANGE": ["Замена масла и фильтров, 5W-30", "Масло в АКПП поменять"],
+    "WHEEL_ALIGNMENT": ["Тянет вправо после ямы", "Развал-схождение после замены рычагов"],
+}
+
 # ─────────────────────────── каталог ───────────────────────────
 # (название, производители, цена от–до, сторона, позиция, б/у возможно)
 CATALOG = {
@@ -759,6 +789,77 @@ def main():
                    from (select shop_id, round(avg(stars)::numeric, 1) avg, count(*) cnt from reviews group by shop_id) r
                    where r.shop_id = s.id""")
 
+    # ── мастера и заявки на услуги ──
+    def near(km_min, km_max):
+        angle = RNG.uniform(0, 2 * 3.14159)
+        dist = RNG.uniform(km_min, km_max)
+        return (MARKET_POINT[0] + dist / 111.0 * __import__("math").sin(angle),
+                MARKET_POINT[1] + dist / (111.0 * 0.733) * __import__("math").cos(angle))
+
+    def add_master(owner, name, address, services, brands, origins, radius, mobile, hours, point, created):
+        cur.execute("""insert into masters (owner_id, name, phone, address, lat, lng, radius_km, is_mobile, all_brands,
+                                            open_from, open_to, work_days, is_accepting, status, public_id, created_at, updated_at)
+                       values (%s, %s, (select phone from users where id = %s), %s, %s, %s, %s, %s, %s, %s, %s, 127, true,
+                               'ACTIVE', %s, %s, %s) returning id""",
+                    (owner, name, owner, address, point[0], point[1], radius, mobile, brands is None, hours[0], hours[1],
+                     public_id(), created, created))
+        mid = cur.fetchone()[0]
+        execute_values(cur, "insert into master_services (master_id, service) values %s", [(mid, x) for x in services])
+        if brands:
+            execute_values(cur, "insert into master_brands (master_id, brand_id) values %s", [(mid, brand_id[b]) for b in brands])
+        if origins:
+            execute_values(cur, "insert into master_origins (master_id, origin) values %s", [(mid, o) for o in origins])
+        return mid
+
+    master_rows = []
+    for n, (name, address, services, brands, origins, radius, mobile, hours, owner_name) in enumerate(MASTERS, start=1):
+        created = NOW - timedelta(days=RNG.randint(30, 300))
+        owner = add_user(phone("701", 100000 + n), owner_name, "MASTER", created)
+        point = near(0.5, 4.0)
+        mid = add_master(owner, name, address, services, brands, origins, radius, mobile, hours, point, created)
+        master_rows.append(dict(id=mid, owner=owner, services=services, brands=brands, origins=origins, point=point,
+                                radius=radius, name=name))
+        rows = []
+        for _ in range(int(RNG.triangular(8, 220, 60))):
+            stars = RNG.choices([5, 4, 3, 2, 1], weights=[72, 20, 5, 2, 1])[0]
+            tags = RNG.sample(["FAST_REPLY", "PART_OK", "EASY_TO_FIND"], k=RNG.randint(0, 2)) if stars >= 4 else []
+            rows.append((mid, RNG.choice(buyers)["id"] if RNG.random() < .8 else None, stars, tags or '{}',
+                         NOW - timedelta(days=RNG.uniform(1, 200))))
+        execute_values(cur, "insert into master_reviews (master_id, buyer_id, stars, tags, created_at) values %s", rows)
+    cur.execute("""update masters m set rating = r.avg, reviews_count = r.cnt
+                   from (select master_id, round(avg(stars)::numeric, 1) avg, count(*) cnt from master_reviews group by master_id) r
+                   where r.master_id = m.id""")
+
+    # тестовый мастер: все услуги и марки, радиус 30 км, круглосуточно — любая заявка рядом с рынком доходит
+    master_tester = add_user("+996555000003", "Мастер", "MASTER", NOW - timedelta(days=1))
+    add_master(master_tester, "Мой сервис", "ул. Садыгалиева 1", list(SERVICE_TEXTS) + ["LPG", "CAR_WASH", "BODY_PAINT",
+               "TINTING", "MOBILE_MASTER"], None, [], 30, True, ("00:00", "23:59"), MARKET_POINT, NOW - timedelta(days=1))
+
+    # живые заявки клиентов — лента мастеров «Новые»
+    brand_slug_by_id = {v: k for k, v in brand_id.items()}
+    for minutes_ago, service in ((4, "TIRE_SERVICE"), (9, "CAR_REPAIR"), (15, "DIAGNOSTICS"), (21, "AUTO_ELECTRIC"), (28, "OIL_CHANGE")):
+        b = RNG.choice(buyers)
+        created = NOW - timedelta(minutes=minutes_ago)
+        point = near(0.3, 2.0)
+        cur.execute("""insert into service_requests (buyer_id, service, car_id, brand_id, model_id, year, origin, description,
+                                                     when_kind, where_kind, lat, lng, radius_km, status, duration, sent_at,
+                                                     expires_at, created_at)
+                       values (%s, %s, %s, %s, %s, %s, %s, %s, 'TODAY', 'I_COME', %s, %s, 10, 'ACTIVE', 'HOUR_3', %s, %s, %s)
+                       returning id""",
+                    (b["id"], service, b["car"], brand_id[b["brand"]], b["model"]["id"], b["year"],
+                     {"hyundai": "KOREA", "kia": "KOREA", "daewoo": "KOREA", "mercedes-benz": "EUROPE", "lada": "EUROPE"}.get(b["brand"], "JAPAN"),
+                     RNG.choice(SERVICE_TEXTS[service]), point[0], point[1], created, created + timedelta(hours=3), created))
+        sid = cur.fetchone()[0]
+        count = 0
+        for m in master_rows:
+            works = service in m["services"] and (m["brands"] is None or b["brand"] in m["brands"])
+            distance = int(((m["point"][0] - point[0]) * 111000) ** 2 + ((m["point"][1] - point[1]) * 111000 * 0.733) ** 2) ** 0.5
+            if works and distance <= min(10, m["radius"]) * 1000:
+                cur.execute("""insert into service_recipients (request_id, master_id, status, distance_m, notified_at)
+                               values (%s, %s, 'DELIVERED', %s, %s)""", (sid, m["id"], int(distance), created))
+                count += 1
+        cur.execute("update service_requests set recipients_count = %s where id = %s", (count, sid))
+
     # тестовые аккаунты для ручной проверки: клиент с Camry 50 и продавец, открытый круглосуточно со всеми марками
     tester = add_user("+996555000001", "Клиент", "BUYER", NOW - timedelta(days=1))
     add_car(tester, "toyota", camry, 2014, "2.5 бензин", True)
@@ -788,7 +889,9 @@ def main():
     u, s, p, m, r, rv, ch, act = cur.fetchone()
     print(f"Готово: пользователей {u}, магазинов {s}, запчастей {p}, фото {m}, запросов {r} (активных {act}), отзывов {rv}, чатов {ch}")
     print("\nПокупатель: +996555123456 (Бакыт, Camry 50 · 2012)")
-    print("Тестовые: клиент +996555000001 (Camry 50 · 2014), продавец +996555000002 («Мой бокс», открыт всегда, все марки)")
+    print("Тестовые: клиент +996555000001 (Camry 50 · 2014), продавец +996555000002 («Мой бокс», открыт всегда, все марки),")
+    print("          мастер +996555000003 («Мой сервис», все услуги и марки, радиус 30 км, круглосуточно)")
+    print("Мастера: +996701100001…+996701100014")
     print("Продавцы (вход по коду из debugCode):")
     cur.execute("""select u.phone, s.name, r.code, c.number, s.rating, s.reviews_count,
                           (select count(*) from parts p where p.shop_id = s.id)
