@@ -93,7 +93,7 @@
 | Место | Всегда отдельно код ряда (`row` / `rowCode`), номер контейнера (`container` / `number`) и `side`. |
 | Машина | `brand {id, slug, name, shortName, logoUrl, placeholder, color, popular}` + подпись модели + год. |
 | Счётчики | Все бейджи и чипы считает сервер. |
-| Фото | Загрузка через бэкенд: `POST /media/photos` (multipart, `file`, `purpose`) → `{id, url, thumbUrl, width, height}`; дальше `id` передаётся в `mediaIds` сущности. Сервер пережимает в 1080 и 320 px и убирает EXIF. **Приложение само сжимает фото до 1080 px по длинной стороне (JPEG) перед отправкой** — на рынке слабый мобильный интернет; сервер принимает до 10 МБ. HEIC не принимается. |
+| Фото | Загрузка через бэкенд: `POST /media/photos` (multipart, `file`, `purpose`) → `{id, url, thumbUrl, width, height}`; дальше `id` передаётся в `mediaIds` сущности. **Видео** (только для заявки на услугу): `POST /media/videos` (multipart: `file` — видео до 30 с и 100 МБ, `poster?` — обложка-кадр, `durationSec?` — нужна только не для MP4/MOV, `purpose=SERVICE`) → `MediaItemDto {id, kind: VIDEO, url, thumbUrl?, width?, height?, durationSec}`. Ошибки 400: `VIDEO_TOO_LONG`, `DURATION_REQUIRED`, `BAD_MEDIA_TYPE`, `FILE_TOO_LARGE`, `VIDEO_NOT_ALLOWED`. Сервер пережимает в 1080 и 320 px и убирает EXIF. **Приложение само сжимает фото до 1080 px по длинной стороне (JPEG) перед отправкой** — на рынке слабый мобильный интернет; сервер принимает до 10 МБ. HEIC не принимается. |
 | Живые события | **Centrifugo**, не STOMP. См. раздел 11. |
 
 ---
@@ -376,7 +376,7 @@ enum QuickReply {                                                   // быст�
 2. Сразу после подключения — подписка на **личный канал** `inbox:{userId}#{userId}` (без отдельного токена; Centrifugo пускает туда только этого пользователя). Presence на нём = «в сети».
 3. Открыли чат — подписка на `chat:{chatId}` с токеном `GET /chats/{id}/subscription-token`; закрыли — отписка.
 
-Все события — конверт `{type, payload}`:
+Все события — конверт `{type, payload}`. Поля в `payload` — те же, что в REST, и в том же формате: даты строками ISO 8601 (`"2026-10-01T04:33:27.667Z"`, время — `"09:00:00"`).
 
 | канал | type | payload |
 | --- | --- | --- |
@@ -419,16 +419,17 @@ enum QuickReply {                                                   // быст�
   "mediaIds": [81], "when": "NOW", "atTime": null, "where": "PICKUP_POINT",
   "lat": 42.851, "lng": 74.63, "address": "ул. Ахунбаева 98", "radiusKm": 5, "duration": null }
 ```
-  Машина — `carId` из гаража или `brandId` + `modelId?` + `year?` + `engineVolume?` + `fuel?` + `origin?` (страна по умолчанию — по марке). Описание 10–500 символов, до 5 фото (`purpose=SERVICE`). `atTime` — только при `when = AT_TIME`. `lat/lng` обязательны всегда: от этой точки считается расстояние до мастеров. Некому отправить — 409 `NO_RECIPIENTS`.
+  Машина — `carId` из гаража или `brandId` + `modelId?` + `year?` + `engineVolume?` + `fuel?` + `origin?` (страна по умолчанию — по марке). Описание 10–500 символов, до 5 фото и видео вместе (`purpose=SERVICE`; видео до 30 с — `POST /media/videos`). `atTime` — только при `when = AT_TIME`. `lat/lng` обязательны всегда: от этой точки считается расстояние до мастеров. Некому отправить — 409 `NO_RECIPIENTS`.
 - **Кому уходит:** мастер `ACTIVE`, «Принимаю» включено, сейчас его рабочее время, услуга в его списке, марка — в его марках (или «Все марки»), страна — в его списке (или список пуст, или «не знаю»), расстояние от мастера до точки клиента ≤ меньшего из радиусов заявки и мастера.
+- Вложения заявки: `photos[]` — только фото (как раньше), `media[]` — всё по порядку, фото и видео: `MediaItemDto {id, kind: PHOTO|VIDEO, url, thumbUrl?, width?, height?, durationSec?}`. У видео без обложки `thumbUrl = null` — показывать первый кадр.
 - `GET /service-requests/my?cursor=` [05б] → `{id, service, description, carLabel, status, state, canHelpCount, createdAt, expiresAt}`. `state`: `WAITING` / `HAS_OFFERS` — активна, `NO_OFFERS` — время вышло без откликов (предложить «Расширить радиус»), `EXPIRED` — время вышло, отклики есть, `CLOSED`.
-- `GET /service-requests/{id}` → `{…, service, car {brand, modelLabel?, year?, engineVolume?, fuel?, origin, label}, photos[], when, atTime?, where, lat, lng, address?, radiusKm, status, state, duration, expiresAt, extendedTimes, canExtend, canWiden, recipientsCount, seenCount, canHelpCount, closedWithMasterId?, urgent}`.
+- `GET /service-requests/{id}` → `{…, service, car {brand, modelLabel?, year?, engineVolume?, fuel?, origin, label}, photos[], media[], when, atTime?, where, lat, lng, address?, radiusKm, status, state, duration, expiresAt, extendedTimes, canExtend, canWiden, recipientsCount, seenCount, canHelpCount, closedWithMasterId?, urgent}`.
 - `GET /service-requests/{id}/offers?afterId=` [37] — отклики «Могу помочь» по времени: `{id, master {id, name, avatarUrl?, rating, reviewsCount, address, mobile, isOpenNow, phone?}, priceFrom?, availableAt?, message?, distanceM, chatId}` — «★ 4.9 · 1,2 км · от 1 500 сом · сегодня 15:00», «Позвонить», «Написать».
 - `GET /service-requests/{id}/stats` → `{status, expiresAt, durationMin, remainingMin, canExtend, extendedTimes, radiusKm, counts {delivered, seen, canHelp, notMine, silent}}` — «Получили / Посмотрели / Могут / Не их профиль». Живое — `SERVICE_REQUEST_STATS` (раздел 11).
 - `POST /service-requests/{id}/extend {minutes: 30|60|180}` — до 3 раз; `POST /service-requests/{id}/widen` — радиус +5 км (до 50), новым мастерам пуш, срок заново; `POST /service-requests/{id}/close {masterId?, stars?, tags[]?}` — «Договорились» (оценка только откликнувшемуся мастеру).
 
 #### 12.4 Мастер [39]
-- `GET /my/master/requests?filter=NEW|ANSWERED|EXPIRED&cursor=` → `{id, service, car, description, photos[], when, atTime?, where, address?, lat, lng, distanceM, buyerName?, status, dealHere, urgent, createdAt, notifiedAt, expiresAt, seen, myOffer?}` — «Шиномонтаж · Toyota Camry 50 · 1,2 км · осталось 12 мин».
+- `GET /my/master/requests?filter=NEW|ANSWERED|EXPIRED&cursor=` → `{id, service, car, description, photos[], media[], when, atTime?, where, address?, lat, lng, distanceM, buyerName?, status, dealHere, urgent, createdAt, notifiedAt, expiresAt, seen, myOffer?}` — «Шиномонтаж · Toyota Camry 50 · 1,2 км · осталось 12 мин».
 - `GET /my/master/requests/{id}`, `POST /my/master/requests/{id}/seen`.
 - `POST /my/master/requests/{id}/offer {answer: CAN_HELP|NOT_MINE, priceFrom?, availableAt?, message?}` (Idempotency-Key) — один раз; после срока — 409 `REQUEST_EXPIRED`, повтор — 409 `ALREADY_ANSWERED`. «Могу помочь» → клиенту пуш и чат (`chatId` в ответе).
 - `GET /my/master/stats?period=WEEK|MONTH` → `{received, canHelp, notMine, wroteInChat, deals, unanswered, avgReplyMinutes?, topServices[{code, name, count}]}`.

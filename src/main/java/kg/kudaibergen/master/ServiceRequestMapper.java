@@ -99,8 +99,8 @@ public class ServiceRequestMapper {
    public ServiceRequestDetailDto detail(ServiceRequest request, long seenCount, Lang lang) {
       ServiceType type = type(request);
       return new ServiceRequestDetailDto(request.getId(), ServiceCatalog.dto(type, lang), car(request),
-            request.getDescription(), photos(request.getPhotoIds()), request.getWhen(), request.getAtTime(),
-            request.getWhere(), request.getLat(), request.getLng(), request.getAddress(), request.getRadiusKm(),
+            request.getDescription(), photos(request.getPhotoIds()), media.items(request.getPhotoIds()),
+            request.getWhen(), request.getAtTime(), request.getWhere(), request.getLat(), request.getLng(), request.getAddress(), request.getRadiusKm(),
             request.getStatus(), state(request), request.getDuration(), request.getExpiresAt(),
             request.getExtendedTimes(), request.canExtend(), request.canWiden(), request.getRecipientsCount(),
             seenCount, request.getCanHelpCount(), request.getClosedWithMasterId(), type.isUrgent(),
@@ -116,8 +116,8 @@ public class ServiceRequestMapper {
                                      ServiceOfferDto myOffer, Lang lang) {
       ServiceType type = type(request);
       return new MasterFeedItemDto(request.getId(), ServiceCatalog.dto(type, lang), car(request),
-            request.getDescription(), photos(request.getPhotoIds()), request.getWhen(), request.getAtTime(),
-            request.getWhere(), request.getAddress(), request.getLat(), request.getLng(), recipient.getDistanceM(),
+            request.getDescription(), photos(request.getPhotoIds()), media.items(request.getPhotoIds()),
+            request.getWhen(), request.getAtTime(), request.getWhere(), request.getAddress(), request.getLat(), request.getLng(), recipient.getDistanceM(),
             buyerName, request.getStatus(), recipient.getMasterId().equals(request.getClosedWithMasterId()),
             type.isUrgent(), request.getCreatedAt(), recipient.getNotifiedAt(), request.getExpiresAt(),
             recipient.getSeenAt() != null, myOffer);

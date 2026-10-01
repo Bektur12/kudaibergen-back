@@ -132,7 +132,7 @@ public class ServiceRequestService {
       }
       List<Long> photoIds = input.mediaIds() == null ? List.of() : input.mediaIds().stream().distinct().toList();
       if (!photoIds.isEmpty()) {
-         media.requireUsable(photoIds, List.of(buyerId), Set.of(MediaPurpose.SERVICE, MediaPurpose.REQUEST));
+         media.requireUsable(photoIds, List.of(buyerId), Set.of(MediaPurpose.SERVICE, MediaPurpose.REQUEST), true);
       }
       Instant now = clock.instant();
       checkLimits(buyerId, now);

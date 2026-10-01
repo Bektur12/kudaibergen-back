@@ -27,17 +27,31 @@ public class Media {
    @Column(nullable = false, length = 8, updatable = false)
    private MediaPurpose purpose;
 
-   @Column(name = "key_1080", nullable = false, length = 300, updatable = false)
+   @Enumerated(EnumType.STRING)
+   @Column(nullable = false, length = 5, updatable = false)
+   private MediaKind kind = MediaKind.PHOTO;
+
+   /** Фото — 1080 px; у видео — обложка (может не быть). */
+   @Column(name = "key_1080", length = 300, updatable = false)
    private String key1080;
 
-   @Column(name = "key_320", nullable = false, length = 300, updatable = false)
+   @Column(name = "key_320", length = 300, updatable = false)
    private String key320;
 
-   @Column(nullable = false, updatable = false)
-   private int width;
+   @Column(updatable = false)
+   private Integer width;
 
-   @Column(nullable = false, updatable = false)
-   private int height;
+   @Column(updatable = false)
+   private Integer height;
+
+   @Column(name = "video_key", length = 300, updatable = false)
+   private String videoKey;
+
+   @Column(name = "mime_type", length = 60, updatable = false)
+   private String mimeType;
+
+   @Column(name = "duration_sec", updatable = false)
+   private Short durationSec;
 
    @Column(name = "size_bytes", nullable = false, updatable = false)
    private long sizeBytes;
@@ -57,6 +71,45 @@ public class Media {
       this.width = width;
       this.height = height;
       this.sizeBytes = sizeBytes;
+   }
+
+   /** Видео; poster — обложка, пережатая как фото (null — без обложки). */
+   public static Media video(Long ownerId, MediaPurpose purpose, String videoKey, String mimeType, int durationSec,
+                             long sizeBytes, String posterKey1080, String posterKey320, Integer posterWidth,
+                             Integer posterHeight) {
+      Media media = new Media();
+      media.ownerId = ownerId;
+      media.purpose = purpose;
+      media.kind = MediaKind.VIDEO;
+      media.videoKey = videoKey;
+      media.mimeType = mimeType;
+      media.durationSec = (short) durationSec;
+      media.sizeBytes = sizeBytes;
+      media.key1080 = posterKey1080;
+      media.key320 = posterKey320;
+      media.width = posterWidth;
+      media.height = posterHeight;
+      return media;
+   }
+
+   public boolean isVideo() {
+      return kind == MediaKind.VIDEO;
+   }
+
+   public MediaKind getKind() {
+      return kind;
+   }
+
+   public String getVideoKey() {
+      return videoKey;
+   }
+
+   public String getMimeType() {
+      return mimeType;
+   }
+
+   public Integer getDurationSec() {
+      return durationSec == null ? null : durationSec.intValue();
    }
 
    public Long getId() {
@@ -79,11 +132,11 @@ public class Media {
       return key320;
    }
 
-   public int getWidth() {
+   public Integer getWidth() {
       return width;
    }
 
-   public int getHeight() {
+   public Integer getHeight() {
       return height;
    }
 

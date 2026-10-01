@@ -45,7 +45,7 @@ public final class ServiceInputs {
          CarOrigin origin,
          @NotBlank(message = "Опишите, что случилось")
          @Size(min = 10, max = 500, message = "От 10 до 500 символов") String description,
-         @Size(max = MAX_PHOTOS, message = "Не больше 5 фото") List<Long> mediaIds,
+         @Size(max = MAX_PHOTOS, message = "Не больше 5 фото и видео") List<Long> mediaIds,
          @NotNull(message = "Выберите, когда") ServiceWhen when,
          Instant atTime,
          @NotNull(message = "Выберите, где") ServiceWhere where,
