@@ -7,40 +7,57 @@ import org.springframework.util.unit.DataSize;
 
 /** Все настройки домена в одном месте (префикс app.*). */
 @ConfigurationProperties(prefix = "app")
-public record AppProperties(Jwt jwt, Sms sms, RequestLimits request, Notification notification, Fcm fcm,
-                            Media media, Centrifugo centrifugo) {
+public record AppProperties(Jwt jwt, Otp otp, Sms sms, Fcm fcm, Market market, Requests requests,
+                            Centrifugo centrifugo, Media media) {
 
-   public record Jwt(String secret, Duration accessTtl, Duration refreshTtl) {
+   /**
+    * Живой чат идёт через Centrifugo: apiUrl и apiKey — Server API (публикация и presence),
+    * tokenSecret — HMAC-ключ токенов подключения и подписки клиента (не app.jwt.secret).
+    */
+   public record Centrifugo(String apiUrl, String apiKey, String tokenSecret, Duration tokenTtl) {
    }
 
-   public record Sms(String provider, Duration codeTtl, int maxAttempts, Duration resendInterval,
-                     boolean exposeCode, String fixedCode, Nikita nikita) {
-
-      public record Nikita(String url, String login, String password, String sender) {
-      }
-   }
-
-   public record RequestLimits(Duration normalTtl, Duration urgentTtl, Duration extendBy, int dailyLimitPerBuyer) {
-   }
-
-   public record Notification(int dispatchBatchSize, int maxAttempts, Duration batchingWindow, int batchingThreshold) {
-   }
-
-   public record Fcm(boolean enabled, String credentialsPath, String credentialsJson) {
-   }
-
-   /** Медиа-сообщения в чате (фото/голосовые/видео): storage = local (диск, dev) или s3 (бакет). */
+   /**
+    * Вложения чата. storage: local — папка uploadDir, отдаётся по /media/** (dev); s3 — приватный
+    * бакет MinIO/S3 и presigned-ссылки. Голосовые — не длиннее maxVoiceSeconds (ТЗ 11.1).
+    */
    public record Media(String storage, String uploadDir, S3 s3, DataSize maxPhotoSize, DataSize maxVoiceSize,
-                       DataSize maxVideoSize) {
+                       DataSize maxVideoSize, int maxVoiceSeconds) {
 
       public record S3(String endpoint, String accessKey, String secretKey, String bucket, String region,
                        Duration presignTtl) {
       }
    }
 
-   /** Живой чат живёт в Centrifugo, а не в самом бэкенде — apiUrl/apiKey это Server API
-    * (публикация и presence), tokenSecret — отдельный от app.jwt.secret HMAC-ключ, которым
-    * подписывается connection-токен клиента (см. CentrifugoTokenService). */
-   public record Centrifugo(String apiUrl, String apiKey, String tokenSecret, Duration tokenTtl) {
+   /**
+    * Запросы «Найти запчасть» (ТЗ 4.3–4.5, 10.2): лимиты покупателя (активных одновременно и новых за сутки),
+    * окно правки ответа продавцом. Срок жизни запроса выбирает покупатель (RequestDuration).
+    */
+   public record Requests(int maxOpen, int maxPerDay, Duration replyEditWindow) {
+   }
+
+   /** qrBaseUrl — префикс ссылки в QR-наклейках: {qrBaseUrl}{token} открывает приложение. */
+   public record Market(String qrBaseUrl) {
+   }
+
+   public record Jwt(String secret, Duration accessTtl, Duration refreshTtl) {
+   }
+
+   /** Код входа: TTL, пауза до повторной отправки, попытки и блокировка номера, лимиты отправки на номер и IP. */
+   public record Otp(Duration codeTtl, Duration resendInterval, int maxAttempts, Duration blockDuration, int phoneLimit,
+                     int ipLimit, Duration limitWindow, String hashSecret, boolean exposeCode, String fixedCode) {
+
+      public boolean hasFixedCode() {
+         return fixedCode != null && !fixedCode.isBlank();
+      }
+   }
+
+   public record Sms(String provider, Nikita nikita) {
+
+      public record Nikita(String url, String login, String password, String sender) {
+      }
+   }
+
+   public record Fcm(boolean enabled, String credentialsPath, String credentialsJson) {
    }
 }

@@ -1,0 +1,30 @@
+package kg.kudaibergen.chat.dto;
+
+import java.time.Instant;
+
+import kg.kudaibergen.chat.entity.ChatSide;
+import kg.kudaibergen.master.dto.MasterCardDto;
+import kg.kudaibergen.shop.dto.ShopCardDto;
+import org.springframework.lang.Nullable;
+
+/**
+ * Открытый чат (08 — покупатель, 13 — продавец). Шапка: магазин «Ряд 14 · Бокс 12 · в сети» или покупатель
+ * «имя · запрос · машина». У чата с мастером shop = null, master — карточка мастера, serviceRequest — заявка.
+ * request — закреплённый запрос на запчасть. mySide — от чьего имени пишет текущий пользователь (SHOP — исполнитель).
+ * otherReadMessageId — до какого сообщения прочитала другая сторона (галочки). channel — канал Centrifugo,
+ * подписка на него — по токену из GET /chats/{id}/subscription-token.
+ */
+public record ChatDto(Long id, ChatSide mySide, @Nullable ShopCardDto shop, @Nullable MasterCardDto master, BuyerDto buyer,
+                      @Nullable PinnedRequestDto request, @Nullable PinnedRequestDto serviceRequest,
+                      boolean online, @Nullable Instant lastSeenAt, boolean blockedByMe, boolean blockedByOther,
+                      boolean canWrite, long unread, long otherReadMessageId, String channel) {
+
+   /** Покупатель для продавца: имя и аватар, телефон не показываем (ТЗ 14). null — не заполнено. */
+   public record BuyerDto(Long id, @Nullable String name, @Nullable String avatarUrl) {
+   }
+
+   /** «Стойки передние · Toyota Camry 50 · 2012», open = false — запрос закрыт или истёк. */
+   public record PinnedRequestDto(Long id, String text, String carLabel, String status, boolean open,
+                                  boolean soldHere) {
+   }
+}

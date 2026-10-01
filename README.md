@@ -1,42 +1,112 @@
-# Kudaibergen — бэкенд маркетплейса автозапчастей
+# Kudaibergen — бэкенд рынка автозапчастей «Кудайберген»
 
-Реализация ТЗ v1.0: веерный запрос покупателя → массовый ответ магазинов → сделка, чат, аналитика.
+Покупатель отправляет запрос «Найти запчасть» продавцам рынка, те отвечают «Есть / Нет», дальше чат,
+маршрут до бокса и оценка. Плюс каталог запчастей продавцов, карта рынка, статистика бокса.
 
 ## Стек
 
-Java 21 · Spring Boot 3.3 · PostgreSQL 16 · Spring Data JPA · Flyway · Spring Security + JWT ·
-springdoc-openapi · JUnit 5 + Testcontainers.
+Java 21 · Spring Boot 3 · PostgreSQL 16 · Redis · Flyway · Spring Security + JWT · Centrifugo v6 (живые события) ·
+MinIO/S3 (фото) · FCM (пуши) · springdoc-openapi · JUnit 5 + Testcontainers.
+
+## Документы
+
+| файл | что |
+| --- | --- |
+| [docs/BACKEND_SPEC.md](docs/BACKEND_SPEC.md) | контракт API для фронта: пути, поля, енамы, ошибки, Centrifugo, пуши |
+| [docs/FRONTEND_PROMPT.md](docs/FRONTEND_PROMPT.md) | промпт для подключения мобильного приложения, контракт внутри |
+| [docs/ADMIN_API.md](docs/ADMIN_API.md) | API веб-админки: вход, роли и права, журнал, эндпоинты по фазам |
+| [docs/BACKEND_DESIGN.md](docs/BACKEND_DESIGN.md) | устройство бэкенда: схема данных, модули, решения |
+| [docs/SPEC_GAPS.md](docs/SPEC_GAPS.md) | сверка спецификации по дизайну с кодом и принятые решения |
 
 ## Запуск
 
 ```bash
-docker compose up -d          # PostgreSQL 16 на localhost:5432
+docker compose up -d          # Postgres 16, Redis, Centrifugo (8000); MinIO — docker compose --profile s3 up -d
 mvn spring-boot:run           # приложение на localhost:8080
 ```
 
-Swagger UI: http://localhost:8080/swagger-ui.html · OpenAPI: `/v3/api-docs`
-Health: `/actuator/health`
+Swagger UI: http://localhost:8080/swagger-ui.html · OpenAPI: `/v3/api-docs` · Health: `/actuator/health`.
 
-Гайд для команды фронтенда (авторизация, флоу продукта, WebSocket-чат, форматы ошибок) —
-[INTEGRATION.md](INTEGRATION.md).
-
-В dev-режиме SMS не отправляются: код пишется в лог и возвращается в ответе
-`POST /auth/request-code` полем `debugCode` (`app.sms.expose-code=true`).
-
-### Быстрая проверка вручную
+В dev-режиме SMS не отправляются: код пишется в лог и возвращается в ответе `POST /api/v1/auth/otp/send`
+полем `debugCode` (`SMS_EXPOSE_CODE=true`).
 
 ```bash
-curl -s -X POST localhost:8080/api/v1/auth/request-code \
+curl -s -X POST localhost:8080/api/v1/auth/otp/send \
   -H 'Content-Type: application/json' -d '{"phone":"+996700123456"}'
-# → {"expiresInSeconds":120,"debugCode":"1234"}
+# → {"expiresIn":120,"resendIn":42,"debugCode":"1234"}
 
-curl -s -X POST localhost:8080/api/v1/auth/verify \
+curl -s -X POST localhost:8080/api/v1/auth/otp/verify \
   -H 'Content-Type: application/json' -d '{"phone":"+996700123456","code":"1234"}'
-# → accessToken / refreshToken / isNewUser
+# → {accessToken, refreshToken, expiresIn, isNewUser, user}
 
-curl -s -X POST localhost:8080/api/v1/auth/register-role -H "Authorization: Bearer $TOKEN" \
-  -H 'Content-Type: application/json' -d '{"role":"SELLER","name":"Азамат","storeName":"АвтоПрофи"}'
+curl -s -X PUT localhost:8080/api/v1/me/role -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' -d '{"role":"SELLER"}'
 ```
+
+### Локальная база
+
+База должна быть в UTF-8, иначе поиск по-русски молча не работает (в локали C Postgres не переводит
+кириллицу в нижний регистр; при старте в логе будет предупреждение). Для своего Postgres:
+
+```sql
+CREATE DATABASE kudaibergen TEMPLATE template0 ENCODING 'UTF8'
+  LOCALE_PROVIDER icu ICU_LOCALE 'ru-RU' LC_COLLATE 'en_US.UTF-8' LC_CTYPE 'en_US.UTF-8';
+```
+
+### Демо-данные
+
+```bash
+python3 scripts/fetch_demo_photos.py   # один раз: настоящие фото запчастей с Wikimedia Commons (~87 шт.)
+python3 scripts/demo_seed.py --yes     # нужны psycopg2 и Pillow
+```
+
+Фото отобраны вручную (`scripts/demo_photos.json`), лежат в `scripts/demo_photos/` (не в git), авторы и лицензии —
+`scripts/demo_photos/ATTRIBUTION.md`. Для видов без подходящего фото и без скачанных фото рисуются иллюстрации.
+
+Удаляет пользователей, магазины, запчасти, запросы, чаты и фото (справочники и схема рынка остаются) и заливает
+живой рынок: 24 магазина по рядам (плюс тестовые клиент `+996555000001` и продавец `+996555000002`), ~300 запчастей с картинками, историю запросов за месяц с ответами, чатами и
+отзывами, активные запросы для ленты продавцов. Покупатель из макета — Бакыт `+996555123456` (Camry 50 · 2012),
+продавцы — `+996700100001`…`+996700100024` (список печатается в конце). Админка: суперадмин `+996555000010`,
+админ рынка `+996555000011`, пароль `Kudaibergen2026`. Для админки в данных есть магазины и мастера в разных
+статусах, спор за контейнер, предупреждение, блокировки и жалоба на мастера; магазины «на проверке» видны только
+при `SHOP_VERIFICATION_REQUIRED=true` (иначе при старте подтверждаются сами). Только для локальной базы.
+
+Проверить запросы ночью: `SHOP_IGNORE_WORKING_HOURS=true` — боксы считаются открытыми в любое время.
+
+### Админка: первый суперадмин
+
+```bash
+ADMIN_BOOTSTRAP_PHONE=+996555000099 ADMIN_BOOTSTRAP_NAME="Имя Фамилия" mvn spring-boot:run
+```
+
+При старте, если активного суперадмина нет, этот номер становится `SUPER_ADMIN`. Пароль он задаёт сам по SMS-коду:
+`POST /api/v1/admin/auth/password/code {phone}`, затем `POST /api/v1/admin/auth/password {phone, code, password}`.
+Вход в админку: `POST /api/v1/admin/auth/login {phone, password}` → SMS-код → `POST /api/v1/admin/auth/verify`.
+Остальных сотрудников суперадмин добавляет в разделе «Сотрудники» (`POST /api/v1/admin/staff`), пароль каждый
+задаёт себе сам.
+
+| Роль | Кто | Права |
+| --- | --- | --- |
+| `SUPER_ADMIN` | владелец, техадмин | все, всегда |
+| `MARKET_ADMIN` | «Администратор рынка» | все, кроме `STAFF_MANAGE` (сотрудники и права ролей); набор можно поменять в `PUT /admin/staff/roles/MARKET_ADMIN/permissions` |
+
+Права: `DASHBOARD_VIEW`, `EXPORT_EXCEL`, `SELLERS_VIEW`, `SELLERS_VERIFY`, `SELLERS_BLOCK`, `DISPUTES_RESOLVE`,
+`MASTERS_VIEW`, `MASTERS_VERIFY`, `MASTERS_BLOCK`, `MASTERS_CREATE`, `MARKET_VIEW`, `MARKET_EDIT`,
+`MARKET_MAP_PUBLISH`, `TENANTS_IMPORT`, `REQUESTS_VIEW`, `REQUESTS_MANAGE`, `COMPLAINTS_VIEW`,
+`COMPLAINTS_RESOLVE`, `CONTENT_REMOVE`, `SELLER_WARN`, `DICTIONARIES_VIEW`, `DICTIONARIES_EDIT`,
+`BROADCASTS_VIEW`, `BROADCASTS_SEND`, `USERS_VIEW`, `USERS_BLOCK`, `PII_VIEW` (без него телефоны маской),
+`MESSAGE_USERS`, `AUDIT_VIEW`, `STAFF_MANAGE`. Что открывает каждое — в [docs/ADMIN_API.md](docs/ADMIN_API.md).
+
+### Фоновые задачи
+
+| Задача | Когда | Что делает |
+| --- | --- | --- |
+| Рассылки (`BroadcastSender`) | каждые 20 с | запланированные — фиксирует получателей и шлёт пуши батчами по 500; в 22:00–07:00 (Бишкек) стоит |
+| Сводка админки (`DashboardService`) | по запросу, кэш 90 с | KPI, графики, марки без ответа; `POST /admin/dashboard/refresh` — пересчитать сразу |
+| Истечение запросов и заявок | каждую минуту | статус «время вышло», пуши покупателю |
+| Очистка медиа | 03:45 | неприкреплённые фото и видео старше суток |
+| Refresh-токены | 03:30 | удаляет просроченные |
+| Удаление аккаунтов | ночью | через 30 дней после запроса на удаление |
 
 ### Переменные окружения
 
@@ -48,101 +118,49 @@ curl -s -X POST localhost:8080/api/v1/auth/register-role -H "Authorization: Bear
 | `SMS_FIXED_CODE` | фиксированный код для всех входов (тест, напр. `1111`) | пусто (в проде пусто) |
 | `SMS_EXPOSE_CODE` | отдавать код в ответе API | `true` (в проде `false`) |
 | `SMS_URL`, `SMS_LOGIN`, `SMS_PASSWORD`, `SMS_SENDER` | шлюз nikita.kg | — |
+| `CENTRIFUGO_API_URL`, `CENTRIFUGO_API_KEY` | Server API Centrifugo (чат) | localhost:8000/api, dev-ключ |
+| `CENTRIFUGO_TOKEN_SECRET` | HMAC токенов клиента Centrifugo, тот же в самом Centrifugo | dev-значение, **в проде обязателен** |
+| `SHOP_IGNORE_WORKING_HOURS` | только для разработки: боксы открыты в любое время, запросы доходят и ночью | `false` |
+| `SHOP_VERIFICATION_REQUIRED` | проверять место продавца (QR, SMS арендатора, админ) до того, как магазин начнёт работать | `false` — магазин действует сразу |
+| `ADMIN_ORIGINS` | домены веб-админки для CORS, через запятую | `http://localhost:*,http://127.0.0.1:*` |
+| `ADMIN_BOOTSTRAP_PHONE`, `ADMIN_BOOTSTRAP_NAME` | первый суперадмин (создаётся при старте, если его нет) | пусто |
+| `ADMIN_COOKIE_SECURE`, `ADMIN_COOKIE_SAMESITE` | атрибуты cookie `admin_refresh`; админка на другом домене — `None` (и Secure) | `true`, `Strict` |
+| `OCR_PROVIDER`, `OCR_GOOGLE_API_KEY` | распознавание номера детали: `none` или `google` (Cloud Vision) | `none` |
+| `MEDIA_STORAGE` | вложения чата: `local` или `s3` | `local` |
+| `MEDIA_PUBLIC_URL` | для `local`: адрес сервера в ссылках на файлы. Пусто — подставляется сам: адрес, по которому обратился телефон, а вне запроса (события, пуши) — адрес компьютера в локальной сети. В проде — точный адрес | пусто |
+| `S3_ENDPOINT`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_BUCKET` | MinIO/S3 при `MEDIA_STORAGE=s3` | localhost:9000, бакет kudaibergen |
 | `FCM_ENABLED`, `FCM_CREDENTIALS` (путь к файлу) или `FCM_CREDENTIALS_JSON` (содержимое JSON, приоритетнее) | пуши через Firebase | `false` |
 
-Доменные настройки (TTL запросов, лимиты, окно батчинга пушей) — блок `app.*` в
+Доменные настройки (лимиты запросов, окно правки ответа, медиа) — блок `app.*` в
 `src/main/resources/application.yml`.
 
 ## Тесты
 
 ```bash
-mvn test        # нужен запущенный Docker: Testcontainers поднимает Postgres 16
+mvn test        # юнит-тесты и интеграционные (*IT) — для IT нужен Docker: Testcontainers поднимает Postgres и Redis
 ```
-
-Покрыты сквозные сценарии: вход по SMS, веерная рассылка с проверкой матчинга,
-массовый ответ шаблоном, прямой чат с магазином, отзыв и рейтинг,
-аналитика продавца, идемпотентность, продление и отмена запроса, права доступа.
 
 ## Структура
 
 ```
 kg.kudaibergen
-├── auth          — SMS-вход, JWT, SecurityConfig, шлюзы SMS
-├── user          — профиль, автомобили покупателя
-├── store         — магазины, филиалы, категории, шаблоны ответов
-├── request       — запросы + веерная рассылка + лента продавца
-├── offer         — предложения, массовый ответ, протухание
-├── chat          — чаты и сообщения
-├── review        — отзывы и пересчёт рейтинга
-├── analytics     — статистика продавца (нативный SQL)
-├── notification  — outbox, диспетчер пушей, устройства
-└── common        — ошибки, идемпотентность, конфиги, пагинация, PartCategory
+├── auth          — SMS-вход, JWT, refresh-токены, SecurityConfig
+├── user          — профиль, настройки, устройства для пушей
+├── garage        — марки, модели, «Мой гараж»
+├── category      — категории запчастей
+├── market        — схема рынка, ряды и контейнеры, поиск места, маршрут, QR, GPS-калибровка
+├── shop          — магазины, проверка, фото места, сотрудники, подсветка на карте
+├── catalog       — запчасти продавцов, поиск, избранное, импорт из Excel
+├── request       — запросы «Найти запчасть», ответы, статистика запроса, отзывы
+├── chat          — чаты, Centrifugo, быстрые ответы
+├── stats         — статистика бокса
+├── admin         — веб-админка: сотрудники и права, вход, журнал (@Audited), поиск
+├── media         — загрузка и хранение фото
+├── ocr           — распознавание номера детали
+├── complaint     — жалобы
+├── notification  — пуши FCM, тихие часы
+└── common        — ошибки (RFC 7807), идемпотентность, лимиты, пагинация
 ```
 
-Внутри пакета: `Controller` → `Service` → `Repository` + `entity/`, `dto/`.
-Контроллер в репозиторий не ходит.
-
-Зависимости между пакетами односторонние. Там, где связь получалась бы взаимной,
-пакет объявляет интерфейс, а сосед его реализует:
-
-- `request.RequestOffersView` — предложения в карточке запроса (реализует `offer`);
-- `store.DealAccess` — «была ли принятая сделка» (реализует `offer`), нужен для скрытия телефонов.
-
-## Ключевые механизмы
-
-**Веерная рассылка** (`RequestService.create`) — магазины подбираются одним запросом
-по `store_categories` + городу филиала, получатели пишутся в `request_recipients`,
-пуши уходят в `notification_outbox`, а не в FCM из HTTP-потока. Ответ содержит
-`sellersMatched` — приложение показывает «отправлено N продавцам».
-
-**Массовый ответ** (`OfferService.bulkReply`) — один шаблон на N запросов в одной
-транзакции: проверяется, что магазин действительно получал запрос и ещё не отвечал;
-`replied_at` проставляется по каждому запросу, отсюда считается рейтинг скорости ответа.
-
-**Протухание** — `ExpirationScheduler` раз в минуту переводит просроченные запросы в
-`EXPIRED`, затем гасит висящие на них предложения. Срочный запрос живёт 2 часа, обычный — сутки.
-
-**Идемпотентность** — аспект `IdempotencyAspect` над методами с `@Idempotent`
-(`POST /requests`, `POST /offers`, `POST /offers/bulk`). Ключ уникален в пределах
-пользователя (`userId:ключ`), ответ хранится в `idempotency_keys` сутки.
-
-**Уведомления** — `OutboxDispatcher` каждые 5 секунд разгребает outbox. Если одному
-продавцу в окно 15 минут накопилось больше трёх новых запросов, уходит одно
-уведомление «8 новых запросов, 3 срочных» вместо восьми отдельных.
-
-**Аналитика** — считается на лету из `request_recipients` + `offers` нативным SQL по
-индексу `idx_recipients_store`, отдельного трекинга нет.
-
-## Решения, которых не было в ТЗ явно
-
-1. **Роль при регистрации.** `POST /auth/verify` создаёт пользователя с ролью `BUYER`
-   (колонка `role` NOT NULL) и возвращает `isNewUser=true`; окончательная роль ставится
-   в `POST /auth/register-role`. Для `SELLER` там же автоматически создаётся магазин —
-   иначе весь кабинет `/my-store` был бы пустым. Повторный вызов → 409.
-   Эндпоинт требует токен, выданный на шаге verify; после смены роли выдаётся новая пара токенов.
-2. **Refresh-токен без таблицы** — stateless JWT с claim `typ=refresh` (access 15 мин, refresh 30 дней).
-3. **Нативные enum-типы Postgres** маппятся как строки, а драйверу выставлен
-   `stringtype=unspecified` — Postgres сам приводит значение к `user_role`/`request_status`/
-   `offer_status`/`verification_status`. Схема из ТЗ не менялась.
-4. **Лента продавца** отдаёт только активные запросы; пропущенные и отвеченные видны в аналитике.
-   Группировка по категориям — на клиенте, как и указано в ТЗ.
-5. **Телефоны филиалов** отдаются владельцу магазина и покупателю с принятой сделкой,
-   остальным приходит `"phone": null`.
-6. **Отзыв** можно оставить только после принятой сделки и только один на магазин;
-   создаётся сразу со статусом `APPROVED`, поле `status` оставлено под будущую модерацию.
-   Рейтинг магазина пересчитывается по одобренным отзывам.
-7. **`null` в ответах не вырезаются** — клиент рассчитывает на `"repliedAt": null`.
-8. **`GET /me/vehicles`** отдаёт машину по умолчанию первой; первая добавленная машина
-   становится дефолтной автоматически.
-9. Локально стоит JDK 22 — сборка идёт с `release 21`, как требует ТЗ.
-
-## Чего нет в v1 (по §10 ТЗ)
-
-Продажа автомобилей, карта и геопоиск, услуги СТО, онлайн-оплата и эскроу.
-Схема под это заложена (`latitude`/`longitude`, `business_type`), эндпоинтов нет.
-
-## Порядок разработки по ТЗ
-
-Шаги 1–10 реализованы: скелет и миграции → SMS-вход и JWT → магазины и категории →
-автомобили → запросы с веерной рассылкой → предложения, шаблоны и массовый ответ →
-outbox и FCM → чаты → аналитика → отзывы и рейтинг.
+Внутри пакета: `Controller` → `Service` → `Repository` + `entity/`, `dto/`. Где связь между модулями получалась бы
+взаимной, модуль объявляет интерфейс, а сосед его реализует: `market.ContainerTenants` и `user.UserShops` реализует `shop`.

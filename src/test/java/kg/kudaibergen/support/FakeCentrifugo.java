@@ -78,10 +78,17 @@ public class FakeCentrifugo {
       respond(exchange, Map.of("result", Map.of()));
    }
 
+   /** batch: publish-команды складываются в очередь, presence отвечает из {@link #present}. */
    private void handleBatch(HttpExchange exchange) throws IOException {
       JsonNode body = JSON.readTree(exchange.getRequestBody());
       List<Map<String, Object>> replies = new ArrayList<>();
       for (JsonNode command : body.path("commands")) {
+         if (command.has("publish")) {
+            JsonNode publish = command.path("publish");
+            published.add(new Published(publish.path("channel").asText(), publish.path("data")));
+            replies.add(Map.of("publish", Map.of()));
+            continue;
+         }
          String channel = command.path("presence").path("channel").asText();
          Map<String, Object> clients = new LinkedHashMap<>();
          int i = 0;
@@ -92,6 +99,16 @@ public class FakeCentrifugo {
          replies.add(Map.of("presence", Map.of("presence", clients)));
       }
       respond(exchange, Map.of("replies", replies));
+   }
+
+   /** Все публикации в канал за timeout (для проверок «что ушло в inbox»). */
+   public List<Published> drain(Duration timeout) throws InterruptedException {
+      List<Published> all = new ArrayList<>();
+      Published next;
+      while ((next = takePublish(timeout)) != null) {
+         all.add(next);
+      }
+      return all;
    }
 
    private void respond(HttpExchange exchange, Object body) throws IOException {

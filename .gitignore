@@ -39,3 +39,5 @@ build/
 
 ### Media uploads (dev-хранилище чата) ###
 /uploads/
+# демо-фото с Wikimedia Commons (scripts/fetch_demo_photos.py)
+scripts/demo_photos/

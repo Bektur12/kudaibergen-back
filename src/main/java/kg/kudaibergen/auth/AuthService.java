@@ -1,161 +1,133 @@
 package kg.kudaibergen.auth;
 
-import java.security.SecureRandom;
-import java.time.Instant;
-import java.util.Optional;
-
-import io.jsonwebtoken.JwtException;
-import kg.kudaibergen.auth.dto.RefreshRequest;
-import kg.kudaibergen.auth.dto.RegisterRoleRequest;
-import kg.kudaibergen.auth.dto.RequestCodeRequest;
-import kg.kudaibergen.auth.dto.RequestCodeResponse;
+import kg.kudaibergen.auth.dto.DeletionResponse;
+import kg.kudaibergen.auth.dto.SendOtpRequest;
+import kg.kudaibergen.auth.dto.SendOtpResponse;
 import kg.kudaibergen.auth.dto.TokenResponse;
-import kg.kudaibergen.auth.dto.VerifyRequest;
-import kg.kudaibergen.auth.entity.SmsCode;
-import kg.kudaibergen.auth.sms.SmsSender;
+import kg.kudaibergen.auth.dto.VerifyOtpRequest;
+import kg.kudaibergen.auth.otp.OtpPurpose;
+import kg.kudaibergen.auth.otp.OtpService;
+import kg.kudaibergen.auth.sms.SmsProvider;
+import kg.kudaibergen.auth.sms.SmsTexts;
+import kg.kudaibergen.auth.token.RefreshTokenService;
 import kg.kudaibergen.common.config.AppProperties;
-import kg.kudaibergen.common.error.BadRequestException;
-import kg.kudaibergen.common.error.ConflictException;
 import kg.kudaibergen.common.error.ForbiddenException;
-import kg.kudaibergen.common.error.RateLimitException;
-import kg.kudaibergen.store.StoreService;
+import kg.kudaibergen.common.error.UnauthorizedException;
+import kg.kudaibergen.user.DeviceService;
 import kg.kudaibergen.user.UserRepository;
+import kg.kudaibergen.user.UserService;
+import kg.kudaibergen.user.MeView;
+import kg.kudaibergen.user.entity.Lang;
 import kg.kudaibergen.user.entity.User;
-import kg.kudaibergen.user.entity.UserRole;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Вход по SMS: код 4 цифры, живёт 2 минуты, 3 попытки ввода,
- * не чаще одной отправки в минуту на номер.
+ * Вход по номеру и SMS-коду (экраны 01–02), обмен и отзыв refresh-токенов,
+ * удаление аккаунта с подтверждением по SMS (ТЗ, раздел 3).
  */
 @Service
 public class AuthService {
 
    private static final Logger log = LoggerFactory.getLogger(AuthService.class);
-   private static final SecureRandom RANDOM = new SecureRandom();
 
-   private final SmsCodeRepository smsCodes;
+   private final OtpService otpService;
+   private final SmsProvider smsProvider;
+   private final UserService userService;
    private final UserRepository users;
-   private final SmsSender smsSender;
-   private final PasswordEncoder passwordEncoder;
+   private final DeviceService devices;
    private final JwtService jwtService;
-   private final StoreService storeService;
-   private final AppProperties.Sms config;
+   private final RefreshTokenService refreshTokens;
+   private final MeView meView;
+   private final boolean exposeCode;
 
-   public AuthService(SmsCodeRepository smsCodes, UserRepository users, SmsSender smsSender,
-                      PasswordEncoder passwordEncoder, JwtService jwtService, StoreService storeService,
-                      AppProperties properties) {
-      this.smsCodes = smsCodes;
+   public AuthService(OtpService otpService, SmsProvider smsProvider, UserService userService,
+                      UserRepository users, DeviceService devices, JwtService jwtService,
+                      RefreshTokenService refreshTokens, MeView meView, AppProperties properties) {
+      this.otpService = otpService;
+      this.smsProvider = smsProvider;
+      this.userService = userService;
       this.users = users;
-      this.smsSender = smsSender;
-      this.passwordEncoder = passwordEncoder;
+      this.devices = devices;
       this.jwtService = jwtService;
-      this.storeService = storeService;
-      this.config = properties.sms();
+      this.refreshTokens = refreshTokens;
+      this.meView = meView;
+      this.exposeCode = properties.otp().exposeCode();
    }
 
-   @Transactional
-   public RequestCodeResponse requestCode(RequestCodeRequest request) {
-      String phone = request.phone();
-      Instant now = Instant.now();
-
-      smsCodes.findTopByPhoneOrderByCreatedAtDesc(phone).ifPresent(last -> {
-         if (last.getCreatedAt().isAfter(now.minus(config.resendInterval()))) {
-            throw new RateLimitException("SMS_TOO_OFTEN",
-                  "Новый код можно запросить раз в " + config.resendInterval().toSeconds() + " секунд");
-         }
-      });
-
-      String code = config.fixedCode() != null && !config.fixedCode().isBlank()
-            ? config.fixedCode()
-            : String.format("%04d", RANDOM.nextInt(10_000));
-      smsCodes.save(new SmsCode(phone, passwordEncoder.encode(code), now.plus(config.codeTtl())));
-      smsSender.send(phone, "Код входа Kudaibergen: " + code);
-
-      return new RequestCodeResponse(config.codeTtl().toSeconds(), config.exposeCode() ? code : null);
-   }
-
-   @Transactional
-   public TokenResponse verify(VerifyRequest request) {
-      Instant now = Instant.now();
-      SmsCode smsCode = smsCodes.findTopByPhoneOrderByCreatedAtDesc(request.phone())
-            .orElseThrow(() -> new BadRequestException("CODE_NOT_REQUESTED", "Код не запрашивался"));
-
-      if (smsCode.isUsed()) {
-         throw new BadRequestException("CODE_ALREADY_USED", "Код уже использован");
-      }
-      if (smsCode.isExpired(now)) {
-         throw new BadRequestException("CODE_EXPIRED", "Срок действия кода истёк");
-      }
-      if (smsCode.getAttempts() >= config.maxAttempts()) {
-         throw new RateLimitException("CODE_ATTEMPTS_EXCEEDED", "Превышено число попыток, запросите новый код");
-      }
-      if (!passwordEncoder.matches(request.code(), smsCode.getCodeHash())) {
-         smsCode.registerAttempt();
-         throw new BadRequestException("INVALID_CODE", "Неверный код", "code");
-      }
-      smsCode.markUsed();
-
-      Optional<User> existing = users.findByPhone(request.phone());
-      User user = existing.orElseGet(() -> {
-         log.info("Регистрация нового пользователя {}", request.phone());
-         // роль уточняется отдельным шагом /auth/register-role
-         return users.save(new User(request.phone(), UserRole.BUYER));
-      });
-      if (user.isBlocked()) {
-         throw new ForbiddenException("USER_BLOCKED", "Пользователь заблокирован");
-      }
-
-      boolean isNewUser = user.getName() == null;
-      return tokens(user, isNewUser);
-   }
-
-   @Transactional(readOnly = true)
-   public TokenResponse refresh(RefreshRequest request) {
-      JwtService.ParsedToken parsed;
-      try {
-         parsed = jwtService.parseRefreshToken(request.refreshToken());
-      } catch (JwtException invalid) {
-         throw new BadRequestException("INVALID_REFRESH_TOKEN", "Refresh-токен недействителен");
-      }
-      User user = users.findById(parsed.userId())
-            .orElseThrow(() -> new BadRequestException("INVALID_REFRESH_TOKEN", "Refresh-токен недействителен"));
-      if (user.isBlocked()) {
-         throw new ForbiddenException("USER_BLOCKED", "Пользователь заблокирован");
-      }
-      return tokens(user, false);
+   public SendOtpResponse sendOtp(SendOtpRequest request, String clientIp) {
+      String code = otpService.issue(OtpPurpose.LOGIN, request.phone(), clientIp);
+      // язык SMS: у существующего пользователя — его сохранённый, иначе выбранный на экране 01
+      Lang lang = users.findByPhone(request.phone()).map(User::getLang).orElse(request.langOrDefault());
+      smsProvider.send(request.phone(), SmsTexts.loginCode(code, lang));
+      return otpResponse(code);
    }
 
    /**
-    * Второй шаг регистрации: пользователь выбирает роль и имя.
-    * Для продавца сразу заводим магазин — иначе весь кабинет /my-store пустой.
+    * Код гасится до выдачи токенов; новый номер сразу регистрируется (роль — отдельным шагом, экран 03).
+    * Вход в течение 30 дней после запроса на удаление аккаунта отменяет удаление.
     */
    @Transactional
-   public TokenResponse registerRole(Long userId, RegisterRoleRequest request) {
-      User user = users.findById(userId)
-            .orElseThrow(() -> new BadRequestException("USER_NOT_FOUND", "Пользователь не найден"));
-      if (user.getName() != null) {
-         throw new ConflictException("REGISTRATION_ALREADY_COMPLETED", "Регистрация уже завершена");
+   public TokenResponse verifyOtp(VerifyOtpRequest request) {
+      otpService.verify(OtpPurpose.LOGIN, request.phone(), request.code());
+      User user = userService.findOrCreate(request.phone(), request.langOrDefault());
+      ensureNotBlocked(user);
+      if (user.cancelDeletion()) {
+         log.info("Пользователь {} вошёл — удаление аккаунта отменено", user.getId());
       }
-
-      user.setRole(request.role());
-      user.setName(request.name() == null || request.name().isBlank() ? "Пользователь" : request.name().trim());
-      if (request.city() != null && !request.city().isBlank()) {
-         user.setCity(request.city().trim());
-      }
-      if (request.role() == UserRole.SELLER) {
-         storeService.createForOwner(user, request.storeName(), request.businessType());
-      }
-      // роль попала в токен — выдаём новую пару
-      return tokens(user, false);
+      return tokens(user);
    }
 
-   private TokenResponse tokens(User user, boolean isNewUser) {
-      return new TokenResponse(jwtService.generateAccessToken(user), jwtService.generateRefreshToken(user),
-            jwtService.accessTtlSeconds(), isNewUser, user.getRole());
+   @Transactional(noRollbackFor = UnauthorizedException.class)
+   public TokenResponse refresh(String refreshToken) {
+      Long userId = refreshTokens.consume(refreshToken);
+      User user = users.findById(userId)
+            .filter(found -> found.getDeletionRequestedAt() == null)
+            .orElseThrow(() -> new UnauthorizedException("REFRESH_TOKEN_INVALID", "Сессия истекла, войдите заново"));
+      ensureNotBlocked(user);
+      return tokens(user);
+   }
+
+   public void logout(Long userId, String refreshToken) {
+      refreshTokens.revoke(refreshToken, userId);
+   }
+
+   /** Шаг 1 удаления аккаунта: код на номер владельца. */
+   public SendOtpResponse sendDeletionOtp(Long userId, String clientIp) {
+      User user = userService.getRequired(userId);
+      String code = otpService.issue(OtpPurpose.DELETE_ACCOUNT, user.getPhone(), clientIp);
+      smsProvider.send(user.getPhone(), SmsTexts.deletionCode(code, user.getLang()));
+      return otpResponse(code);
+   }
+
+   /** Шаг 2: код верный — помечаем аккаунт к удалению и закрываем все сессии и пуши. */
+   @Transactional
+   public DeletionResponse confirmDeletion(Long userId, String code) {
+      User user = userService.getRequired(userId);
+      otpService.verify(OtpPurpose.DELETE_ACCOUNT, user.getPhone(), code);
+      user.requestDeletion();
+      refreshTokens.revokeAll(userId);
+      devices.removeAllOf(userId);
+      log.info("Пользователь {} запросил удаление аккаунта", userId);
+      return new DeletionResponse(user.getDeletionRequestedAt().plus(UserService.DELETION_GRACE));
+   }
+
+   private SendOtpResponse otpResponse(String code) {
+      return new SendOtpResponse(otpService.codeTtl().toSeconds(), otpService.resendInterval().toSeconds(),
+            exposeCode ? code : null);
+   }
+
+   private TokenResponse tokens(User user) {
+      return new TokenResponse(jwtService.generateAccessToken(user), refreshTokens.issue(user.getId()),
+            jwtService.accessTtlSeconds(), !user.isOnboarded(),
+            meView.of(user));
+   }
+
+   private static void ensureNotBlocked(User user) {
+      if (user.isBlocked()) {
+         throw new ForbiddenException("USER_BLOCKED", "Аккаунт заблокирован. Обратитесь в поддержку");
+      }
    }
 }

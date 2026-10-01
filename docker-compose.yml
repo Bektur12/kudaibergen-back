@@ -17,19 +17,48 @@ services:
       timeout: 3s
       retries: 10
 
+  # OTP-коды, rate limit, кэш
+  redis:
+    image: redis:7-alpine
+    container_name: kudaibergen-redis
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # живой чат: WebSocket для клиентов и Server API для бэкенда на :8000
   centrifugo:
-    image: centrifugo/centrifugo:latest
+    image: centrifugo/centrifugo:v6
     container_name: kudaibergen-centrifugo
     command: centrifugo -c /centrifugo/config.json
     volumes:
       - ./centrifugo/config.json:/centrifugo/config.json:ro
     environment:
-      # секреты — только через env, config.json в репозитории их не содержит
+      # секреты только через env; тот же ключ, что app.centrifugo.token-secret у бэкенда
       CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY: ${CENTRIFUGO_TOKEN_SECRET:-change-me-centrifugo-secret-32-bytes-min}
       CENTRIFUGO_HTTP_API_KEY: ${CENTRIFUGO_API_KEY:-change-me-centrifugo-api-key}
     ports:
-      # 8000: клиентские WS/HTTP-подключения (/connection/websocket) и server API (/api)
       - "${CENTRIFUGO_PORT:-8000}:8000"
+
+  # фото и вложения при MEDIA_STORAGE=s3 (бакет создать в консоли на :9001). По умолчанию хранилище local,
+  # поэтому MinIO поднимается только с профилем: docker compose --profile s3 up -d
+  minio:
+    image: quay.io/minio/minio:latest
+    profiles: ["s3"]
+    container_name: kudaibergen-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:-kudaibergen}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:-kudaibergen-secret}
+    ports:
+      - "${MINIO_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - kudaibergen-minio:/data
 
 volumes:
   kudaibergen-pgdata:
+  kudaibergen-minio:

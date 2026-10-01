@@ -2,39 +2,44 @@ spring:
   application:
     name: kudaibergen-backend
   datasource:
-    url: ${DB_URL:jdbc:postgresql://postgres.railway.internal:5432/railway}
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/kudaibergen}
     username: ${DB_USER:postgres}
     password: ${DB_PASSWORD:1111}
-    hikari:
-      data-source-properties:
-        # нативные enum-типы Postgres (user_role, request_status, offer_status, verification_status):
-        # драйвер шлёт строки без типа, а Postgres сам приводит их к нужному enum
-        stringtype: unspecified
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
   jpa:
     open-in-view: false
     hibernate:
-      ddl-auto: none
+      ddl-auto: validate
     properties:
       hibernate:
         jdbc:
           batch_size: 50
+          # time_zone не задаём: Instant и так пишется в UTC, а с time_zone Hibernate сдвигает
+          # LocalTime часов работы на пояс JVM (08:00 в Бишкеке ложилось в базу как 02:00)
         order_inserts: true
   flyway:
     enabled: true
     locations: classpath:db/migration
   jackson:
-    # null-поля оставляем в ответе: клиент рассчитывает на "repliedAt": null и т.п.
+    # null-поля оставляем в ответе: клиент рассчитывает на "debugCode": null и т.п.
     default-property-inclusion: always
-  threads:
-    virtual:
-      enabled: true
   servlet:
+    # фото, голосовые и видео в чате
     multipart:
       max-file-size: 100MB
       max-request-size: 100MB
+  threads:
+    virtual:
+      enabled: true
 
 server:
   port: ${SERVER_PORT:8080}
+  # за балансировщиком: реальный IP клиента из X-Forwarded-For (нужен для rate limit)
+  forward-headers-strategy: native
   error:
     include-message: never
 
@@ -51,56 +56,95 @@ app:
     secret: ${JWT_SECRET:change-me-in-production-please-32-bytes-minimum-secret}
     access-ttl: 15m
     refresh-ttl: 30d
-  sms:
-    provider: ${SMS_PROVIDER:log}       # log | nikita
+  otp:
     code-ttl: 2m
-    max-attempts: 3
-    resend-interval: 1m
-    # в dev-режиме код возвращается в ответе /auth/request-code
+    resend-interval: 42s
+    max-attempts: 5
+    # после max-attempts неверных вводов номер блокируется
+    block-duration: 15m
+    # лимиты отправки: на номер и на IP за окно
+    phone-limit: 5
+    ip-limit: 20
+    limit-window: 1h
+    # ключ HMAC для хэша кода в Redis; по умолчанию берётся JWT_SECRET
+    hash-secret: ${OTP_HASH_SECRET:${JWT_SECRET:change-me-in-production-please-32-bytes-minimum-secret}}
+    # в dev-режиме код возвращается в ответе /auth/otp/send
     expose-code: ${SMS_EXPOSE_CODE:true}
     # тестовый стенд: если задан, все коды входа равны ему (SMS_FIXED_CODE=1111). В проде оставить пустым
     fixed-code: ${SMS_FIXED_CODE:}
+  sms:
+    provider: ${SMS_PROVIDER:log}       # log | nikita
     nikita:
       url: ${SMS_URL:https://smspro.nikita.kg/api/message}
       login: ${SMS_LOGIN:}
       password: ${SMS_PASSWORD:}
       sender: ${SMS_SENDER:Kudaibergen}
-  request:
-    normal-ttl: 24h
-    urgent-ttl: 2h
-    extend-by: 24h
-    daily-limit-per-buyer: 10
-  notification:
-    dispatch-batch-size: 200
-    max-attempts: 5
-    batching-window: 15m
-    batching-threshold: 3
-  fcm:
-    enabled: ${FCM_ENABLED:false}
-    credentials-path: ${FCM_CREDENTIALS:}
-    # содержимое service account JSON целиком (для Railway и т.п., где нет файлов); приоритетнее пути
-    credentials-json: ${FCM_CREDENTIALS_JSON:}
+  market:
+    # ссылка в QR-наклейках рядов и контейнеров; приложение ловит её как deep link
+    qr-base-url: ${QR_BASE_URL:https://kudaibergen.kg/qr/}
+  requests:
+    # на покупателя: активных одновременно и новых за сутки
+    max-open: 10
+    max-per-day: 20
+    # продавец может изменить ответ, дальше — только в чате
+    reply-edit-window: 10m
+  centrifugo:
+    # Server API: публикация событий чата и presence («в сети»)
+    api-url: ${CENTRIFUGO_API_URL:http://localhost:8000/api}
+    api-key: ${CENTRIFUGO_API_KEY:change-me-centrifugo-api-key}
+    # HMAC-ключ токенов подключения и подписки клиента — не путать с app.jwt.secret
+    token-secret: ${CENTRIFUGO_TOKEN_SECRET:change-me-centrifugo-secret-32-bytes-min}
+    token-ttl: 1h
   media:
-    # local — локальная папка, отдаётся по /media/** (dev); s3 — приватный бакет + presigned-ссылки
+    # local — папка на диске, отдаётся по /media/** (dev); s3 — приватный бакет MinIO/S3 + presigned-ссылки
     storage: ${MEDIA_STORAGE:local}
     upload-dir: ${MEDIA_UPLOAD_DIR:uploads}
+    # для local: адрес сервера в ссылках на файлы. Пусто — адрес из запроса (как телефон обратился к серверу),
+    # вне запроса — адрес компьютера в локальной сети. В проде — точный адрес (https://api.kudaibergen.kg)
+    public-url: ${MEDIA_PUBLIC_URL:}
     s3:
-      endpoint: ${AWS_ENDPOINT_URL:}
-      access-key: ${AWS_ACCESS_KEY_ID:}
-      secret-key: ${AWS_SECRET_ACCESS_KEY:}
-      bucket: ${AWS_S3_BUCKET_NAME:}
-      region: ${AWS_DEFAULT_REGION:auto}
+      endpoint: ${S3_ENDPOINT:http://localhost:9000}
+      access-key: ${S3_ACCESS_KEY:}
+      secret-key: ${S3_SECRET_KEY:}
+      bucket: ${S3_BUCKET:kudaibergen}
+      region: ${S3_REGION:us-east-1}
       presign-ttl: 24h
     max-photo-size: 10MB
     max-voice-size: 15MB
     max-video-size: 100MB
-  centrifugo:
-    # Server API (публикация и presence), см. CentrifugoClient
-    api-url: ${CENTRIFUGO_API_URL:http://localhost:8000/api}
-    api-key: ${CENTRIFUGO_API_KEY:change-me-centrifugo-api-key}
-    # HMAC-секрет connection-токена клиента — не путать с app.jwt.secret, это разные ключи
-    token-secret: ${CENTRIFUGO_TOKEN_SECRET:change-me-centrifugo-secret-32-bytes-minimum}
-    token-ttl: 1h
+    max-voice-seconds: 60
+  shops:
+    # проверка места продавца (QR, SMS арендатора, админ). false — магазин действует сразу после регистрации
+    verification-required: ${SHOP_VERIFICATION_REQUIRED:false}
+    # только для разработки: боксы «открыты» в любое время, запросы доходят и ночью. В проде — false
+    ignore-working-hours: ${SHOP_IGNORE_WORKING_HOURS:false}
+  admin:
+    # домены веб-админки для CORS, через запятую; в проде — точный адрес, например https://admin.kudaibergen.kg
+    origins: ${ADMIN_ORIGINS:http://localhost:*,http://127.0.0.1:*}
+    access-ttl: 15m
+    # сессия админки: refresh-токен в httpOnly-cookie admin_refresh
+    refresh-ttl: 12h
+    cookie-secure: ${ADMIN_COOKIE_SECURE:true}
+    # Strict — админка и API на одном сайте; None — на разных доменах (тогда только с Secure)
+    cookie-same-site: ${ADMIN_COOKIE_SAMESITE:Strict}
+    # первый суперадмин: создаётся при старте, если активного суперадмина нет; пароль он задаёт сам по SMS
+    bootstrap-phone: ${ADMIN_BOOTSTRAP_PHONE:}
+    bootstrap-name: ${ADMIN_BOOTSTRAP_NAME:Суперадмин}
+    # попыток входа на номер за окно; на IP — втрое больше
+    login-limit: 10
+    login-window: 15m
+  ocr:
+    # распознавание номера детали (второй этап): none — выключено, google — Google Cloud Vision
+    provider: ${OCR_PROVIDER:none}
+    google:
+      api-key: ${OCR_GOOGLE_API_KEY:}
+      url: ${OCR_GOOGLE_URL:https://vision.googleapis.com}
+    per-user-hourly: 30
+  fcm:
+    enabled: ${FCM_ENABLED:false}
+    credentials-path: ${FCM_CREDENTIALS:}
+    # содержимое service account JSON целиком (для окружений без файлов); приоритетнее пути
+    credentials-json: ${FCM_CREDENTIALS_JSON:}
 
 logging:
   level:

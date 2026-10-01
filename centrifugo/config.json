@@ -1,6 +1,8 @@
 {
   "client": {
-    "allowed_origins": ["*"]
+    "allowed_origins": [
+      "*"
+    ]
   },
   "channel": {
     "namespaces": [
@@ -8,17 +10,24 @@
         "name": "chat",
         "presence": true,
         "join_leave": true,
-        "allow_subscribe_for_client": false,
-        "allow_publish_for_subscriber": true,
-        "allow_user_limited_channels": true
+        "history_size": 100,
+        "history_ttl": "600s",
+        "force_recovery": true,
+        "allow_publish_for_subscriber": true
       },
       {
         "name": "inbox",
         "presence": true,
-        "join_leave": false,
-        "allow_subscribe_for_client": false,
-        "allow_publish_for_subscriber": false,
+        "history_size": 50,
+        "history_ttl": "600s",
+        "force_recovery": true,
         "allow_user_limited_channels": true
+      },
+      {
+        "name": "admin",
+        "history_size": 50,
+        "history_ttl": "600s",
+        "force_recovery": true
       }
     ]
   }

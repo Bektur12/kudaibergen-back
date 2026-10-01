@@ -1,19 +1,30 @@
 package kg.kudaibergen.common.error;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+
 import org.springframework.http.HttpStatus;
 
-/** Базовая ошибка домена: код + HTTP-статус + (опционально) поле. */
+/**
+ * Базовая ошибка домена: машинный код + HTTP-статус. Превращается в RFC 7807 problem+json,
+ * где code и дополнительные свойства (attemptsLeft, retryAfter, …) идут полями верхнего уровня.
+ */
 public class ApiException extends RuntimeException {
 
    private final String code;
    private final HttpStatus status;
-   private final String field;
+   private final Map<String, Object> properties = new LinkedHashMap<>();
 
-   public ApiException(String code, String message, HttpStatus status, String field) {
+   public ApiException(String code, String message, HttpStatus status) {
       super(message);
       this.code = code;
       this.status = status;
-      this.field = field;
+   }
+
+   /** Дополнительное поле ответа об ошибке, например attemptsLeft для неверного кода. */
+   public ApiException with(String name, Object value) {
+      properties.put(name, value);
+      return this;
    }
 
    public String getCode() {
@@ -24,7 +35,7 @@ public class ApiException extends RuntimeException {
       return status;
    }
 
-   public String getField() {
-      return field;
+   public Map<String, Object> getProperties() {
+      return properties;
    }
 }

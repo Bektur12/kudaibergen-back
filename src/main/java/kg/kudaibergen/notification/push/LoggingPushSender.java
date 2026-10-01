@@ -15,7 +15,7 @@ public class LoggingPushSender implements PushSender {
 
    @Override
    public void send(List<String> deviceTokens, PushMessage message) {
-      log.info("PUSH -> {} устройств: {} / {} {}", deviceTokens.size(), message.title(), message.body(),
-            message.data());
+      log.info("PUSH -> {} устройств: {} / {} {} category={} sound={}", deviceTokens.size(), message.title(),
+            message.body(), message.data(), message.category(), message.sound());
    }
 }

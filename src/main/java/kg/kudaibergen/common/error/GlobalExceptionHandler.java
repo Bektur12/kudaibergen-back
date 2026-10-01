@@ -1,108 +1,130 @@
 package kg.kudaibergen.common.error;
 
-import jakarta.validation.ConstraintViolation;
+import java.util.List;
+
 import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
+import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
-import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.lang.NonNull;
+import org.springframework.lang.Nullable;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
-import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
-import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
-import org.springframework.web.multipart.MaxUploadSizeExceededException;
-import org.springframework.web.multipart.MultipartException;
-import org.springframework.web.multipart.support.MissingServletRequestPartException;
-import org.springframework.web.servlet.resource.NoResourceFoundException;
+import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
+/**
+ * Все ошибки — application/problem+json (RFC 7807) с полем code.
+ * Стандартные исключения Spring MVC обрабатывает базовый класс, здесь только дописываем code.
+ */
 @RestControllerAdvice
-public class GlobalExceptionHandler {
+public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
    @ExceptionHandler(ApiException.class)
-   public ResponseEntity<ApiErrorResponse> handleApi(ApiException ex) {
-      return ResponseEntity.status(ex.getStatus())
-            .body(new ApiErrorResponse(ex.getCode(), ex.getMessage(), ex.getField()));
+   public ResponseEntity<ProblemDetail> handleApi(ApiException ex) {
+      ResponseEntity.BodyBuilder response = ResponseEntity.status(ex.getStatus());
+      if (ex instanceof RateLimitException rateLimit) {
+         response.header(HttpHeaders.RETRY_AFTER, String.valueOf(rateLimit.retryAfterSeconds()));
+      }
+      return response.body(Problems.of(ex));
    }
 
-   @ExceptionHandler(MethodArgumentNotValidException.class)
-   public ResponseEntity<ApiErrorResponse> handleValidation(MethodArgumentNotValidException ex) {
-      var error = ex.getBindingResult().getFieldErrors().stream().findFirst();
-      String field = error.map(f -> f.getField()).orElse(null);
-      String message = error.map(f -> f.getDefaultMessage()).orElse("Некорректные данные");
-      return ResponseEntity.badRequest().body(new ApiErrorResponse("VALIDATION_ERROR", message, field));
+   @Override
+   protected ResponseEntity<Object> handleMethodArgumentNotValid(@NonNull MethodArgumentNotValidException ex,
+                                                                 @NonNull HttpHeaders headers,
+                                                                 @NonNull HttpStatusCode status,
+                                                                 @NonNull WebRequest request) {
+      List<Problems.FieldError> errors = ex.getBindingResult().getFieldErrors().stream()
+            .map(error -> new Problems.FieldError(error.getField(), error.getDefaultMessage()))
+            .toList();
+      return ResponseEntity.badRequest().body(validation(errors));
    }
 
    @ExceptionHandler(ConstraintViolationException.class)
-   public ResponseEntity<ApiErrorResponse> handleConstraint(ConstraintViolationException ex) {
-      var violation = ex.getConstraintViolations().stream().findFirst();
-      String field = violation.map(v -> v.getPropertyPath().toString()).orElse(null);
-      String message = violation.map(ConstraintViolation::getMessage).orElse("Некорректные данные");
-      return ResponseEntity.badRequest().body(new ApiErrorResponse("VALIDATION_ERROR", message, field));
-   }
-
-   @ExceptionHandler({ HttpMessageNotReadableException.class, MethodArgumentTypeMismatchException.class,
-         MissingRequestHeaderException.class })
-   public ResponseEntity<ApiErrorResponse> handleBadInput(Exception ex) {
-      return ResponseEntity.badRequest()
-            .body(new ApiErrorResponse("BAD_REQUEST", "Некорректный запрос", null));
-   }
-
-   @ExceptionHandler(MaxUploadSizeExceededException.class)
-   public ResponseEntity<ApiErrorResponse> handleUploadTooLarge(MaxUploadSizeExceededException ex) {
-      return ResponseEntity.badRequest()
-            .body(new ApiErrorResponse("FILE_TOO_LARGE", "Файл больше допустимого размера", "file"));
-   }
-
-   @ExceptionHandler(MultipartException.class)
-   public ResponseEntity<ApiErrorResponse> handleMultipart(MultipartException ex) {
-      return ResponseEntity.badRequest()
-            .body(new ApiErrorResponse("BAD_REQUEST", "Некорректная загрузка файла", null));
-   }
-
-   /** Клиент не приложил обязательную часть multipart-запроса (например, сам файл). */
-   @ExceptionHandler(MissingServletRequestPartException.class)
-   public ResponseEntity<ApiErrorResponse> handleMissingPart(MissingServletRequestPartException ex) {
-      return ResponseEntity.badRequest()
-            .body(new ApiErrorResponse("FILE_REQUIRED", "Файл не передан", ex.getRequestPartName()));
+   public ResponseEntity<ProblemDetail> handleConstraint(ConstraintViolationException ex) {
+      List<Problems.FieldError> errors = ex.getConstraintViolations().stream()
+            .map(violation -> new Problems.FieldError(violation.getPropertyPath().toString(), violation.getMessage()))
+            .toList();
+      return ResponseEntity.badRequest().body(validation(errors));
    }
 
    @ExceptionHandler(AuthenticationException.class)
-   public ResponseEntity<ApiErrorResponse> handleAuth(AuthenticationException ex) {
+   public ResponseEntity<ProblemDetail> handleAuth(AuthenticationException ex) {
       return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-            .body(new ApiErrorResponse("UNAUTHORIZED", "Требуется авторизация", null));
+            .body(Problems.of(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", "Требуется авторизация"));
    }
 
    @ExceptionHandler(AccessDeniedException.class)
-   public ResponseEntity<ApiErrorResponse> handleDenied(AccessDeniedException ex) {
+   public ResponseEntity<ProblemDetail> handleDenied(AccessDeniedException ex) {
       return ResponseEntity.status(HttpStatus.FORBIDDEN)
-            .body(new ApiErrorResponse("FORBIDDEN", "Нет доступа к ресурсу", null));
+            .body(Problems.of(HttpStatus.FORBIDDEN, "FORBIDDEN", "Нет доступа к ресурсу"));
    }
 
-   @ExceptionHandler(NoResourceFoundException.class)
-   public ResponseEntity<ApiErrorResponse> handleNoResource(NoResourceFoundException ex) {
-      return ResponseEntity.status(HttpStatus.NOT_FOUND)
-            .body(new ApiErrorResponse("NOT_FOUND", "Ресурс не найден", null));
-   }
-
-   /** Гонка на уникальных индексах (например, два оффера одного магазина на один запрос). */
+   /** Гонка на уникальных индексах (например, два магазина на один контейнер). */
    @ExceptionHandler(DataIntegrityViolationException.class)
-   public ResponseEntity<ApiErrorResponse> handleIntegrity(DataIntegrityViolationException ex) {
+   public ResponseEntity<ProblemDetail> handleIntegrity(DataIntegrityViolationException ex) {
       log.warn("Нарушение целостности данных: {}", ex.getMostSpecificCause().getMessage());
       return ResponseEntity.status(HttpStatus.CONFLICT)
-            .body(new ApiErrorResponse("CONFLICT", "Конфликт данных", null));
+            .body(Problems.of(HttpStatus.CONFLICT, "CONFLICT", "Конфликт данных"));
    }
 
    @ExceptionHandler(Exception.class)
-   public ResponseEntity<ApiErrorResponse> handleUnexpected(Exception ex) {
+   public ResponseEntity<ProblemDetail> handleUnexpected(Exception ex) {
       log.error("Необработанная ошибка", ex);
       return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-            .body(new ApiErrorResponse("INTERNAL_ERROR", "Внутренняя ошибка сервера", null));
+            .body(Problems.of(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", "Внутренняя ошибка сервера"));
+   }
+
+   /** Ошибки самого Spring MVC (404 маршрута, 405, битый JSON, …): добавляем code по статусу. */
+   @Override
+   protected ResponseEntity<Object> handleExceptionInternal(@NonNull Exception ex, @Nullable Object body,
+                                                            @NonNull HttpHeaders headers,
+                                                            @NonNull HttpStatusCode statusCode,
+                                                            @NonNull WebRequest request) {
+      ResponseEntity<Object> response = super.handleExceptionInternal(ex, body, headers, statusCode, request);
+      if (response != null && response.getBody() instanceof ProblemDetail problem
+            && problem.getProperties() == null) {
+         String code = codeFor(statusCode);
+         ProblemDetail withCode = Problems.of(statusCode, code, detailFor(statusCode));
+         return ResponseEntity.status(statusCode).headers(response.getHeaders()).body(withCode);
+      }
+      return response;
+   }
+
+   private static ProblemDetail validation(List<Problems.FieldError> errors) {
+      String detail = errors.isEmpty() ? "Некорректные данные" : errors.get(0).message();
+      ProblemDetail problem = Problems.of(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", detail);
+      problem.setProperty(Problems.ERRORS, errors);
+      return problem;
+   }
+
+   private static String codeFor(HttpStatusCode status) {
+      return switch (status.value()) {
+         case 404 -> "NOT_FOUND";
+         case 405 -> "METHOD_NOT_ALLOWED";
+         case 406, 415 -> "UNSUPPORTED_MEDIA_TYPE";
+         case 413 -> "PAYLOAD_TOO_LARGE";
+         default -> status.is4xxClientError() ? "BAD_REQUEST" : "INTERNAL_ERROR";
+      };
+   }
+
+   private static String detailFor(HttpStatusCode status) {
+      return switch (status.value()) {
+         case 404 -> "Ресурс не найден";
+         case 405 -> "Метод не поддерживается";
+         case 406, 415 -> "Неподдерживаемый формат";
+         case 413 -> "Слишком большой запрос";
+         default -> status.is4xxClientError() ? "Некорректный запрос" : "Внутренняя ошибка сервера";
+      };
    }
 }

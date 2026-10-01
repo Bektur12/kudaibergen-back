@@ -1,295 +1,541 @@
 package kg.kudaibergen.chat;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
-
+import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
+import java.util.Optional;
 
-import kg.kudaibergen.chat.dto.ChatEvent;
-import kg.kudaibergen.chat.dto.ChatResponse;
-import kg.kudaibergen.chat.dto.MessageResponse;
-import kg.kudaibergen.chat.dto.ReadEvent;
-import kg.kudaibergen.chat.dto.SendMessageRequest;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import kg.kudaibergen.catalog.PartRepository;
+import kg.kudaibergen.catalog.entity.Part;
+import kg.kudaibergen.chat.dto.ChatDto;
+import kg.kudaibergen.master.entity.ServiceRequest;
+import kg.kudaibergen.master.entity.ServiceOffer;
+import kg.kudaibergen.master.entity.Master;
+import kg.kudaibergen.master.MasterRepository;
+import kg.kudaibergen.chat.dto.ChatListAs;
+import kg.kudaibergen.chat.dto.ChatInputs;
+import kg.kudaibergen.chat.dto.ChatListItemDto;
+import kg.kudaibergen.chat.dto.MessageDto;
+import kg.kudaibergen.chat.dto.QuickReplyDto;
+import kg.kudaibergen.chat.dto.UnreadDto;
 import kg.kudaibergen.chat.entity.Chat;
+import kg.kudaibergen.chat.entity.ChatSide;
 import kg.kudaibergen.chat.entity.Message;
-import kg.kudaibergen.chat.realtime.CentrifugoClient;
+import kg.kudaibergen.chat.entity.MessageType;
+import kg.kudaibergen.chat.entity.QuickReply;
+import kg.kudaibergen.chat.entity.SystemEvent;
+import kg.kudaibergen.chat.realtime.CentrifugoTokens;
+import kg.kudaibergen.chat.realtime.ChatChannels;
+import kg.kudaibergen.common.config.AppProperties;
 import kg.kudaibergen.common.error.BadRequestException;
 import kg.kudaibergen.common.error.ForbiddenException;
 import kg.kudaibergen.common.error.NotFoundException;
-import kg.kudaibergen.common.web.PageResponse;
-import kg.kudaibergen.notification.OutboxService;
-import kg.kudaibergen.store.DealAccess;
-import kg.kudaibergen.store.StoreRepository;
-import kg.kudaibergen.store.entity.Store;
-import kg.kudaibergen.user.UserService;
-import kg.kudaibergen.user.entity.User;
+import kg.kudaibergen.common.web.CursorPage;
+import kg.kudaibergen.complaint.ComplaintDto;
+import kg.kudaibergen.complaint.ComplaintService;
+import kg.kudaibergen.complaint.ComplaintType;
+import kg.kudaibergen.request.PartRequestRepository;
+import kg.kudaibergen.request.RequestEvents;
+import kg.kudaibergen.request.entity.PartRequest;
+import kg.kudaibergen.request.entity.RequestReply;
+import kg.kudaibergen.shop.ShopAccess;
+import kg.kudaibergen.shop.ShopMapper;
+import kg.kudaibergen.shop.ShopRepository;
+import kg.kudaibergen.shop.entity.Shop;
+import kg.kudaibergen.user.UserRepository;
+import kg.kudaibergen.user.entity.Lang;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.context.event.EventListener;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
- * Живой чат: REST — для истории, отправки и бизнес-логики, Centrifugo — для live-доставки уже
- * сохранённых событий (см. CentrifugoClient) и presence. Сокет тут только push, ничего не решает
- * сам — если Centrifugo недоступен, чат продолжает работать по REST + пуш-уведомлениям.
+ * Чат покупателя с магазином (ТЗ 11): REST — история, отправка и все правила; Centrifugo — только
+ * живая доставка уже сохранённого (ChatRealtime). Без Centrifugo чат работает на REST и пушах.
  */
 @Service
-public class ChatService implements DealAccess {
+public class ChatService {
+
+   private static final int MAX_WAVEFORM_POINTS = 100;
+   /** Первая страница списка: всё, что раньше «бесконечности». */
+   private static final Instant LIST_START = Instant.parse("9999-12-31T00:00:00Z");
 
    private final ChatRepository chats;
    private final MessageRepository messages;
-   private final StoreRepository stores;
-   private final UserService userService;
-   private final OutboxService outbox;
-   private final ChatMediaStorage mediaStorage;
-   private final CentrifugoClient centrifugo;
+   private final ReplyTemplateRepository templates;
+   private final ChatAccess access;
+   private final ChatView view;
+   private final ChatAttachments media;
+   private final CentrifugoTokens tokens;
+   private final ShopRepository shops;
+   private final ShopAccess shopAccess;
+   private final ShopMapper shopMapper;
+   private final PartRequestRepository requests;
+   private final PartRepository parts;
+   private final UserRepository users;
+   private final ComplaintService complaints;
+   private final ApplicationEventPublisher events;
    private final TransactionTemplate tx;
-   private final ObjectMapper objectMapper;
+   private final ObjectMapper json;
+   private final AppProperties.Media mediaConfig;
+   private final Clock clock;
+   private final ChatProviders providers;
+   private final MasterRepository masters;
 
-   public ChatService(ChatRepository chats, MessageRepository messages, StoreRepository stores,
-                      UserService userService, OutboxService outbox, ChatMediaStorage mediaStorage,
-                      CentrifugoClient centrifugo, TransactionTemplate tx, ObjectMapper objectMapper) {
+   public ChatService(ChatRepository chats, MessageRepository messages, ReplyTemplateRepository templates,
+                      ChatAccess access, ChatView view, ChatAttachments media, CentrifugoTokens tokens,
+                      ShopRepository shops, ShopAccess shopAccess, ShopMapper shopMapper,
+                      PartRequestRepository requests, PartRepository parts, UserRepository users, ComplaintService complaints,
+                      ApplicationEventPublisher events, TransactionTemplate tx, ObjectMapper json,
+                      AppProperties properties, Clock clock, ChatProviders providers, MasterRepository masters) {
       this.chats = chats;
       this.messages = messages;
-      this.stores = stores;
-      this.userService = userService;
-      this.outbox = outbox;
-      this.mediaStorage = mediaStorage;
-      this.centrifugo = centrifugo;
+      this.templates = templates;
+      this.access = access;
+      this.view = view;
+      this.media = media;
+      this.tokens = tokens;
+      this.shops = shops;
+      this.shopAccess = shopAccess;
+      this.shopMapper = shopMapper;
+      this.requests = requests;
+      this.parts = parts;
+      this.users = users;
+      this.complaints = complaints;
+      this.events = events;
       this.tx = tx;
-      this.objectMapper = objectMapper;
+      this.json = json;
+      this.mediaConfig = properties.media();
+      this.clock = clock;
+      this.providers = providers;
+      this.masters = masters;
    }
 
-   /** Чат либо уже есть, либо создаётся — создание чата и есть заключение сделки. */
+   // ─────────────────────── открыть чат ───────────────────────
+
+   /**
+    * «Написать» покупателя (07, 29, 30). Чат с магазином один — из запроса, карточки товара или профиля
+    * открывается тот же (создаётся при первом открытии, бокс увидит его после первого сообщения).
+    * requestId — только проверка, что запрос свой; контекстом чата он становится, когда бокс ответил «Есть».
+    */
    @Transactional
-   public Chat getOrCreate(Long buyerId, Long storeId, Long requestId) {
-      return chats.findByBuyerIdAndStoreId(buyerId, storeId)
-            .orElseGet(() -> {
-               Chat created = chats.save(new Chat(buyerId, storeId, requestId));
-               stores.findById(storeId).ifPresent(Store::incrementDeals);
-               broadcastInboxUpdate(created);
-               return created;
+   public ChatDto open(Long buyerId, ChatInputs.OpenChat input, Lang lang) {
+      if ((input.shopId() == null) == (input.masterId() == null)) {
+         throw new BadRequestException("PROVIDER_REQUIRED", "Укажите магазин или мастера");
+      }
+      if (input.masterId() != null) {
+         return openWithMaster(buyerId, input, lang);
+      }
+      Shop shop = shops.findById(input.shopId()).filter(Shop::isActive)
+            .orElseThrow(() -> new NotFoundException("SHOP_NOT_FOUND", "Магазин не найден"));
+      if (shop.getId().equals(view.shopIdOf(buyerId))) {
+         throw new BadRequestException("SELF_CHAT", "Нельзя написать своему боксу");
+      }
+      if (input.requestId() != null) {
+         requests.findById(input.requestId())
+               .filter(found -> found.getBuyerId().equals(buyerId))
+               .orElseThrow(() -> new NotFoundException("REQUEST_NOT_FOUND", "Запрос не найден"));
+      }
+      Chat chat = chats.findByBuyerIdAndShopId(buyerId, shop.getId())
+            .orElseGet(() -> createChat(buyerId, shop.getId(), input.requestId()));
+      if (input.partId() != null) {
+         attachPart(chat, buyerId, input.partId());
+      }
+      return view.chat(chat, ChatSide.BUYER, lang);
+   }
+
+   /** Чат с мастером — один на пару: из заявки и из профиля мастера открывается тот же. */
+   private ChatDto openWithMaster(Long buyerId, ChatInputs.OpenChat input, Lang lang) {
+      Master master = masters.findById(input.masterId()).filter(Master::isActive)
+            .orElseThrow(() -> new NotFoundException("MASTER_NOT_FOUND", "Мастер не найден"));
+      if (master.getOwnerId().equals(buyerId)) {
+         throw new BadRequestException("SELF_CHAT", "Нельзя написать самому себе");
+      }
+      Chat chat = chats.findByBuyerIdAndMasterId(buyerId, master.getId())
+            .orElseGet(() -> createMasterChat(buyerId, master.getId(), input.serviceRequestId()));
+      return view.chat(chat, ChatSide.BUYER, lang);
+   }
+
+   /**
+    * Мастер ответил «Могу помочь» (39): в чате клиента с мастером (один на пару) — карточка отклика
+    * (REPLY с payload serviceRequestId, offerId, priceFrom, availableAt); заявка становится контекстом чата.
+    * Вызывается в транзакции отклика. Возвращает id чата.
+    */
+   @Transactional(propagation = Propagation.MANDATORY)
+   public Long openForServiceOffer(ServiceRequest request, ServiceOffer offer, Master master, Long authorId) {
+      Chat chat = chats.findByBuyerIdAndMasterId(request.getBuyerId(), master.getId())
+            .orElseGet(() -> createMasterChat(request.getBuyerId(), master.getId(), request.getId()));
+      chat.aboutServiceRequest(request.getId());
+      Map<String, Object> card = new LinkedHashMap<>();
+      card.put("serviceRequestId", request.getId());
+      card.put("offerId", offer.getId());
+      card.put("priceFrom", offer.getPriceFrom());
+      card.put("availableAt", offer.getAvailableAt() == null ? null : offer.getAvailableAt().toString());
+      // о «Могу помочь» клиенту уже пришёл пуш модуля заявок — второй не нужен
+      add(chat, Message.reply(chat.getId(), authorId, offer.getMessage(), card, clock.instant()), false);
+      return chat.getId();
+   }
+
+   private Chat createMasterChat(Long buyerId, Long masterId, Long serviceRequestId) {
+      Instant now = clock.instant();
+      try {
+         return chats.saveAndFlush(Chat.withMaster(buyerId, masterId, serviceRequestId, now));
+      } catch (DataIntegrityViolationException parallel) {
+         return chats.findByBuyerIdAndMasterId(buyerId, masterId).orElseThrow();
+      }
+   }
+
+   /**
+    * Бокс ответил «Есть» (12): в чате покупателя с боксом (один на пару, создаётся, если его нет) —
+    * карточка ответа с requestId; запрос становится контекстом чата. Вызывается в транзакции ответа.
+    * Возвращает id чата.
+    */
+   @Transactional(propagation = Propagation.MANDATORY)
+   public Long openForReply(PartRequest request, RequestReply reply, Long authorId) {
+      Chat chat = chats.findByBuyerIdAndShopId(request.getBuyerId(), reply.getShopId())
+            .orElseGet(() -> createChat(request.getBuyerId(), reply.getShopId(), request.getId()));
+      chat.aboutRequest(request.getId());
+      Map<String, Object> card = new LinkedHashMap<>();
+      card.put("requestId", request.getId());
+      card.put("replyId", reply.getId());
+      card.put("condition", reply.getCondition() == null ? null : reply.getCondition().name());
+      card.put("price", reply.getPrice());
+      card.put("partId", reply.getPartId());
+      // о «Есть» покупателю уже пришёл пуш модуля запросов — второй не нужен
+      add(chat, Message.reply(chat.getId(), authorId, reply.getMessage(), card, clock.instant()), false);
+      return chat.getId();
+   }
+
+   /**
+    * Карточка товара в чате (ТЗ 5.3). Та же карточка подряд второй раз не добавляется — повторное
+    * «Написать» с той же карточки просто открывает чат.
+    */
+   private void attachPart(Chat chat, Long buyerId, Long partId) {
+      Part part = parts.findById(partId)
+            .filter(found -> found.getShopId().equals(chat.getShopId()) && found.isActive())
+            .orElseThrow(() -> new NotFoundException("PART_NOT_FOUND", "Запчасть не найдена"));
+      if (chat.getLastMessageId() != null) {
+         Message last = messages.findById(chat.getLastMessageId()).orElse(null);
+         if (last != null && last.getType() == MessageType.PART && last.getPayload() != null
+               && partId.equals(((Number) last.getPayload().get("partId")).longValue())) {
+            return;
+         }
+      }
+      Map<String, Object> card = new LinkedHashMap<>();
+      card.put("partId", part.getId());
+      card.put("price", part.getPrice());
+      card.put("mediaId", part.getPhotoIds().isEmpty() ? null : part.getPhotoIds().get(0));
+      add(chat, Message.part(chat.getId(), buyerId, part.getTitle(), card, clock.instant()), true);
+   }
+
+   /** Новый чат начинается с плашки «Оплата в боксе при осмотре». Гонку двух созданий ловит UNIQUE. */
+   private Chat createChat(Long buyerId, Long shopId, Long requestId) {
+      Instant now = clock.instant();
+      Chat chat;
+      try {
+         chat = chats.saveAndFlush(new Chat(buyerId, shopId, requestId, now));
+      } catch (DataIntegrityViolationException parallel) {
+         return chats.findByBuyerIdAndShopId(buyerId, shopId).orElseThrow();
+      }
+      // плашка не делает чат «начатым»: last_message остаётся пустым до первого настоящего сообщения
+      messages.save(Message.system(chat.getId(), SystemEvent.PAY_AT_BOX, null, now));
+      return chat;
+   }
+
+   /** Покупатель закрыл запрос с боксом — в их чате плашка «Запрос закрыт». */
+   @EventListener
+   public void onRequestClosed(RequestEvents.Closed event) {
+      if (event.shopId() == null) {
+         return;
+      }
+      PartRequest request = requests.findById(event.requestId()).orElseThrow();
+      chats.findByBuyerIdAndShopId(request.getBuyerId(), event.shopId())
+            .ifPresent(chat -> {
+               Map<String, Object> payload = new LinkedHashMap<>();
+               payload.put("requestId", request.getId());
+               payload.put("stars", event.stars());
+               add(chat, Message.system(chat.getId(), SystemEvent.REQUEST_CLOSED, payload, clock.instant()), false);
             });
    }
 
-   /** Признак сделки для показа телефонов и отзывов (п.8 ТЗ) — есть чат между покупателем и магазином. */
-   @Override
-   @Transactional(readOnly = true)
-   public boolean hasAcceptedDeal(Long buyerId, Long storeId) {
-      return buyerId != null && storeId != null && chats.existsByBuyerIdAndStoreId(buyerId, storeId);
-   }
+   // ─────────────────────── просмотр ───────────────────────
 
+   /** Список чатов (16). as = BUYER — мои чаты покупателя, SHOP — чаты моего бокса, MASTER — мои как мастера. */
    @Transactional(readOnly = true)
-   public List<ChatResponse> list(Long userId) {
-      Long storeId = stores.findByOwnerId(userId).map(Store::getId).orElse(null);
-      List<Chat> found = chats.findForParticipant(userId, storeId);
-      if (found.isEmpty()) {
-         return List.of();
-      }
-      Set<Long> unread = Set.copyOf(messages.findChatIdsWithUnread(
-            found.stream().map(Chat::getId).toList(), userId));
-
-      Map<Long, Long> ownerByStore = new HashMap<>();
-      List<String> inboxChannels = new ArrayList<>();
-      for (Chat chat : found) {
-         Long ownerId = ownerByStore.computeIfAbsent(chat.getStoreId(), this::ownerOf);
-         Long otherUserId = userId.equals(chat.getBuyerId()) ? ownerId : chat.getBuyerId();
-         if (otherUserId != null) {
-            inboxChannels.add(ChatChannels.inbox(otherUserId));
+   public CursorPage<ChatListItemDto> list(Long userId, ChatListAs as, String cursor, Integer limit, Lang lang) {
+      int size = CursorPage.limit(limit);
+      Instant at = LIST_START;
+      long beforeId = Long.MAX_VALUE;
+      if (cursor != null && !cursor.isBlank()) {
+         String[] parts = CursorPage.decode(cursor).split("\\|");
+         try {
+            at = Instant.parse(parts[0]);
+            beforeId = Long.parseLong(parts[1]);
+         } catch (RuntimeException e) {
+            throw new BadRequestException("BAD_CURSOR", "Некорректный курсор");
          }
       }
-      Map<String, Set<Long>> presence = centrifugo.presentUserIdsBatch(inboxChannels);
-
-      return found.stream()
-            .map(chat -> {
-               Long ownerId = ownerByStore.get(chat.getStoreId());
-               Long otherUserId = userId.equals(chat.getBuyerId()) ? ownerId : chat.getBuyerId();
-               boolean online = otherUserId != null
-                     && !presence.getOrDefault(ChatChannels.inbox(otherUserId), Set.of()).isEmpty();
-               return toResponse(chat, unread.contains(chat.getId()), userId, ownerId, online);
-            })
-            .toList();
-   }
-
-   /** Покупатель пишет магазину напрямую с карточки магазина, без запроса/предложения. */
-   @Transactional
-   public ChatResponse startChat(Long buyerId, Long storeId) {
-      Long ownerId = ownerOf(storeId);
-      if (ownerId == null) {
-         throw new NotFoundException("STORE_NOT_FOUND", "Магазин не найден");
+      List<Chat> rows = switch (as) {
+         case SHOP -> chats.findShopPage(shopAccess.requireMember(userId).shop().getId(), at, beforeId, size + 1);
+         case MASTER -> {
+            Long masterId = providers.masterIdOf(userId);
+            if (masterId == null) {
+               throw new NotFoundException("NO_MASTER", "Вы ещё не зарегистрированы как мастер");
+            }
+            yield chats.findMasterPage(masterId, at, beforeId, size + 1);
+         }
+         case BUYER -> chats.findBuyerPage(userId, at, beforeId, size + 1);
+      };
+      boolean more = rows.size() > size;
+      List<Chat> page = more ? rows.subList(0, size) : rows;
+      String next = null;
+      if (more) {
+         Chat last = page.get(page.size() - 1);
+         Instant key = last.getLastMessageAt() == null ? last.getCreatedAt() : last.getLastMessageAt();
+         next = CursorPage.encode(key + "|" + last.getId());
       }
-      if (ownerId.equals(buyerId)) {
-         throw new BadRequestException("SELF_CHAT", "Нельзя написать самому себе");
-      }
-      Chat chat = getOrCreate(buyerId, storeId, null);
-      boolean hasUnread = messages.countUnread(chat.getId(), buyerId) > 0;
-      return toResponse(chat, hasUnread, buyerId);
-   }
-
-   /** Одиночный вызов (не список) — считает online отдельным presence-запросом. */
-   private ChatResponse toResponse(Chat chat, boolean hasUnread, Long viewerId) {
-      Long ownerId = ownerOf(chat.getStoreId());
-      Long otherUserId = viewerId.equals(chat.getBuyerId()) ? ownerId : chat.getBuyerId();
-      boolean online = otherUserId != null && !centrifugo.presentUserIds(ChatChannels.inbox(otherUserId)).isEmpty();
-      return toResponse(chat, hasUnread, viewerId, ownerId, online);
-   }
-
-   private ChatResponse toResponse(Chat chat, boolean hasUnread, Long viewerId, Long ownerId, boolean online) {
-      Long otherUserId = viewerId.equals(chat.getBuyerId()) ? ownerId : chat.getBuyerId();
-      Instant lastSeenAt = online || otherUserId == null ? null : userService.lastSeenAt(otherUserId);
-      String channel = ChatChannels.chat(chat.getId(), chat.getBuyerId(), ownerId);
-      return new ChatResponse(chat.getId(), chat.getRequestId(), chat.getBuyerId(), chat.getStoreId(),
-            stores.findName(chat.getStoreId()), chat.getLastMessage(), chat.getLastMessageAt(), hasUnread,
-            chat.getCreatedAt(), online, lastSeenAt, channel);
+      return new CursorPage<>(view.rows(page, as == ChatListAs.BUYER ? ChatSide.BUYER : ChatSide.SHOP, lang), next);
    }
 
    @Transactional(readOnly = true)
-   public PageResponse<MessageResponse> messages(Long chatId, Long userId, int page, int size) {
-      requireParticipant(chatId, userId);
-      return PageResponse.of(messages.findByChatIdOrderByCreatedAtDesc(chatId, PageRequest.of(page, size)),
-            message -> MessageResponse.of(message, mediaStorage::urlFor));
+   public ChatDto get(Long userId, Long chatId, Lang lang) {
+      ChatAccess.Participant participant = access.require(userId, chatId);
+      return view.chat(participant.chat(), participant.side(), lang);
    }
 
+   /** История: новые первыми; cursor — от самого старого загруженного сообщения вглубь. */
+   @Transactional(readOnly = true)
+   public CursorPage<MessageDto> messages(Long userId, Long chatId, String cursor, Integer limit) {
+      Chat chat = access.require(userId, chatId).chat();
+      int size = CursorPage.limit(limit);
+      long beforeId = cursor == null || cursor.isBlank() ? Long.MAX_VALUE : CursorPage.afterId(cursor);
+      List<Message> rows = messages.findPage(chatId, beforeId, PageRequest.of(0, size + 1));
+      return CursorPage.of(rows, size, message -> String.valueOf(message.getId()),
+            message -> view.message(message, chat));
+   }
+
+   @Transactional(readOnly = true)
+   public UnreadDto unread(Long userId) {
+      Long shopId = view.shopIdOf(userId);
+      Long masterId = providers.masterIdOf(userId);
+      return new UnreadDto(chats.totalUnreadForBuyer(userId), shopId == null ? 0 : chats.totalUnreadForShop(shopId),
+            masterId == null ? 0 : chats.totalUnreadForMaster(masterId));
+   }
+
+   /** Токен подписки на канал чата — только участнику. */
+   @Transactional(readOnly = true)
+   public CentrifugoTokens.Token subscriptionToken(Long userId, Long chatId) {
+      access.require(userId, chatId);
+      return tokens.subscription(userId, ChatChannels.chat(chatId));
+   }
+
+   // ─────────────────────── отправка ───────────────────────
+
+   /** Текст или быстрый ответ. Повтор с тем же clientId возвращает уже сохранённое сообщение. */
    @Transactional
-   public MessageResponse send(Long chatId, Long userId, SendMessageRequest request) {
-      Chat chat = requireParticipant(chatId, userId);
-      Message message = messages.save(new Message(chatId, userId, request.body().trim(), "TEXT"));
-      chat.touch(message.getBody(), message.getCreatedAt());
-      notifyRecipient(chat, userId, message.getBody());
-      MessageResponse response = MessageResponse.of(message, mediaStorage::urlFor);
-      broadcast(chat, response);
-      broadcastInboxUpdate(chat);
-      return response;
+   public MessageDto send(Long userId, Long chatId, ChatInputs.SendMessage input) {
+      ChatAccess.Participant participant = access.requireForUpdate(userId, chatId);
+      Chat chat = participant.chat();
+      Optional<Message> repeated = repeated(chat, input.clientId());
+      if (repeated.isPresent()) {
+         return view.message(repeated.get(), chat);
+      }
+      requireWritable(chat);
+      Instant now = clock.instant();
+      Message message;
+      if (input.quickReply() != null) {
+         message = quick(participant, input.quickReply(), input.clientId(), now);
+      } else {
+         if (input.text() == null || input.text().isBlank()) {
+            throw new BadRequestException("TEXT_REQUIRED", "Сообщение не может быть пустым");
+         }
+         message = Message.text(chatId, participant.side(), userId, input.text().trim(), input.clientId(), now);
+      }
+      add(chat, message, true);
+      return view.message(message, chat);
    }
 
-   /** Загрузка в хранилище идёт вне транзакции: пока файл летит в S3, соединение с БД не занято. */
-   public MessageResponse sendMedia(Long chatId, Long userId, MultipartFile file, String type, String caption,
-                                    Integer durationSeconds, String waveformJson) {
-      requireParticipant(chatId, userId);
-      String waveform = "VOICE".equals(type) ? normalizeWaveform(waveformJson) : null;
-      ChatMediaStorage.Stored stored = mediaStorage.store(file, type);
+   /**
+    * Быстрый ответ своей стороны (ТЗ 11.1). Текст — на языке отправителя, как если бы он написал сам.
+    * ROUTE несёт место бокса для карточки «Маршрут»; ACTION-кнопки сообщением не отправляются.
+    */
+   private Message quick(ChatAccess.Participant participant, QuickReply reply, String clientId, Instant now) {
+      if (reply.side() != participant.side() || reply.kind() != QuickReply.QuickReplyKind.MESSAGE) {
+         throw new BadRequestException("QUICK_REPLY_NOT_ALLOWED", "Этот быстрый ответ здесь недоступен");
+      }
+      Chat chat = participant.chat();
+      Lang lang = users.findById(participant.userId()).map(user -> user.getLang()).orElse(Lang.RU);
+      Map<String, Object> payload = null;
+      if (reply == QuickReply.ROUTE) {
+         if (chat.withMaster()) {
+            throw new BadRequestException("QUICK_REPLY_NOT_ALLOWED", "Этот быстрый ответ здесь недоступен");
+         }
+         Shop shop = shops.findById(chat.getShopId()).orElseThrow();
+         payload = new LinkedHashMap<>();
+         payload.put("location", json.convertValue(shopMapper.location(shop.getContainerId()),
+               new TypeReference<Map<String, Object>>() {
+               }));
+      }
+      return Message.quick(chat.getId(), participant.side(), participant.userId(), reply, reply.label(lang), payload,
+            clientId, now);
+   }
+
+   /**
+    * Фото, голосовое (до 60 секунд) или видео. Файл загружается в хранилище вне транзакции, чтобы
+    * не держать соединение с базой, пока он летит в MinIO.
+    */
+   public MessageDto sendMedia(Long userId, Long chatId, MultipartFile file, MessageType type, String caption,
+                               Integer durationSeconds, String waveformJson, String clientId) {
+      if (!type.isMedia()) {
+         throw new BadRequestException("BAD_MEDIA_TYPE", "Тип вложения: PHOTO, VOICE или VIDEO");
+      }
+      if (type == MessageType.VOICE && durationSeconds != null && durationSeconds > mediaConfig.maxVoiceSeconds()) {
+         throw new BadRequestException("VOICE_TOO_LONG",
+               "Голосовое — не длиннее " + mediaConfig.maxVoiceSeconds() + " секунд");
+      }
+      List<Double> waveform = type == MessageType.VOICE ? waveform(waveformJson) : null;
+      MessageDto existing = tx.execute(status -> {
+         ChatAccess.Participant participant = access.require(userId, chatId);
+         requireWritable(participant.chat());
+         return repeated(participant.chat(), clientId).map(m -> view.message(m, participant.chat())).orElse(null);
+      });
+      if (existing != null) {
+         return existing;
+      }
+      ChatAttachments.Stored stored = media.store(file, type);
       return tx.execute(status -> {
-         Chat chat = requireParticipant(chatId, userId);
-         Message message = messages.save(new Message(chatId, userId, caption == null ? "" : caption.trim(), type,
-               stored.key(), stored.mimeType(), durationSeconds));
-         message.setWaveform(waveform);
-         chat.touch(previewOf(type), message.getCreatedAt());
-         notifyRecipient(chat, userId, previewOf(type));
-         MessageResponse response = MessageResponse.of(message, mediaStorage::urlFor);
-         broadcast(chat, response);
-         broadcastInboxUpdate(chat);
-         return response;
+         ChatAccess.Participant participant = access.requireForUpdate(userId, chatId);
+         Chat chat = participant.chat();
+         Optional<Message> repeated = repeated(chat, clientId);
+         if (repeated.isPresent()) {
+            return view.message(repeated.get(), chat);
+         }
+         requireWritable(chat);
+         String text = caption == null || caption.isBlank() ? null : caption.trim();
+         Message message = Message.media(chatId, participant.side(), userId, type, text, stored.key(),
+               stored.mimeType(), durationSeconds, waveform, clientId, clock.instant());
+         add(chat, message, true);
+         return view.message(message, chat);
       });
    }
 
-   private static final int MAX_WAVEFORM_POINTS = 100;
+   /** Сохранить, сдвинуть «последнее сообщение», продлить жизнь запроса, после коммита — доставить. */
+   private void add(Chat chat, Message message, boolean push) {
+      messages.save(message);
+      if (message.getSide() != ChatSide.SYSTEM) {
+         chat.messageAdded(message);
+      }
+      events.publishEvent(new ChatEvents.MessageAdded(chat.getId(), message.getId(), push));
+   }
 
-   /** Проверяет JSON-массив пиков (<= 100 чисел в диапазоне 0..1) и возвращает его в нормализованном виде. */
-   private String normalizeWaveform(String json) {
-      if (json == null || json.isBlank()) {
+   private Optional<Message> repeated(Chat chat, String clientId) {
+      return clientId == null || clientId.isBlank() ? Optional.empty()
+            : messages.findByChatIdAndClientId(chat.getId(), clientId);
+   }
+
+   private void requireWritable(Chat chat) {
+      if (chat.isBlocked()) {
+         throw new ForbiddenException("CHAT_BLOCKED", "Переписка заблокирована");
+      }
+      if (!providers.active(chat)) {
+         throw new ForbiddenException(chat.withMaster() ? "MASTER_NOT_ACTIVE" : "SHOP_NOT_ACTIVE",
+               chat.withMaster() ? "Мастер не принимает сообщения" : "Магазин не принимает сообщения");
+      }
+   }
+
+   /** JSON-массив до 100 пиков громкости 0..1; пусто — без волны. */
+   private List<Double> waveform(String raw) {
+      if (raw == null || raw.isBlank()) {
          return null;
       }
       List<Double> peaks;
       try {
-         peaks = objectMapper.readValue(json, new TypeReference<List<Double>>() {
+         peaks = json.readValue(raw, new TypeReference<List<Double>>() {
          });
       } catch (Exception e) {
-         throw new BadRequestException("BAD_WAVEFORM", "waveform должен быть JSON-массивом чисел", "waveform");
+         throw new BadRequestException("BAD_WAVEFORM", "waveform — JSON-массив чисел");
       }
-      if (peaks.isEmpty() || peaks.size() > MAX_WAVEFORM_POINTS) {
-         throw new BadRequestException("BAD_WAVEFORM",
-               "waveform: от 1 до %d значений".formatted(MAX_WAVEFORM_POINTS), "waveform");
+      if (peaks.isEmpty() || peaks.size() > MAX_WAVEFORM_POINTS
+            || peaks.stream().anyMatch(peak -> peak == null || peak.isNaN() || peak < 0 || peak > 1)) {
+         throw new BadRequestException("BAD_WAVEFORM", "waveform — от 1 до 100 чисел от 0 до 1");
       }
-      for (Double peak : peaks) {
-         if (peak == null || peak.isNaN() || peak < 0 || peak > 1) {
-            throw new BadRequestException("BAD_WAVEFORM", "Значения waveform должны быть в диапазоне 0..1",
-                  "waveform");
-         }
-      }
-      try {
-         return objectMapper.writeValueAsString(peaks);
-      } catch (Exception e) {
-         throw new BadRequestException("BAD_WAVEFORM", "Некорректный waveform", "waveform");
+      return new ArrayList<>(peaks);
+   }
+
+   // ─────────────────────── прочтение, блокировка, жалоба ───────────────────────
+
+   /** «Прочитано» до сообщения (по умолчанию — до последнего) за всю свою сторону. */
+   @Transactional
+   public void read(Long userId, Long chatId, Long upToMessageId) {
+      ChatAccess.Participant participant = access.requireForUpdate(userId, chatId);
+      Chat chat = participant.chat();
+      long last = chat.getLastMessageId() == null ? 0 : chat.getLastMessageId();
+      long upTo = upToMessageId == null ? last : Math.min(upToMessageId, last);
+      if (chat.read(participant.side(), upTo)) {
+         events.publishEvent(new ChatEvents.Read(chatId, participant.side(), upTo));
       }
    }
 
-   /** Пуш уже сохранённого сообщения обоим участникам чата, кто сейчас подписан на канал. */
-   private void broadcast(Chat chat, MessageResponse message) {
-      String channel = ChatChannels.chat(chat.getId(), chat.getBuyerId(), ownerOf(chat.getStoreId()));
-      centrifugo.publish(channel, ChatEvent.message(message));
-   }
-
-   private String previewOf(String type) {
-      return switch (type) {
-         case "PHOTO" -> "📷 Фото";
-         case "VOICE" -> "🎤 Голосовое сообщение";
-         case "VIDEO" -> "🎥 Видео";
-         default -> "Новое сообщение";
-      };
-   }
-
-   /** Пуш нужен только тому, кто не увидит сообщение живьём — то есть не подписан прямо сейчас
-    * на канал этого чата в Centrifugo (presence на chat:{id}#..., см. ChatChannels). Просто
-    * "онлайн" недостаточно: человек может быть в сети, но сидеть на другом экране. */
-   private void notifyRecipient(Chat chat, Long senderId, String previewText) {
-      Long ownerId = ownerOf(chat.getStoreId());
-      Long recipientId = senderId.equals(chat.getBuyerId()) ? ownerId : chat.getBuyerId();
-      String channel = ChatChannels.chat(chat.getId(), chat.getBuyerId(), ownerId);
-      if (centrifugo.presentUserIds(channel).contains(recipientId)) {
-         return;
-      }
-      User sender = userService.getRequired(senderId);
-      outbox.enqueueNewMessage(recipientId, chat.getId(),
-            sender.getName() == null ? "Новое сообщение" : sender.getName(), previewText);
+   /** «Заблокировать собеседника»: писать не может никто, пока блокирующая сторона не снимет блок. */
+   @Transactional
+   public ChatDto block(Long userId, Long chatId, boolean blocked, Lang lang) {
+      ChatAccess.Participant participant = access.requireForUpdate(userId, chatId);
+      participant.chat().setBlocked(participant.side(), blocked);
+      events.publishEvent(new ChatEvents.Changed(chatId));
+      return view.chat(participant.chat(), participant.side(), lang);
    }
 
    @Transactional
-   public void markRead(Long chatId, Long userId) {
-      Chat chat = requireParticipant(chatId, userId);
-      Instant now = Instant.now();
-      messages.markRead(chatId, userId, now);
-      String channel = ChatChannels.chat(chat.getId(), chat.getBuyerId(), ownerOf(chat.getStoreId()));
-      centrifugo.publish(channel, ChatEvent.read(new ReadEvent(userId, now)));
-      broadcastInboxUpdate(chat);
+   public ComplaintDto complain(Long userId, Long chatId, String text) {
+      access.require(userId, chatId);
+      return complaints.create(userId, ComplaintType.CHAT, chatId, text);
    }
 
-   /** Участник чата — покупатель или владелец магазина. Остальным доступа нет. */
-   private Chat requireParticipant(Long chatId, Long userId) {
-      Chat chat = chats.findById(chatId)
-            .orElseThrow(() -> new NotFoundException("CHAT_NOT_FOUND", "Чат не найден"));
-      boolean buyer = chat.getBuyerId().equals(userId);
-      boolean seller = userId.equals(ownerOf(chat.getStoreId()));
-      if (!buyer && !seller) {
-         throw new ForbiddenException("CHAT_FORBIDDEN", "Чат принадлежит другим участникам");
-      }
-      return chat;
-   }
-
-   private Long ownerOf(Long storeId) {
-      return stores.findOwnerUserIds(List.of(storeId)).stream().findFirst().orElse(null);
-   }
+   // ─────────────────────── быстрые ответы ───────────────────────
 
    /**
-    * Живой инбокс: пушит актуальную строку чата обеим сторонам в их личный канал inbox:{id}#{id}
-    * (тот же формат, что и GET /chats, без нового DTO). Нужно, чтобы список чатов обновлялся сам,
-    * без pull-to-refresh, даже если конкретный чат не открыт.
+    * Кнопки над полем ввода (ТЗ 11.1). Покупателю — «Как пройти к боксу» и, пока запрос открыт,
+    * «Купил — закрыть запрос». Продавцу — «Отложил для вас», «Как пройти», «Продано» и свои шаблоны бокса.
     */
-   private void broadcastInboxUpdate(Chat chat) {
-      Long ownerId = ownerOf(chat.getStoreId());
-      pushInboxRow(chat, chat.getBuyerId());
-      if (ownerId != null) {
-         pushInboxRow(chat, ownerId);
+   @Transactional(readOnly = true)
+   public List<QuickReplyDto> quickReplies(Long userId, Long chatId, Lang lang) {
+      ChatAccess.Participant participant = access.require(userId, chatId);
+      Chat chat = participant.chat();
+      List<QuickReplyDto> result = new ArrayList<>();
+      if (participant.side() == ChatSide.BUYER && chat.withMaster()) {
+         return result;
       }
+      if (participant.side() == ChatSide.BUYER) {
+         result.add(quick(QuickReply.ROUTE_TO_BOX, lang));
+         boolean requestOpen = chat.getRequestId() != null
+               && requests.findById(chat.getRequestId()).map(PartRequest::isOpen).orElse(false);
+         if (requestOpen) {
+            result.add(quick(QuickReply.CLOSE_REQUEST, lang));
+         }
+         return result;
+      }
+      if (chat.withMaster()) {
+         return result;
+      }
+      result.add(quick(QuickReply.RESERVED, lang));
+      result.add(quick(QuickReply.ROUTE, lang));
+      result.add(quick(QuickReply.SOLD, lang));
+      templates.findByShopIdOrderBySortOrderAscIdAsc(chat.getShopId()).forEach(template ->
+            result.add(new QuickReplyDto(null, QuickReply.QuickReplyKind.MESSAGE, template.getId(), template.getText())));
+      return result;
    }
 
-   private void pushInboxRow(Chat chat, Long viewerId) {
-      boolean hasUnread = messages.countUnread(chat.getId(), viewerId) > 0;
-      centrifugo.publish(ChatChannels.inbox(viewerId), toResponse(chat, hasUnread, viewerId));
+   private static QuickReplyDto quick(QuickReply reply, Lang lang) {
+      return new QuickReplyDto(reply, reply.kind(), null, reply.label(lang));
    }
 }

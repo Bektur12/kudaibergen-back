@@ -9,6 +9,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 
 @Entity
@@ -19,34 +20,85 @@ public class User {
    @GeneratedValue(strategy = GenerationType.IDENTITY)
    private Long id;
 
-   @Column(nullable = false, unique = true, length = 20)
+   @Column(nullable = false, unique = true, length = 16)
    private String phone;
 
    @Column(length = 120)
    private String name;
 
-   @Enumerated(EnumType.STRING)
-   @Column(nullable = false, length = 40)
-   private UserRole role;
+   @Column(name = "avatar_media_id")
+   private Long avatarMediaId;
 
-   @Column(nullable = false, length = 80)
-   private String city = "Бишкек";
+   @Enumerated(EnumType.STRING)
+   @Column(nullable = false, length = 10)
+   private UserRole role = UserRole.BUYER;
+
+   @Enumerated(EnumType.STRING)
+   @Column(nullable = false, length = 2)
+   private Lang lang = Lang.RU;
 
    @Column(name = "is_blocked", nullable = false)
    private boolean blocked;
 
-   @Column(name = "created_at", nullable = false, updatable = false)
-   private Instant createdAt = Instant.now();
+   @Column(name = "blocked_at")
+   private Instant blockedAt;
+
+   @Column(name = "blocked_reason", length = 300)
+   private String blockedReason;
+
+   @Column(name = "onboarded_at")
+   private Instant onboardedAt;
 
    @Column(name = "last_seen_at")
    private Instant lastSeenAt;
 
+   @Column(name = "deletion_requested_at")
+   private Instant deletionRequestedAt;
+
+   @Column(name = "created_at", nullable = false, updatable = false)
+   private Instant createdAt = Instant.now();
+
+   @Column(name = "updated_at", nullable = false)
+   private Instant updatedAt = Instant.now();
+
    protected User() {
    }
 
-   public User(String phone, UserRole role) {
+   public User(String phone, Lang lang) {
       this.phone = phone;
+      this.lang = lang;
+   }
+
+   @PreUpdate
+   void touch() {
+      updatedAt = Instant.now();
+   }
+
+   /** Экран 03 пройден — роль выбрана хотя бы раз. */
+   public boolean isOnboarded() {
+      return onboardedAt != null;
+   }
+
+   /** Выбор режима; первый выбор завершает онбординг. */
+   public void switchRole(UserRole role) {
       this.role = role;
+      if (onboardedAt == null) {
+         onboardedAt = Instant.now();
+      }
+   }
+
+   /** Удаление подтверждено по SMS: через 30 дней данные сотрёт джоба. */
+   public void requestDeletion() {
+      deletionRequestedAt = Instant.now();
+   }
+
+   /** Вход в течение 30 дней после запроса на удаление отменяет его. */
+   public boolean cancelDeletion() {
+      if (deletionRequestedAt == null) {
+         return false;
+      }
+      deletionRequestedAt = null;
+      return true;
    }
 
    public Long getId() {
@@ -65,20 +117,24 @@ public class User {
       this.name = name;
    }
 
+   public Long getAvatarMediaId() {
+      return avatarMediaId;
+   }
+
+   public void setAvatarMediaId(Long avatarMediaId) {
+      this.avatarMediaId = avatarMediaId;
+   }
+
    public UserRole getRole() {
       return role;
    }
 
-   public void setRole(UserRole role) {
-      this.role = role;
+   public Lang getLang() {
+      return lang;
    }
 
-   public String getCity() {
-      return city;
-   }
-
-   public void setCity(String city) {
-      this.city = city;
+   public void setLang(Lang lang) {
+      this.lang = lang;
    }
 
    public boolean isBlocked() {
@@ -89,15 +145,44 @@ public class User {
       this.blocked = blocked;
    }
 
-   public Instant getCreatedAt() {
-      return createdAt;
+   /** Блокировка администрацией: не входит, его магазин и профиль мастера не получают запросов. */
+   public void block(String reason) {
+      this.blocked = true;
+      this.blockedAt = Instant.now();
+      this.blockedReason = reason;
+   }
+
+   public void unblock() {
+      this.blocked = false;
+      this.blockedAt = null;
+      this.blockedReason = null;
+   }
+
+   public Instant getBlockedAt() {
+      return blockedAt;
+   }
+
+   public String getBlockedReason() {
+      return blockedReason;
+   }
+
+   public Instant getOnboardedAt() {
+      return onboardedAt;
    }
 
    public Instant getLastSeenAt() {
       return lastSeenAt;
    }
 
-   public void setLastSeenAt(Instant lastSeenAt) {
-      this.lastSeenAt = lastSeenAt;
+   public Instant getDeletionRequestedAt() {
+      return deletionRequestedAt;
+   }
+
+   public Instant getCreatedAt() {
+      return createdAt;
+   }
+
+   public Instant getUpdatedAt() {
+      return updatedAt;
    }
 }

@@ -1,6 +1,15 @@
 package kg.kudaibergen.user.dto;
 
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
+import kg.kudaibergen.user.entity.Lang;
 
-public record UpdateMeRequest(@Size(max = 120) String name, @Size(max = 80) String city) {
+/** Частичное обновление: null — поле не меняется. */
+public record UpdateMeRequest(
+      @Size(min = 1, max = 120, message = "Имя от 1 до 120 символов")
+      @Pattern(regexp = ".*\\S.*", message = "Имя не может быть пустым")
+      String name,
+      Lang lang,
+      /** Фото из POST /media/photos (purpose AVATAR); убрать — DELETE /me/avatar. */
+      Long avatarMediaId) {
 }

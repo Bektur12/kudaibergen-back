@@ -1,9 +1,11 @@
 package kg.kudaibergen.request.entity;
 
-/** Статус запроса. В БД — нативный enum request_status. */
+/**
+ * ACTIVE — продавцы видят и отвечают до expiresAt; EXPIRED — время вышло, покупатель может продлить
+ * или расширить адресатов; CLOSED — покупатель закрыл («Купил» или вручную).
+ */
 public enum RequestStatus {
    ACTIVE,
-   COMPLETED,
    EXPIRED,
-   CANCELLED
+   CLOSED
 }

@@ -1,14 +1,21 @@
 package kg.kudaibergen.chat.entity;
 
 import java.time.Instant;
+import java.util.List;
+import java.util.Map;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
+/** Сообщение чата. media_key — ключ в хранилище, URL клиенту собирает сервер при выдаче. */
 @Entity
 @Table(name = "messages")
 public class Message {
@@ -17,61 +24,116 @@ public class Message {
    @GeneratedValue(strategy = GenerationType.IDENTITY)
    private Long id;
 
-   @Column(name = "chat_id", nullable = false)
+   @Column(name = "chat_id", nullable = false, updatable = false)
    private Long chatId;
 
-   @Column(name = "sender_id", nullable = false)
+   @Enumerated(EnumType.STRING)
+   @Column(nullable = false, length = 6, updatable = false)
+   private ChatSide side;
+
+   @Column(name = "sender_id", updatable = false)
    private Long senderId;
 
-   @Column(nullable = false, columnDefinition = "text")
-   private String body;
+   @Enumerated(EnumType.STRING)
+   @Column(nullable = false, length = 8, updatable = false)
+   private MessageType type;
 
-   @Column(nullable = false, length = 10)
-   private String type = "TEXT";
+   @Column(length = 4000, updatable = false)
+   private String text;
 
-   @Column(name = "media_url")
-   private String mediaUrl;
+   @Column(length = 20, updatable = false)
+   private String code;
 
-   @Column(name = "mime_type", length = 100)
+   @JdbcTypeCode(SqlTypes.JSON)
+   @Column(updatable = false)
+   private Map<String, Object> payload;
+
+   @Column(name = "media_key", length = 300, updatable = false)
+   private String mediaKey;
+
+   @Column(name = "mime_type", length = 100, updatable = false)
    private String mimeType;
 
-   @Column(name = "duration_seconds")
+   @Column(name = "duration_seconds", updatable = false)
    private Integer durationSeconds;
 
-   /** JSON-массив пиков громкости 0..1, только для VOICE. */
-   @Column(columnDefinition = "text")
-   private String waveform;
+   @JdbcTypeCode(SqlTypes.JSON)
+   @Column(updatable = false)
+   private List<Double> waveform;
 
-   @Column(name = "read_at")
-   private Instant readAt;
+   @Column(name = "client_id", length = 64, updatable = false)
+   private String clientId;
 
    @Column(name = "created_at", nullable = false, updatable = false)
-   private Instant createdAt = Instant.now();
+   private Instant createdAt;
+
+   /** Скрыто администрацией (модерация). Пишет только админка, JPA поле не меняет. */
+   @Column(name = "hidden_by_admin", insertable = false, updatable = false)
+   private boolean hiddenByAdmin;
+
+   @Column(name = "hidden_reason", insertable = false, updatable = false)
+   private String hiddenReason;
 
    protected Message() {
    }
 
-   public Message(Long chatId, Long senderId, String body, String type) {
-      this(chatId, senderId, body, type, null, null, null);
-   }
-
-   public Message(Long chatId, Long senderId, String body, String type, String mediaUrl, String mimeType,
-                  Integer durationSeconds) {
+   private Message(Long chatId, ChatSide side, Long senderId, MessageType type, String clientId, Instant now) {
       this.chatId = chatId;
+      this.side = side;
       this.senderId = senderId;
-      this.body = body;
-      this.type = type == null ? "TEXT" : type;
-      this.mediaUrl = mediaUrl;
-      this.mimeType = mimeType;
-      this.durationSeconds = durationSeconds;
+      this.type = type;
+      this.clientId = clientId;
+      this.createdAt = now;
    }
 
-   public void setWaveform(String waveform) {
-      this.waveform = waveform;
+   public static Message text(Long chatId, ChatSide side, Long senderId, String text, String clientId, Instant now) {
+      Message message = new Message(chatId, side, senderId, MessageType.TEXT, clientId, now);
+      message.text = text;
+      return message;
    }
 
-   public String getWaveform() {
-      return waveform;
+   public static Message media(Long chatId, ChatSide side, Long senderId, MessageType type, String caption,
+                               String mediaKey, String mimeType, Integer durationSeconds, List<Double> waveform,
+                               String clientId, Instant now) {
+      Message message = new Message(chatId, side, senderId, type, clientId, now);
+      message.text = caption;
+      message.mediaKey = mediaKey;
+      message.mimeType = mimeType;
+      message.durationSeconds = durationSeconds;
+      message.waveform = waveform;
+      return message;
+   }
+
+   public static Message quick(Long chatId, ChatSide side, Long senderId, QuickReply reply, String text,
+                               Map<String, Object> payload, String clientId, Instant now) {
+      Message message = new Message(chatId, side, senderId, MessageType.QUICK, clientId, now);
+      message.code = reply.name();
+      message.text = text;
+      message.payload = payload;
+      return message;
+   }
+
+   /** Карточка ответа «Есть» от имени бокса — первое сообщение чата по запросу. */
+   public static Message reply(Long chatId, Long senderId, String text, Map<String, Object> payload, Instant now) {
+      Message message = new Message(chatId, ChatSide.SHOP, senderId, MessageType.REPLY, null, now);
+      message.text = text;
+      message.payload = payload;
+      return message;
+   }
+
+   /** Карточка запчасти от покупателя: «Написать» с карточки (ТЗ 5.3). text — название товара. */
+   public static Message part(Long chatId, Long senderId, String title, Map<String, Object> payload, Instant now) {
+      Message message = new Message(chatId, ChatSide.BUYER, senderId, MessageType.PART, null, now);
+      message.text = title;
+      message.payload = payload;
+      return message;
+   }
+
+   public static Message system(Long chatId, SystemEvent event, Map<String, Object> payload, Instant now) {
+      Message message = new Message(chatId, ChatSide.SYSTEM, null, MessageType.SYSTEM, null, now);
+      message.code = event.name();
+      message.payload = payload;
+      return message;
    }
 
    public Long getId() {
@@ -82,20 +144,32 @@ public class Message {
       return chatId;
    }
 
+   public ChatSide getSide() {
+      return side;
+   }
+
    public Long getSenderId() {
       return senderId;
    }
 
-   public String getBody() {
-      return body;
-   }
-
-   public String getType() {
+   public MessageType getType() {
       return type;
    }
 
-   public String getMediaUrl() {
-      return mediaUrl;
+   public String getText() {
+      return text;
+   }
+
+   public String getCode() {
+      return code;
+   }
+
+   public Map<String, Object> getPayload() {
+      return payload;
+   }
+
+   public String getMediaKey() {
+      return mediaKey;
    }
 
    public String getMimeType() {
@@ -106,11 +180,23 @@ public class Message {
       return durationSeconds;
    }
 
-   public Instant getReadAt() {
-      return readAt;
+   public List<Double> getWaveform() {
+      return waveform;
+   }
+
+   public String getClientId() {
+      return clientId;
    }
 
    public Instant getCreatedAt() {
       return createdAt;
+   }
+
+   public boolean isHiddenByAdmin() {
+      return hiddenByAdmin;
+   }
+
+   public String getHiddenReason() {
+      return hiddenReason;
    }
 }

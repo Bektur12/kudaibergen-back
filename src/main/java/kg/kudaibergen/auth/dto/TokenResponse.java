@@ -1,7 +1,8 @@
 package kg.kudaibergen.auth.dto;
 
-import kg.kudaibergen.user.entity.UserRole;
+import kg.kudaibergen.user.dto.MeResponse;
 
-public record TokenResponse(String accessToken, String refreshToken, long expiresInSeconds,
-                            boolean isNewUser, UserRole role) {
+/** isNewUser = роль ещё не выбрана: клиент ведёт на экран 03. */
+public record TokenResponse(String accessToken, String refreshToken, long expiresIn, boolean isNewUser,
+                            MeResponse user) {
 }
