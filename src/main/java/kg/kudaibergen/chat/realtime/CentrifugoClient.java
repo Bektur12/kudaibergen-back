@@ -7,9 +7,11 @@ import java.util.Map;
 import java.util.Set;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import kg.kudaibergen.common.config.AppProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
@@ -26,11 +28,19 @@ public class CentrifugoClient {
 
    private final RestClient rest;
 
-   public CentrifugoClient(AppProperties properties) {
+   /**
+    * События сериализуются тем же ObjectMapper, что и ответы REST: даты — ISO-строками («2026-10-01T05:00:00Z»,
+    * «09:00»), а не числами и массивами, как у RestClient по умолчанию.
+    */
+   public CentrifugoClient(AppProperties properties, ObjectMapper objectMapper) {
       AppProperties.Centrifugo config = properties.centrifugo();
       this.rest = RestClient.builder()
             .baseUrl(config.apiUrl())
             .defaultHeader("X-API-Key", config.apiKey())
+            .messageConverters(converters -> {
+               converters.removeIf(converter -> converter instanceof MappingJackson2HttpMessageConverter);
+               converters.add(new MappingJackson2HttpMessageConverter(objectMapper));
+            })
             .build();
    }
 
