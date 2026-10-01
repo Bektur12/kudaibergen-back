@@ -63,6 +63,8 @@ VITE_USE_MOCKS=false
   - При загрузке страницы сразу вызывай `POST /admin/auth/refresh`. На 401 один раз делай refresh и повторяй
     запрос, снова 401 — экран входа.
   - Это уже сделано в `authFetch`/`session.ts`, не ломай.
+- **Лимит входа** считает только неверные пароли. `OTP_COOLDOWN` на `login` значит «пароль верный, код уже
+  отправлен»: переходи к вводу кода с отсчётом `retryAfter`.
 - **Вход:**
   - `POST /admin/auth/login {phone, password}`, затем `POST /admin/auth/verify {phone, code}`;
   - «Задать пароль»: `POST /admin/auth/password/code {phone}`, затем `POST /admin/auth/password {phone, code, password}`;
@@ -118,7 +120,7 @@ VITE_USE_MOCKS=false
 | график по дням | `GET /admin/dashboard/requests-by-day?range=D14\|D30\|QUARTER` → `{date, requests, withHave, serviceRequests}[]` |
 | «Без ответа по маркам» | `GET /admin/dashboard/unanswered-by-brand?period=WEEK\|MONTH`. `hint.text` выводи как есть. Кнопка «Сделать рассылку» открывает создание рассылки с `audience=SELLERS` и `brandIds=hint.broadcastBrandIds` |
 | «Чаще всего ищут» | `GET /admin/dashboard/top-searched?period=WEEK\|MONTH` |
-| «Ждут действий» | `GET /admin/dashboard/pending` → `shops`, `masters`, `complaints`, `disputes`, `latest[{kind, id, title, phone, createdAt}]` |
+| «Ждут действий» | `GET /admin/dashboard/pending` → `shops`, `masters`, `complaints`, `disputes`, `latest[{kind, id, title, phone, createdAt}]`; `title` — готовый текст, словарём не переводить |
 | — | `POST /admin/dashboard/refresh` — кнопка «Обновить», затем инвалидируй все запросы сводки |
 | `GET /admin/dashboard/export.xlsx` | = |
 
@@ -129,7 +131,7 @@ VITE_USE_MOCKS=false
 | `GET /admin/market/map` | = , но ответ — `{current, published, draft?}`. `current` — шапка «версия N · опубликована …». Редактор стартует с `draft.data`, а если черновика нет — с `published`. У `draft` есть `outdated`, `valid`, `error` — покажи их |
 | `PUT /admin/market/map/draft` | = (схема с ошибкой тоже сохраняется) |
 | — | `DELETE /admin/market/map/draft` — «Сбросить черновик» |
-| `POST /admin/market/map/publish` | = ; 409 `NO_DRAFT`, 400 `BAD_MAP` |
+| `POST /admin/market/map/publish` | = , тело необязательно: `{comment}` — поле «Что изменилось» для журнала; 409 `NO_DRAFT`, 400 `BAD_MAP`. У улиц `name`/`labelX`/`labelY` бывают `null` — рисуй полигон без подписи |
 | список рядов | `GET /admin/market/rows?includeInactive=` → счётчики `containers`, `withShop`, `free`, `disabled`, `bySide`; `counts` по рынку |
 | `GET /admin/market/rows/{id}` | = ; сетка мест по сторонам: номер, позиция, арендатор, `shop`, `incoming`, QR |
 | `POST /admin/market/rows/{id}/containers` | **два разных действия:** `PUT /admin/market/rows/{id}/containers {counts}` — число мест по сторонам; `POST /admin/market/containers {rowId, side, number, posInRow?, tenantName?, tenantPhone?}` — одно новое место (409 `CONTAINER_EXISTS`, 400 `WRONG_SIDE`) |
@@ -168,7 +170,7 @@ VITE_USE_MOCKS=false
 | — | `PUT /admin/dictionaries/brands/order {ids}` — drag-and-drop |
 | `POST /admin/brands/{id}/logo/presign` + `PUT …/logo` | **presign нет.** `POST /admin/media/photos` (multipart `file`) → `{id, …}`, затем `PUT /admin/dictionaries/brands/{id}/logo {mediaId}`; `DELETE …/logo` убирает лого. Прозрачный фон станет белым — предупреди в подсказке |
 | `GET/POST /admin/brands/{id}/models` | `GET/POST /admin/dictionaries/brands/{brandId}/models` |
-| `PATCH/DELETE /admin/models/{id}` | `/admin/dictionaries/models/{id}`; `displayName: ""` стирает подпись |
+| `PATCH/DELETE /admin/models/{id}` | `/admin/dictionaries/models/{id}`; `generation: ""` и `displayName: ""` стирают значение, `null` — не менять |
 | `GET /admin/service-types`, `PUT …/order`, `PATCH/DELETE …/{code}` | `/admin/dictionaries/service-types…`; порядок — `PUT …/order {codes}` (все коды). Поля панели: `nameRu`, `nameKg`, `icon`, `needsLocation`, `urgent`, `defaultDuration` (`MIN_15\|MIN_30\|HOUR_1\|HOUR_3`), `defaultRadiusKm`, `active`; в списке ещё `mastersCount`, `requests30d` |
 | `GET/POST/PATCH/DELETE /admin/dictionaries/{kind}[/{id}]` | отдельные пути по видам: `/admin/dictionaries/categories` (+ `PUT order {ids}`), `/admin/dictionaries/synonyms` (POST `{term, synonym, bidirectional}` возвращает **список** созданных пар; изменения нет — удали и создай заново), `/admin/dictionaries/hints` (`categoryId = 0` убирает категорию) |
 
@@ -218,9 +220,9 @@ VITE_USE_MOCKS=false
 | --- | --- |
 | `GET /admin/users` | = , `?role=ALL\|BUYER\|SELLER\|MASTER\|BLOCKED&q=&cursor=`; `counts: {all, buyers, sellers, masters, blocked}` |
 | `GET /admin/users/{id}` | = ; гараж, бокс с ролью, профиль мастера, последние запросы и заявки, жалобы, санкции |
-| `POST …/block` | = , `{reason}`; 409 `ALREADY_BLOCKED`, `SELF_BLOCK` |
+| `POST …/block` | = , `{reason}`; 409 `ALREADY_BLOCKED`, `SELF_BLOCK`, `STAFF_BLOCK` (сотрудник админки — отключают в «Сотрудниках») |
 | `POST …/unblock` | = |
-| — | `POST /admin/users/{id}/message {text}` — кнопка «Написать» |
+| — | `POST /admin/users/{id}/message {text}` → `{recipients}` — кнопка «Написать» |
 
 ### Журнал — `AUDIT_VIEW`
 

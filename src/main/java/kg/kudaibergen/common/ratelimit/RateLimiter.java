@@ -2,6 +2,7 @@ package kg.kudaibergen.common.ratelimit;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 import kg.kudaibergen.common.error.RateLimitException;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -42,6 +43,18 @@ public class RateLimiter {
       if (count > limit) {
          long ttlMillis = Math.max(((Number) result.get(1)).longValue(), 1000);
          throw new RateLimitException(code, message, (ttlMillis + 999) / 1000);
+      }
+   }
+
+   /**
+    * Проверка без счёта: лимит в окне уже исчерпан — 429. Вместе с {@link #hit} на неудаче даёт лимит
+    * только неудачных попыток: удачные не тратят его, а после исчерпания не проходит и верная попытка.
+    */
+   public void check(String key, int limit, String code, String message) {
+      String value = redis.opsForValue().get(PREFIX + key);
+      if (value != null && Long.parseLong(value) >= limit) {
+         Long ttlMillis = redis.getExpire(PREFIX + key, TimeUnit.MILLISECONDS);
+         throw new RateLimitException(code, message, (Math.max(ttlMillis == null ? 0 : ttlMillis, 1000) + 999) / 1000);
       }
    }
 }

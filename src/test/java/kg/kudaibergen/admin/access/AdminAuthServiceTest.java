@@ -33,6 +33,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
@@ -52,6 +53,7 @@ class AdminAuthServiceTest {
    private OtpService otp;
    private SmsProvider sms;
    private RefreshTokenService refreshTokens;
+   private RateLimiter rateLimiter;
    private AdminAuthService service;
    private User user;
    private AdminMember member;
@@ -64,6 +66,7 @@ class AdminAuthServiceTest {
       otp = mock(OtpService.class);
       sms = mock(SmsProvider.class);
       refreshTokens = mock(RefreshTokenService.class);
+      rateLimiter = mock(RateLimiter.class);
       JwtService jwt = mock(JwtService.class);
       AdminProfiles profiles = mock(AdminProfiles.class);
       when(otp.codeTtl()).thenReturn(Duration.ofMinutes(2));
@@ -89,7 +92,7 @@ class AdminAuthServiceTest {
             Duration.ofSeconds(42), 5, Duration.ofMinutes(15), 5, 20, Duration.ofHours(1), "x", true, ""),
             null, null, null, null, null, null);
       service = new AdminAuthService(members, users, access, profiles, otp, sms, jwt, refreshTokens,
-            mock(RateLimiter.class), mock(AuditLog.class), config, properties);
+            rateLimiter, mock(AuditLog.class), config, properties);
    }
 
    @Test
@@ -99,6 +102,17 @@ class AdminAuthServiceTest {
       verify(otp).issue(OtpPurpose.ADMIN_LOGIN, PHONE, "10.0.0.1");
       verify(sms).send(eq(PHONE), contains("4321"));
       assertThat(sent.debugCode()).isEqualTo("4321");
+   }
+
+   @Test
+   void лимитВходаТратятТолькоНеверныеПароли() {
+      service.login(new AdminLoginRequest(PHONE, PASSWORD), "10.0.0.1");
+      verify(rateLimiter).check(eq("admin-login-fail:phone:" + PHONE), eq(10), anyString(), anyString());
+      verify(rateLimiter, never()).hit(anyString(), anyInt(), any(), anyString(), anyString());
+
+      assertBadCredentials(new AdminLoginRequest(PHONE, "wrong-password-1"));
+      verify(rateLimiter).hit(eq("admin-login-fail:phone:" + PHONE), eq(10), any(), anyString(), anyString());
+      verify(rateLimiter).hit(eq("admin-login-fail:ip:10.0.0.1"), eq(30), any(), anyString(), anyString());
    }
 
    @Test

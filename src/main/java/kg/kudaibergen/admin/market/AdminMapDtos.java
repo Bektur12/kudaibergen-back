@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
+import jakarta.validation.constraints.Size;
 import kg.kudaibergen.admin.access.MaskedPhone;
 import kg.kudaibergen.market.admin.AdminMarketDtos.MapUploadRequest;
 import kg.kudaibergen.market.entity.RowType;
@@ -31,6 +32,10 @@ public final class AdminMapDtos {
    }
 
    /** current — что видят приложения; published — она же в формате загрузки (начать черновик); draft — если есть. */
+   /** Комментарий к публикации — в журнал («добавлен ряд 31»). */
+   public record PublishMapRequest(@Nullable @Size(max = 1000) String comment) {
+   }
+
    public record AdminMapDto(MapVersionInfo current, MapUploadRequest published, @Nullable MapDraftDto draft) {
    }
 

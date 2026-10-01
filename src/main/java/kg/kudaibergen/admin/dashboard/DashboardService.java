@@ -22,6 +22,7 @@ import kg.kudaibergen.admin.dashboard.DashboardDtos.DayPoint;
 import kg.kudaibergen.admin.dashboard.DashboardDtos.KpiDto;
 import kg.kudaibergen.admin.dashboard.DashboardDtos.PendingDto;
 import kg.kudaibergen.admin.dashboard.DashboardDtos.PendingItem;
+import kg.kudaibergen.admin.moderation.ComplaintLabels;
 import kg.kudaibergen.admin.dashboard.DashboardDtos.RequestsByDayDto;
 import kg.kudaibergen.admin.dashboard.DashboardDtos.SearchedItem;
 import kg.kudaibergen.admin.dashboard.DashboardDtos.TopSearchedDto;
@@ -239,7 +240,7 @@ public class DashboardService {
                (select 'MASTER', m.id, m.name, u.phone, m.created_at from masters m join users u on u.id = m.owner_id
                  where m.status = 'PENDING_VERIFICATION' order by m.created_at desc limit 5)
                union all
-               (select 'COMPLAINT', c.id, c.type || ' · ' || c.reason, null, c.created_at from complaints c
+               (select 'COMPLAINT', c.id, c.type || '|' || c.reason, null, c.created_at from complaints c
                  where c.status = 'OPEN' and c.type <> 'CONTAINER_CLAIM' order by c.created_at desc limit 5)
                union all
                (select 'DISPUTE', d.id, r.label || ' · ' || k.number, null, d.created_at from container_disputes d
@@ -248,8 +249,19 @@ public class DashboardService {
                order by created_at desc limit 10""", none, (rs, n) -> new PendingItem(rs.getString("kind"),
                rs.getLong("id"), rs.getString("title"), rs.getString("phone"),
                rs.getTimestamp("created_at").toInstant()));
+         latest = latest.stream().map(DashboardService::readable).toList();
          return new PendingDto(nz(shops), nz(masters), nz(complaints), nz(disputes), latest, clock.instant());
       });
+   }
+
+   /** У жалобы title — готовый текст «Чат · Спам / мошенничество», а не коды. */
+   private static PendingItem readable(PendingItem item) {
+      if (!"COMPLAINT".equals(item.kind()) || item.title() == null) {
+         return item;
+      }
+      String[] codes = item.title().split("\\|", 2);
+      return new PendingItem(item.kind(), item.id(), ComplaintLabels.title(codes[0], codes.length > 1 ? codes[1] : null),
+            item.phone(), item.createdAt());
    }
 
    /** Сбросить кэш — после «Обновить» в интерфейсе. */

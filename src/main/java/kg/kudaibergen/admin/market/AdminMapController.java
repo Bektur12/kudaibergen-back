@@ -9,6 +9,7 @@ import kg.kudaibergen.admin.audit.Audited;
 import kg.kudaibergen.admin.common.AdminPage;
 import kg.kudaibergen.admin.market.AdminMapDtos.AdminMapDto;
 import kg.kudaibergen.admin.market.AdminMapDtos.AdminRowDetailDto;
+import kg.kudaibergen.admin.market.AdminMapDtos.PublishMapRequest;
 import kg.kudaibergen.admin.market.AdminMapDtos.AdminRowDto;
 import kg.kudaibergen.admin.market.AdminMapDtos.GeoAnchorsDto;
 import kg.kudaibergen.admin.market.AdminMapDtos.RowCounts;
@@ -81,12 +82,14 @@ public class AdminMapController {
 
    @PostMapping("/map/publish")
    @PreAuthorize("hasAuthority('MARKET_MAP_PUBLISH')")
-   @Audited(action = "MAP_PUBLISH", entity = "MAP")
+   @Audited(action = "MAP_PUBLISH", entity = "MAP", comment = "#request?.comment")
    @Operation(summary = "Опубликовать черновик", description = "Новая версия схемы, приложения перекачивают карту. "
-         + "Ряды сопоставляются по коду: контейнеры и магазины остаются на своих рядах, отсутствующие ряды выключаются")
+         + "Ряды сопоставляются по коду: контейнеры и магазины остаются на своих рядах, отсутствующие ряды выключаются. "
+         + "Тело необязательно: {comment} — что поменялось, для журнала")
    @ApiResponse(responseCode = "400", description = "BAD_MAP — схема не проходит проверку")
    @ApiResponse(responseCode = "409", description = "NO_DRAFT")
-   public PublishedMapDto publish(@AuthenticationPrincipal AuthPrincipal admin) {
+   public PublishedMapDto publish(@AuthenticationPrincipal AuthPrincipal admin,
+                                  @Valid @RequestBody(required = false) PublishMapRequest request) {
       return maps.publish(admin.userId());
    }
 

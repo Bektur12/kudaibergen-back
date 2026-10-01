@@ -47,6 +47,14 @@ public class UserBlocking {
       if (userId.equals(adminId)) {
          throw new ConflictException("SELF_BLOCK", "Нельзя заблокировать себя");
       }
+      // иначе админ рынка с USERS_BLOCK закрыл бы вход суперадмину; доступ сотрудника снимают в «Сотрудниках»
+      Boolean staff = jdbc.queryForObject(
+            "select exists (select 1 from admin_members where user_id = :user and is_active)",
+            Map.of("user", userId), Boolean.class);
+      if (Boolean.TRUE.equals(staff)) {
+         throw new ConflictException("STAFF_BLOCK",
+               "Это сотрудник админки — сначала отключите его в разделе «Сотрудники»");
+      }
       user.block(reason);
       refreshTokens.revokeAll(userId);
       MapSqlParameterSource params = new MapSqlParameterSource("user", userId)

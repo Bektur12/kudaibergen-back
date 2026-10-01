@@ -76,8 +76,10 @@ POST /api/v1/admin/auth/password  {phone, code, password}  → 204, все се�
   активный сотрудник.
 - **Ошибки входа**: 401 `ADMIN_BAD_CREDENTIALS` одинаков для неверного пароля, чужого номера, незаданного пароля
   и отключённого сотрудника. 400 `OTP_INVALID` (`attemptsLeft`) и `OTP_EXPIRED`. 429 `ADMIN_LOGIN_RATE_LIMITED`
-  (10 попыток на номер за 15 минут, 30 на IP), а также `OTP_COOLDOWN` (новый код — через 42 с) и
-  `OTP_BLOCKED` (5 неверных кодов — 15 минут).
+  (10 неверных паролей на номер за 15 минут, 30 на IP; удачные входы лимит не тратят), а также `OTP_COOLDOWN`
+  (новый код — через 42 с) и `OTP_BLOCKED` (5 неверных кодов — 15 минут).
+- `OTP_COOLDOWN` на `login` значит: пароль верный, а код уже ушёл меньше 42 с назад. Фронт переходит к вводу
+  кода с отсчётом `retryAfter` до «Отправить ещё раз».
 - `debugCode` приходит только в dev (`SMS_EXPOSE_CODE=true`).
 - Сценарий фронта: access-токен хранить в памяти. На 401 один раз вызвать `/auth/refresh`, повторить запрос;
   снова 401 — на экран входа. При загрузке страницы — сразу `/auth/refresh`: cookie есть — сессия восстановлена.
@@ -290,7 +292,7 @@ TOTP (Google Authenticator) вместо SMS-кода — позже, отдел
 | --- | --- |
 | марки | `GET /brands?q=` (со счётчиками `modelsCount`, `sellersCount`, `mastersCount`, `carsCount`), `GET /brands/{id}`, `POST /brands`, `PATCH /brands/{id}`, `DELETE /brands/{id}`, `PUT /brands/order {ids}` |
 | логотип | `POST /api/v1/admin/media/photos` (multipart `file`) → `id`; `PUT /brands/{id}/logo {mediaId}`, `DELETE /brands/{id}/logo`. В приложении `logoUrl = /api/v1/brands/{id}/logo` — постоянная ссылка с редиректом на файл. Картинка пережимается в JPEG: прозрачный фон станет белым |
-| модели | `GET /brands/{brandId}/models?q=`, `POST /brands/{brandId}/models`, `PATCH /models/{id}`, `DELETE /models/{id}`. `displayName` заменяет подпись «модель + поколение» в приложении; пустая строка — стереть |
+| модели | `GET /brands/{brandId}/models?q=`, `POST /brands/{brandId}/models`, `PATCH /models/{id}`, `DELETE /models/{id}`. `displayName` заменяет подпись «модель + поколение» в приложении. В `PATCH` пустая строка стирает `generation` и `displayName`, `null` — не менять |
 | категории | `GET /categories`, `POST /categories {slug, nameRu, nameKg}` (встаёт в конец), `PATCH /categories/{id}`, `DELETE /categories/{id}`, `PUT /categories/order {ids}` |
 | услуги [A9] | `GET /service-types` (с `mastersCount`, `requests30d`), `POST /service-types`, `PATCH /service-types/{code}`, `DELETE /service-types/{code}`, `PUT /service-types/order {codes}` (все коды по порядку, drag-and-drop) |
 | синонимы | `GET /synonyms?q=`, `POST /synonyms {term, synonym, bidirectional = true}` → созданные пары, `DELETE /synonyms/{id}` |
@@ -318,12 +320,15 @@ TOTP (Google Authenticator) вместо SMS-кода — позже, отдел
 - `PUT /map/draft` — сохранить черновик. Формат — `market-map.json` плюс ряды с кодами, как у прямой публикации.
   Схема с ошибкой сохраняется, а ошибка видна в `draft.error`. Приложения черновик не видят.
 - `DELETE /map/draft` — удалить черновик.
-- `POST /map/publish` — новая версия из черновика, после чего черновик удаляется. `GET /api/v1/market/map` сразу
+- `POST /map/publish {comment?}` — новая версия из черновика, после чего черновик удаляется. Тело
+  необязательно; `comment` («добавлен ряд 31») пишется в журнал. `GET /api/v1/market/map` сразу
   отдаёт новый `version`, и приложения перекачивают карту.
   - Ряды сопоставляются по коду: контейнеры и магазины остаются на своих рядах, ряды, которых нет в схеме,
     выключаются.
   - 400 `BAD_MAP`, 409 `NO_DRAFT`.
 - `PUT /map` — опубликовать сразу, без черновика (как раньше).
+- У улиц (`streets`) `name`, `labelX`, `labelY` могут быть `null` — улица без подписи (безымянный проезд):
+  рисуется только полигон. Это не ошибка данных.
 
 Редактор MVP — JSON схемы с SVG-превью на фронте: в `data` есть всё для отрисовки (`boundary`, `blocks`, `passages`,
 `entrances`, `rows[].geometry`). Визуальный редактор полигонов — отдельная задача. В задаче `market_map_version`
@@ -426,7 +431,7 @@ relatedServiceRequestId?}`.
 | `GET /admin/dashboard/requests-by-day?range=D14\|D30\|QUARTER` | точки `{date, requests, withHave, serviceRequests}`, пустые дни — нули |
 | `GET /admin/dashboard/unanswered-by-brand?period=WEEK\|MONTH` | марки от 3 запросов: `requests`, `unanswered` (без «Есть» за 30 минут), `pct`, `sellers` (действующих боксов с маркой), по убыванию `pct`. `hint` — у худшей марки от 20%: готовый `text` («Lada: 80% запросов без ответа за 30 минут — её продают всего 2 бокса…») и `broadcastBrandIds` для кнопки «Сделать рассылку» (аудитория SELLERS, фильтр марок) |
 | `GET /admin/dashboard/top-searched?period=WEEK\|MONTH` | топ-10 «Чаще всего ищут»: по подсказке «Что ищем?», иначе по тексту запроса; `requests`, `havePct` |
-| `GET /admin/dashboard/pending` | «Ждут действий»: `shops`, `masters`, `complaints`, `disputes` и `latest` — 10 свежих `{kind, id, title, phone, createdAt}` |
+| `GET /admin/dashboard/pending` | «Ждут действий»: `shops`, `masters`, `complaints`, `disputes` и `latest` — 10 свежих `{kind, id, title, phone, createdAt}`; `title` — готовый текст («Чат · Спам / мошенничество», «Ряд 14 · 12») |
 
 ## Выгрузки Excel
 
@@ -482,9 +487,10 @@ relatedServiceRequestId?}`.
 - `GET /admin/users/{id}` — карточка: гараж, бокс (с ролью в нём), профиль мастера, последние запросы и заявки,
   жалобы от пользователя и на его отзывы и сообщения, санкции.
 - `POST /admin/users/{id}/block {reason}` — сессии закрываются, вход запрещён, бокс и профиль мастера
-  блокируются вместе с аккаунтом. 409 `ALREADY_BLOCKED`, `SELF_BLOCK`.
+  блокируются вместе с аккаунтом. 409 `ALREADY_BLOCKED`, `SELF_BLOCK`, `STAFF_BLOCK` — активного сотрудника
+  админки так не заблокировать: сначала его отключают в «Сотрудниках». Это же действует на «Заблокировать» из жалобы.
 - `POST /admin/users/{id}/unblock` — возвращает и то, что было заблокировано вместе с аккаунтом.
-- `POST /admin/users/{id}/message {text}` — пуш `ADMIN_MESSAGE`.
+- `POST /admin/users/{id}/message {text}` — пуш `ADMIN_MESSAGE` → `{recipients}`, как у магазина и мастера.
 
 ## Журнал
 
@@ -613,6 +619,15 @@ relatedServiceRequestId?}`.
   - `POST /api/v1/broadcasts/{id}/opened`.
 - В задаче было `POST /notifications/{id}/opened`. Списка уведомлений в приложении нет, поэтому отметка «открыто»
   сделана для рассылки.
+
+### После интеграции фронта
+
+- `pending.latest[].title` у жалоб — готовый текст вместо кодов.
+- `POST /admin/market/map/publish` принимает необязательный `{comment}` для журнала.
+- `POST /admin/users/{id}/message` отвечает `{recipients}` вместо 204.
+- Блокировка активного сотрудника админки — 409 `STAFF_BLOCK`.
+- Лимит входа считает только неверные пароли.
+- Документировано: пустая строка стирает `generation` модели; улицы без подписи (`name = null`) допустимы.
 
 ## Готовность
 

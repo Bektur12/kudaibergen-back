@@ -7,6 +7,7 @@ import jakarta.validation.Valid;
 import kg.kudaibergen.admin.audit.AuditTrail;
 import kg.kudaibergen.admin.audit.Audited;
 import kg.kudaibergen.admin.common.AdminPage;
+import kg.kudaibergen.admin.shops.AdminShopDtos.AdminMessageSentDto;
 import kg.kudaibergen.admin.users.AdminUserDtos.AdminUserDetailDto;
 import kg.kudaibergen.admin.users.AdminUserDtos.AdminUserRow;
 import kg.kudaibergen.admin.users.AdminUserDtos.UserCounts;
@@ -14,7 +15,6 @@ import kg.kudaibergen.admin.users.AdminUserDtos.UserFilter;
 import kg.kudaibergen.admin.users.AdminUserDtos.UserMessageRequest;
 import kg.kudaibergen.admin.users.AdminUserDtos.UserReasonRequest;
 import kg.kudaibergen.common.security.AuthPrincipal;
-import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -23,7 +23,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 /** Пользователи. */
@@ -60,7 +59,7 @@ public class AdminUsersController {
    @Audited(action = "USER_BLOCK", entity = "USER", id = "#id", comment = "#request.reason")
    @Operation(summary = "Заблокировать", description = "Сессии закрываются, вход запрещён; его бокс и профиль мастера "
          + "блокируются вместе с ним")
-   @ApiResponse(responseCode = "409", description = "ALREADY_BLOCKED, SELF_BLOCK")
+   @ApiResponse(responseCode = "409", description = "ALREADY_BLOCKED, SELF_BLOCK, STAFF_BLOCK — активный сотрудник админки")
    public AdminUserDetailDto block(@PathVariable Long id, @AuthenticationPrincipal AuthPrincipal admin,
                                    @Valid @RequestBody UserReasonRequest request) {
       AuditTrail.before(users.detail(id));
@@ -81,11 +80,11 @@ public class AdminUsersController {
    }
 
    @PostMapping("/{id}/message")
-   @ResponseStatus(HttpStatus.NO_CONTENT)
    @PreAuthorize("hasAuthority('MESSAGE_USERS')")
    @Audited(action = "USER_MESSAGE", entity = "USER", id = "#id", comment = "#request.text")
-   @Operation(summary = "Написать", description = "Пуш ADMIN_MESSAGE")
-   public void message(@PathVariable Long id, @Valid @RequestBody UserMessageRequest request) {
+   @Operation(summary = "Написать", description = "Пуш ADMIN_MESSAGE. Ответ — как у магазина и мастера: {recipients}")
+   public AdminMessageSentDto message(@PathVariable Long id, @Valid @RequestBody UserMessageRequest request) {
       users.message(id, request.text());
+      return new AdminMessageSentDto(1);
    }
 }

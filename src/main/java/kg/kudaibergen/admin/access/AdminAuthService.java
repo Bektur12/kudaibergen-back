@@ -77,7 +77,7 @@ public class AdminAuthService {
 
    /** Шаг 1. Верный пароль — SMS-код на номер сотрудника. */
    public SendOtpResponse login(AdminLoginRequest request, String clientIp) {
-      limit(request.phone(), clientIp);
+      checkFailures(request.phone(), clientIp);
       Optional<User> user = users.findByPhone(request.phone());
       Optional<AdminMember> member = user.flatMap(found -> members.findById(found.getId()));
       String hash = member.filter(AdminMember::hasPassword).map(AdminMember::getPasswordHash).orElse(dummyHash);
@@ -85,6 +85,7 @@ public class AdminAuthService {
       if (!matches || member.isEmpty() || !member.get().hasPassword()
             || access.active(member.get().getUserId()).isEmpty()) {
          log.info("Админка: неудачный вход для {}", request.phone());
+         countFailure(request.phone(), clientIp);
          throw badCredentials();
       }
       String code = otp.issue(OtpPurpose.ADMIN_LOGIN, request.phone(), clientIp);
@@ -161,6 +162,29 @@ public class AdminAuthService {
       return new Session(new AdminSessionDto(access, config.accessTtl().toSeconds(), me), refresh);
    }
 
+   /**
+    * Лимит входа считает только неверные пароли: частые удачные входы его не тратят. Повторную SMS сдерживает
+    * OTP_COOLDOWN — на него фронт переходит к вводу уже отправленного кода.
+    */
+   private void checkFailures(String phone, String clientIp) {
+      rateLimiter.check("admin-login-fail:phone:" + phone, config.loginLimit(),
+            "ADMIN_LOGIN_RATE_LIMITED", "Слишком много попыток входа, попробуйте позже");
+      if (clientIp != null) {
+         rateLimiter.check("admin-login-fail:ip:" + clientIp, config.loginLimit() * 3,
+               "ADMIN_LOGIN_RATE_LIMITED", "Слишком много попыток входа, попробуйте позже");
+      }
+   }
+
+   private void countFailure(String phone, String clientIp) {
+      rateLimiter.hit("admin-login-fail:phone:" + phone, config.loginLimit(), config.loginWindow(),
+            "ADMIN_LOGIN_RATE_LIMITED", "Слишком много попыток входа, попробуйте позже");
+      if (clientIp != null) {
+         rateLimiter.hit("admin-login-fail:ip:" + clientIp, config.loginLimit() * 3, config.loginWindow(),
+               "ADMIN_LOGIN_RATE_LIMITED", "Слишком много попыток входа, попробуйте позже");
+      }
+   }
+
+   /** Код для пароля шлёт SMS — тут считается каждый запрос. */
    private void limit(String phone, String clientIp) {
       rateLimiter.hit("admin-login:phone:" + phone, config.loginLimit(), config.loginWindow(),
             "ADMIN_LOGIN_RATE_LIMITED", "Слишком много попыток входа, попробуйте позже");
