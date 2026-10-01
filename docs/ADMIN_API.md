@@ -133,6 +133,8 @@ TOTP (Google Authenticator) вместо SMS-кода — позже, отдел
 | `ADMIN_LOGIN`, `ADMIN_PASSWORD_SET` | ADMIN | вход, пароль |
 | `SHOP_SMS_CODE`, `SHOP_WARN`, `SHOP_MESSAGE` | SHOP | SMS-код арендатору, предупреждение, «Написать» |
 | `DISPUTE_RESOLVE` | DISPUTE | решение спора |
+| `COMPLAINT_RESOLVE` | COMPLAINT | решение жалобы (комментарий — из поля «Комментарий для журнала и для продавца») |
+| `PART_REQUEST_WIDEN`, `PART_REQUEST_HIDE`, `SERVICE_REQUEST_WIDEN`, `SERVICE_REQUEST_HIDE` | запросы | мониторинг A8 |
 | `TENANTS_IMPORT_PREVIEW`, `TENANTS_IMPORT_APPLY` | TENANT_IMPORT | загрузка и применение списка (в журнал — итог, без строк) |
 | `MAP_DRAFT_SAVE`, `MAP_DRAFT_DISCARD`, `MAP_PUBLISH`, `CONTAINER_CREATE`, `CONTAINER_DELETE` | MAP, CONTAINER | черновик и публикация схемы, места |
 | `BRAND_*`, `MODEL_*`, `CATEGORY_*`, `SERVICE_TYPE_*` (код услуги — в комментарии), `SYNONYM_*`, `HINT_*`, `MEDIA_UPLOAD` | справочники | создание, правка, удаление, порядок, логотип |
@@ -337,12 +339,81 @@ TOTP (Google Authenticator) вместо SMS-кода — позже, отдел
 | `GET /qr/{token}.png`, `GET /qr/sheet?rowId=` | QR и лист наклеек |
 | `GET /geo-anchors`, `PUT /geo-anchors {anchors}` | опорные GPS-точки; PUT заменяет набор и пересчитывает привязку |
 
+## Модерация [A4]
+
+Жалобы приходят из приложений: `POST /api/v1/complaints {type, targetId, reason, text?, relatedRequestId?,
+relatedServiceRequestId?}`.
+
+- Типы: `PART`, `SHOP`, `SHOP_PHOTO` (targetId — id фото), `REVIEW`, `MASTER_REVIEW`, `CHAT`, `CHAT_MESSAGE`,
+  `MASTER`, `SERVICE_OFFER`.
+- Причины: `FAKE_ORIGINAL` («Подделка под оригинал»), `REVIEW_WITHOUT_PURCHASE`, `SPAM_FRAUD`, `WRONG_PLACE`,
+  `RUDE`, `OTHER`.
+- Повторная жалоба на то же самое не дублируется. Не больше 20 жалоб в сутки.
+
+Эндпоинты админки:
+
+- `GET /admin/complaints?status=OPEN|RESOLVED|REJECTED&type=&cursor=` (`COMPLAINTS_VIEW`) — лента. В строке: тип,
+  причина, объект («Фара передняя правая Depo», «Отзыв ★1», текст сообщения), ответственный, заявитель (телефон —
+  маской без `PII_VIEW`), время. `counts`: `{open, resolved, rejected}`.
+- `GET /admin/complaints/{id}` — карточка:
+  - `subject` — объект: фото, цена, машины у запчасти, звёзды у отзыва, скрыт ли;
+  - `party` — ответственный (магазин с местом, мастер или пользователь — автор отзыва или собеседник в чате);
+  - `partyStats` за 90 дней: `complaints90d`, `warnings90d`, `removed90d`;
+  - заявитель и связанный запрос;
+  - `sameTargetOpen` — сколько ещё открытых жалоб на этот же объект.
+- `POST /admin/complaints/{id}/resolve {action, comment}` (`COMPLAINTS_RESOLVE`, плюс право на само действие):
+
+| action | право | что происходит |
+| --- | --- | --- |
+| `REMOVE_CONTENT` | `CONTENT_REMOVE` | объект скрывается (см. ниже); ответственному — пуш с комментарием. Магазин, мастер и чат целиком не скрываются — 400 `NOTHING_TO_REMOVE` |
+| `WARN_SELLER` | `SELLER_WARN` | предупреждение ответственному на 90 дней, пуш |
+| `BLOCK_SHOP` | `SELLERS_BLOCK` / `MASTERS_BLOCK` / `USERS_BLOCK` | блокировка ответственного: магазина, мастера или пользователя |
+| `UNFOUNDED` | — | жалоба отклонена (`REJECTED`) |
+
+Все открытые жалобы на тот же объект закрываются этим же решением, заявители получают пуш `COMPLAINT_RESOLVED`.
+Ответ: `{complaint, resolvedTogether}`.
+
+**Скрытие контента** (`hidden_by_admin`):
+
+- запчасть уходит в архив, её нельзя опубликовать или вернуть из архива — 409 `PART_HIDDEN`;
+- отзыв пропадает из списка, рейтинг и число отзывов пересчитываются без него;
+- сообщение отдаётся без текста и вложений с `code = HIDDEN_BY_ADMIN`;
+- отклик мастера пропадает у клиента;
+- фото места убирается из профиля.
+
+**Блокировка пользователя:** закрываются все его сессии, его магазин и профиль мастера блокируются вместе с ним,
+снятие блокировки возвращает их.
+
+## Запросы и заявки [A8]
+
+Права: `REQUESTS_VIEW` — смотреть, `REQUESTS_MANAGE` — «Расширить» и «Скрыть».
+
+- `GET /admin/part-requests?period=TODAY|WEEK|MONTH|ALL&status=&noReplies=&q=&cursor=` и
+  `GET /admin/service-requests?…&service=` — таблицы.
+  - Колонки: текст; покупатель (телефон маской) и время; машина; `received / seen / positive` — «получили /
+    посмотрели / могут».
+  - Статус: `ACTIVE` («Активна»), `AGREED` («Договорились»), `NO_REPLIES` («Без откликов»), `EXPIRED` («Время
+    вышло»), `CLOSED`, `HIDDEN`.
+  - `counts`: `{parts, services, partsNoReplies, servicesNoReplies}` за период — «Запросы на запчасти · 342»,
+    «Заявки на услуги · 57», «Без откликов · 6».
+  - Период считается по Бишкеку. `q` — текст или цифры телефона.
+- `GET /admin/part-requests/{id}` — запрос: машина, текст, фото, кому ушёл, счётчики, ответы продавцов (цена,
+  состояние, через сколько минут ответили).
+- `GET /admin/service-requests/{id}` — заявка: машина снимком (объём, топливо, страна), описание и вложения,
+  когда / где / радиус, счётчики, отклики (мастер, через сколько ответил, когда может, цена «от»).
+- `POST /admin/part-requests/{id}/widen` — до всего рынка; `POST /admin/service-requests/{id}/widen` — радиус
+  +5 км. Новым адресатам уходит пуш, срок начинается заново.
+- `POST /admin/part-requests/{id}/hide {reason}`, `POST /admin/service-requests/{id}/hide {reason}` — запрос
+  закрывается и пропадает из лент продавцов и мастеров, покупателю — пуш с причиной.
+- **Живое обновление.** `GET /admin/realtime/token` → `{connectionToken, subscriptionToken, channel:
+  "admin:requests"}`. В канале — `{type: REQUEST_CHANGED, payload: {kind: PART|SERVICE, id, event}}`, где `event`:
+  `DISPATCHED`, `REPLY`, `EXPIRED`, `CLOSED`, `HIDDEN`. В задаче был STOMP, но живые события в проекте идут через
+  Centrifugo; в его конфиге добавлено пространство `admin`.
+
 ## Эндпоинты, которые уже были, — теперь по правам
 
 | Эндпоинт | Право |
 | --- | --- |
-| `GET /admin/complaints` | `COMPLAINTS_VIEW` |
-| `POST /admin/complaints/{id}/resolve {status, resolution}` | `COMPLAINTS_RESOLVE` |
 | `DELETE /admin/parts/{id}` | `CONTENT_REMOVE` |
 | `PUT /admin/market/rows/{id}/containers`, `PATCH /admin/market/containers/{id}` | `MARKET_EDIT` |
 | `GET /admin/market/qr/{token}.png`, `GET /admin/market/qr/sheet?rowId=` | `MARKET_VIEW` |
@@ -414,3 +485,17 @@ TOTP (Google Authenticator) вместо SMS-кода — позже, отдел
   GPS-точек.
 - `PATCH /admin/market/containers/{id}` принимает `tenantName`, `side`, `number`, `posInRow`.
   В `AdminContainerDto` добавлены `posInRow` и `tenantName`.
+
+### Фаза 5 — запросы, заявки, модерация
+
+- Миграция V19:
+  - `hidden_by_admin` и `hidden_reason` у запчастей, отзывов, отзывов о мастерах, сообщений, запросов, заявок
+    и откликов;
+  - жалобы: причина, роль заявителя, связанный запрос или заявка, исход; тип `PHOTO` переименован в `SHOP_PHOTO`;
+  - `users.blocked_at` и `blocked_reason`.
+- `GET /admin/complaints` и `POST /admin/complaints/{id}/resolve` заменены новым контрактом (выше).
+- Приложение:
+  - новый `POST /api/v1/complaints`;
+  - скрытое не видно в поиске, отзывах и лентах;
+  - у сообщения появился `code = HIDDEN_BY_ADMIN`;
+  - пуши `COMPLAINT_RESOLVED` и `ADMIN_MESSAGE` с `kind = CONTENT_REMOVED`.

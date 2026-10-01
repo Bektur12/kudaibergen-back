@@ -62,7 +62,7 @@ public interface ServiceRecipientRepository extends JpaRepository<ServiceRecipie
    @Query(nativeQuery = true, value = """
          select sr.* from service_recipients sr
          join service_requests r on r.id = sr.request_id
-         where sr.master_id = :masterId and sr.replied_at is null and r.status = 'ACTIVE'
+         where not r.hidden_by_admin and sr.master_id = :masterId and sr.replied_at is null and r.status = 'ACTIVE'
            and (sr.notified_at, sr.request_id) < (:at, :id)
          order by sr.notified_at desc, sr.request_id desc
          limit :limit""")
@@ -73,7 +73,7 @@ public interface ServiceRecipientRepository extends JpaRepository<ServiceRecipie
    @Query(nativeQuery = true, value = """
          select sr.* from service_recipients sr
          join service_requests r on r.id = sr.request_id
-         where sr.master_id = :masterId and sr.status = 'CAN_HELP'
+         where not r.hidden_by_admin and sr.master_id = :masterId and sr.status = 'CAN_HELP'
            and (r.status <> 'CLOSED' or r.closed_with_master_id = :masterId)
            and (sr.notified_at, sr.request_id) < (:at, :id)
          order by sr.notified_at desc, sr.request_id desc
@@ -84,7 +84,8 @@ public interface ServiceRecipientRepository extends JpaRepository<ServiceRecipie
    /** «Истёкшие»: время вышло, мастер не ответил. */
    @Query(nativeQuery = true, value = """
          select sr.* from service_recipients sr
-         where sr.master_id = :masterId and sr.status = 'EXPIRED'
+         join service_requests r on r.id = sr.request_id
+         where not r.hidden_by_admin and sr.master_id = :masterId and sr.status = 'EXPIRED'
            and (sr.notified_at, sr.request_id) < (:at, :id)
          order by sr.notified_at desc, sr.request_id desc
          limit :limit""")

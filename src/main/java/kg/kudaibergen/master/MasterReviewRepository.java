@@ -10,10 +10,14 @@ import org.springframework.data.repository.query.Param;
 
 public interface MasterReviewRepository extends JpaRepository<MasterReview, Long> {
 
-   @Query("select avg(r.stars) from MasterReview r where r.masterId = :masterId")
+   @Query("select avg(r.stars) from MasterReview r where r.masterId = :masterId and r.hiddenByAdmin = false")
    Double averageStars(@Param("masterId") Long masterId);
 
-   long countByMasterId(Long masterId);
+   @Query("select count(r) from MasterReview r where r.masterId = :masterId and r.hiddenByAdmin = false")
+   long countByMasterId(@Param("masterId") Long masterId);
 
-   List<MasterReview> findByMasterIdOrderByCreatedAtDescIdDesc(Long masterId, Pageable page);
+   @Query("""
+         select r from MasterReview r where r.masterId = :masterId and r.hiddenByAdmin = false
+         order by r.createdAt desc, r.id desc""")
+   List<MasterReview> findByMasterIdOrderByCreatedAtDescIdDesc(@Param("masterId") Long masterId, Pageable page);
 }

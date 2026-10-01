@@ -107,6 +107,7 @@ enum QuickReply {                                                   // быст�
 | `ADMIN_MESSAGE` | продавцу / мастеру | сообщение администрации (`kind`: `MESSAGE` или `WARNING` — предупреждение); текст в body, ответить нельзя |
 | `ACCOUNT_STATUS` | людям бокса / мастеру | решение администрации: `target` `SHOP` / `MASTER`, `id`, `event` `APPROVED` / `REJECTED` / `BLOCKED` / `UNBLOCKED`; вести в «Мой бокс» / профиль мастера |
 | `DISPUTE_RESOLVED` | обеим сторонам спора | спор за контейнер решён: `disputeId`, `won` `true` / `false` |
+| `COMPLAINT_RESOLVED` | заявителю | жалоба рассмотрена: `complaintId`, `upheld` (меры приняты / нарушений нет) |
 
 ---
 
@@ -271,6 +272,7 @@ enum QuickReply {                                                   // быст�
 - `POST /chats {shopId? | masterId?, requestId?, serviceRequestId?, partId?}` — открыть чат с магазином или мастером (одно из двух): по запросу / заявке, прямой из профиля, с карточкой товара. Ответ «Есть» и отклик «Могу помочь» открывают чат сами (`chatId` в ответе).
 - У чата с мастером в `GET /chats/{id}`: `shop = null`, `master` — карточка мастера, `serviceRequest` — закреплённая заявка; сторона мастера в сообщениях — `SHOP`. Отклик приходит первым сообщением `REPLY` с `payload {offerId, priceFrom, availableAt}`. Быстрых ответов в чате с мастером нет.
 - `GET /chats?as=BUYER|SHOP|MASTER&cursor=` [16] — строки `{id, mySide, title, avatarUrl?, subtitle, requestId?, serviceRequestId?, masterId?, requestClosed, lastMessage?, unread, online, blocked, updatedAt}`; `GET /chats/unread` → `{asBuyer, asShop, asMaster}`.
+- **Пожаловаться** (на запчасть, магазин, фото места, отзыв, сообщение, чат, мастера, отклик): `POST /complaints {type: PART|SHOP|SHOP_PHOTO|REVIEW|MASTER_REVIEW|CHAT|CHAT_MESSAGE|MASTER|SERVICE_OFFER, targetId, reason: FAKE_ORIGINAL|REVIEW_WITHOUT_PURCHASE|SPAM_FRAUD|WRONG_PLACE|RUDE|OTHER, text?, relatedRequestId?, relatedServiceRequestId?}` → 201. Повтор на то же не дублируется; 404 `COMPLAINT_TARGET_NOT_FOUND`, 429 `COMPLAINTS_RATE_LIMITED`. Скрытое администрацией в приложении не показывается: запчасть уходит в архив (публикация — 409 `PART_HIDDEN`), сообщение приходит без текста и вложений с `code = HIDDEN_BY_ADMIN` — показать «Сообщение скрыто администрацией».
 - `GET /chats/{id}`, `GET /chats/{id}/messages?cursor=`, `POST /chats/{id}/messages {text?|quick?, clientId}`, `POST /chats/{id}/messages/media` (фото, голосовое до 60 с, видео), `POST /chats/{id}/read`.
 - `GET /chats/{id}/quick-replies` — быстрые ответы для своей стороны.
 - `PUT/DELETE /chats/{id}/block`, `POST /chats/{id}/complaints`.

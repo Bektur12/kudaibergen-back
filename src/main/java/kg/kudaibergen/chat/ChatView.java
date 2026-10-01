@@ -49,6 +49,9 @@ import org.springframework.stereotype.Component;
 @Component
 public class ChatView {
 
+   /** code сообщения, скрытого модерацией. */
+   public static final String HIDDEN_CODE = "HIDDEN_BY_ADMIN";
+
    private final ChatRepository chats;
    private final MessageRepository messages;
    private final ShopRepository shops;
@@ -94,6 +97,12 @@ public class ChatView {
    public MessageDto message(Message message, Chat chat) {
       boolean read = message.getSide() != ChatSide.SYSTEM
             && chat.readMessageId(message.getSide().other()) >= message.getId();
+      if (message.isHiddenByAdmin()) {
+         // скрыто модерацией: без текста и вложений, клиент показывает «Сообщение скрыто администрацией»
+         return new MessageDto(message.getId(), message.getChatId(), message.getSide(), message.getSenderId(),
+               message.getType(), null, HIDDEN_CODE, null, null, null, null, null, message.getClientId(), read,
+               message.getCreatedAt());
+      }
       return new MessageDto(message.getId(), message.getChatId(), message.getSide(), message.getSenderId(),
             message.getType(), message.getText(), message.getCode(), payload(message),
             media.urlFor(message.getMediaKey()), message.getMimeType(), message.getDurationSeconds(),
@@ -259,8 +268,9 @@ public class ChatView {
    }
 
    private static ChatListItemDto.LastMessageDto lastMessage(Message message, ChatSide mySide) {
-      return new ChatListItemDto.LastMessageDto(message.getId(), message.getType(), message.getText(),
-            message.getCode(), message.getSide(), message.getSide() == mySide, message.getCreatedAt());
+      boolean hidden = message.isHiddenByAdmin();
+      return new ChatListItemDto.LastMessageDto(message.getId(), message.getType(), hidden ? null : message.getText(),
+            hidden ? HIDDEN_CODE : message.getCode(), message.getSide(), message.getSide() == mySide, message.getCreatedAt());
    }
 
    public Map<Long, Long> unread(List<Chat> page, ChatSide mySide) {

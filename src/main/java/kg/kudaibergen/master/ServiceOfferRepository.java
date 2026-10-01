@@ -19,7 +19,7 @@ public interface ServiceOfferRepository extends JpaRepository<ServiceOffer, Long
    /** Отклики «Могу помочь» в порядке прихода; afterId — только новые. */
    @Query("""
          select o from ServiceOffer o
-         where o.requestId = :requestId and o.answer = :canHelp and o.id > :afterId
+         where o.requestId = :requestId and o.answer = :canHelp and o.hiddenByAdmin = false and o.id > :afterId
          order by o.id""")
    List<ServiceOffer> findCanHelp(@Param("requestId") Long requestId, @Param("canHelp") OfferAnswer canHelp,
                                   @Param("afterId") long afterId);

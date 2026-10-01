@@ -40,6 +40,12 @@ public class User {
    @Column(name = "is_blocked", nullable = false)
    private boolean blocked;
 
+   @Column(name = "blocked_at")
+   private Instant blockedAt;
+
+   @Column(name = "blocked_reason", length = 300)
+   private String blockedReason;
+
    @Column(name = "onboarded_at")
    private Instant onboardedAt;
 
@@ -137,6 +143,27 @@ public class User {
 
    public void setBlocked(boolean blocked) {
       this.blocked = blocked;
+   }
+
+   /** Блокировка администрацией: не входит, его магазин и профиль мастера не получают запросов. */
+   public void block(String reason) {
+      this.blocked = true;
+      this.blockedAt = Instant.now();
+      this.blockedReason = reason;
+   }
+
+   public void unblock() {
+      this.blocked = false;
+      this.blockedAt = null;
+      this.blockedReason = null;
+   }
+
+   public Instant getBlockedAt() {
+      return blockedAt;
+   }
+
+   public String getBlockedReason() {
+      return blockedReason;
    }
 
    public Instant getOnboardedAt() {

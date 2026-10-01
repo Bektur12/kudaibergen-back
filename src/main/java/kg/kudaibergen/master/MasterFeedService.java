@@ -114,7 +114,8 @@ public class MasterFeedService {
    public MasterFeedItemDto one(Long userId, Long requestId, Lang lang) {
       Master master = masters.requireMine(userId);
       ServiceRecipient recipient = recipient(requestId, master.getId());
-      ServiceRequest request = requests.findById(requestId).orElseThrow(ServiceRequestService::notFound);
+      ServiceRequest request = requests.findById(requestId).filter(found -> !found.isHiddenByAdmin())
+            .orElseThrow(ServiceRequestService::notFound);
       ServiceOfferDto myOffer = offers.findByRequestIdAndMasterId(requestId, master.getId())
             .map(offer -> mapper.offer(offer, null, recipient.getDistanceM(), chatId(request, master.getId())))
             .orElse(null);
@@ -137,7 +138,8 @@ public class MasterFeedService {
       if (!master.isActive()) {
          throw new ForbiddenException("MASTER_NOT_ACTIVE", "Профиль мастера не проверен или заблокирован");
       }
-      ServiceRequest request = requests.findForUpdate(requestId).orElseThrow(ServiceRequestService::notFound);
+      ServiceRequest request = requests.findForUpdate(requestId).filter(found -> !found.isHiddenByAdmin())
+            .orElseThrow(ServiceRequestService::notFound);
       ServiceRecipient recipient = recipient(requestId, master.getId());
       ServiceRequestService.requireActive(request);
       if (offers.findByRequestIdAndMasterId(requestId, master.getId()).isPresent()) {

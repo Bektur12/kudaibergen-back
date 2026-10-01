@@ -147,7 +147,7 @@ public class IncomingRequestService {
    public IncomingRequestDto one(Long userId, Long requestId, Lang lang) {
       Shop shop = access.requireMember(userId).shop();
       RequestRecipient recipient = recipient(requestId, shop.getId());
-      PartRequest request = requests.findById(requestId).orElseThrow(RequestService::notFound);
+      PartRequest request = requests.findById(requestId).filter(found -> !found.isHiddenByAdmin()).orElseThrow(RequestService::notFound);
       ReplyDto myReply = replies.findByRequestIdAndShopId(requestId, shop.getId())
             .map(reply -> mapper.reply(reply, null, chatId(request, shop.getId()), partCard(reply, request)))
             .orElse(null);
@@ -173,7 +173,7 @@ public class IncomingRequestService {
    @Transactional
    public ReplyDto reply(Long userId, Long requestId, RequestInputs.Reply input) {
       Shop shop = activeShop(userId);
-      PartRequest request = requests.findForUpdate(requestId).orElseThrow(RequestService::notFound);
+      PartRequest request = requests.findForUpdate(requestId).filter(found -> !found.isHiddenByAdmin()).orElseThrow(RequestService::notFound);
       RequestRecipient recipient = recipient(requestId, shop.getId());
       RequestService.requireActive(request);
       if (replies.findByRequestIdAndShopId(requestId, shop.getId()).isPresent()) {
@@ -208,7 +208,7 @@ public class IncomingRequestService {
    @Transactional
    public ReplyDto editReply(Long userId, Long requestId, RequestInputs.Reply input) {
       Shop shop = activeShop(userId);
-      PartRequest request = requests.findForUpdate(requestId).orElseThrow(RequestService::notFound);
+      PartRequest request = requests.findForUpdate(requestId).filter(found -> !found.isHiddenByAdmin()).orElseThrow(RequestService::notFound);
       RequestReply reply = replies.findByRequestIdAndShopId(requestId, shop.getId())
             .orElseThrow(() -> new NotFoundException("REPLY_NOT_FOUND", "Бокс ещё не отвечал на этот запрос"));
       RequestService.requireActive(request);
@@ -252,7 +252,7 @@ public class IncomingRequestService {
    public List<PartCardDto> suggestedParts(Long userId, Long requestId) {
       Shop shop = access.requireMember(userId).shop();
       recipient(requestId, shop.getId());
-      PartRequest request = requests.findById(requestId).orElseThrow(RequestService::notFound);
+      PartRequest request = requests.findById(requestId).filter(found -> !found.isHiddenByAdmin()).orElseThrow(RequestService::notFound);
       return myParts.suggestions(shop.getId(), mapper.carFilter(request), request.getText());
    }
 

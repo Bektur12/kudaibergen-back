@@ -111,6 +111,13 @@ public class PartRequest {
    @Column(name = "created_at", nullable = false, updatable = false)
    private Instant createdAt;
 
+   /** Скрыто администрацией (модерация). Пишет только админка, JPA поле не меняет. */
+   @Column(name = "hidden_by_admin", insertable = false, updatable = false)
+   private boolean hiddenByAdmin;
+
+   @Column(name = "hidden_reason", insertable = false, updatable = false)
+   private String hiddenReason;
+
    protected PartRequest() {
    }
 
@@ -287,5 +294,13 @@ public class PartRequest {
 
    public Instant getCreatedAt() {
       return createdAt;
+   }
+
+   public boolean isHiddenByAdmin() {
+      return hiddenByAdmin;
+   }
+
+   public String getHiddenReason() {
+      return hiddenReason;
    }
 }

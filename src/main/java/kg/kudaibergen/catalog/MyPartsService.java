@@ -196,6 +196,7 @@ public class MyPartsService {
       if (part.getStatus() != PartStatus.ARCHIVED) {
          throw new ConflictException("NOT_ARCHIVED", "Запчасть не в архиве");
       }
+      requireHidden(part);
       if (missing(part).isEmpty()) {
          publish(part);
       } else {
@@ -347,12 +348,20 @@ public class MyPartsService {
    }
 
    private void publish(Part part) {
+      requireHidden(part);
       requireComplete(part);
       if (!part.isActive() && parts.countByShopIdAndStatus(part.getShopId(), PartStatus.ACTIVE) >= MAX_ACTIVE) {
          throw new ConflictException("ACTIVE_PARTS_LIMIT",
                "Не больше " + MAX_ACTIVE + " запчастей в продаже — уберите ненужные в архив");
       }
       part.publish(clock.instant());
+   }
+
+   /** Скрытую администрацией запчасть вернуть в продажу нельзя — только написать в поддержку. */
+   private static void requireHidden(Part part) {
+      if (part.isHiddenByAdmin()) {
+         throw new ConflictException("PART_HIDDEN", "Запчасть скрыта администрацией: " + part.getHiddenReason());
+      }
    }
 
    /** Без обязательных полей, фото и машин товар не публикуется (ТЗ 9.3). */

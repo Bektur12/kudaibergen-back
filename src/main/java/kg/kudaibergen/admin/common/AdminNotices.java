@@ -16,9 +16,10 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 /**
  * Пуши пользователям от администрации. Уходят после коммита: откатилось действие — пуша не будет.
  * <pre>
- * ADMIN_MESSAGE   {kind: MESSAGE | WARNING}                         — «Написать», предупреждение
+ * ADMIN_MESSAGE   {kind: MESSAGE | WARNING | CONTENT_REMOVED}       — «Написать», предупреждение, скрыто
  * ACCOUNT_STATUS  {target: SHOP | MASTER, id, event}                — подтверждён, отклонён, блокировка
  * DISPUTE_RESOLVED {disputeId, won: true | false}                   — спор за контейнер решён
+ * COMPLAINT_RESOLVED {complaintId, upheld}                          — жалоба рассмотрена (заявителю)
  * </pre>
  */
 @Component
@@ -64,6 +65,21 @@ public class AdminNotices {
                comment == null || comment.isBlank() ? body : body + ". " + comment,
                Map.of("type", "DISPUTE_RESOLVED", "disputeId", disputeId.toString(), "won", String.valueOf(won)));
       });
+   }
+
+   /** Контент скрыт по жалобе — владельцу, с комментарием администрации. */
+   public void contentRemoved(Collection<Long> userIds, String comment) {
+      afterCommit(userIds, lang -> new PushMessage(lang == Lang.KG ? "Администрация жашырды" : "Скрыто администрацией",
+            comment == null || comment.isBlank() ? (lang == Lang.KG ? "Эрежелер бузулган" : "Нарушение правил площадки")
+                  : comment, Map.of("type", "ADMIN_MESSAGE", "kind", "CONTENT_REMOVED")));
+   }
+
+   /** Жалоба рассмотрена — заявителю. */
+   public void complaintResolved(Collection<Long> userIds, Long complaintId, boolean upheld) {
+      afterCommit(userIds, lang -> new PushMessage(lang == Lang.KG ? "Арыз каралды" : "Жалоба рассмотрена",
+            upheld ? (lang == Lang.KG ? "Чара көрүлдү. Рахмат!" : "Меры приняты. Спасибо, что сообщили!")
+                  : (lang == Lang.KG ? "Бузуу табылган жок" : "Нарушений не нашли"),
+            Map.of("type", "COMPLAINT_RESOLVED", "complaintId", complaintId.toString(), "upheld", String.valueOf(upheld))));
    }
 
    static String statusTitle(Target target, StatusEvent event, Lang lang) {

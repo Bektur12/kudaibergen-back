@@ -155,7 +155,18 @@ public class ServiceRequestService {
    /** «Расширить радиус» (+5 км, до 50): новым мастерам — пуш, срок заново, истёкшая снова активна. */
    @Transactional
    public ServiceRequestDetailDto widen(AuthPrincipal principal, Long requestId, Lang lang) {
-      ServiceRequest request = ownForUpdate(principal, requestId);
+      return widenRadius(ownForUpdate(principal, requestId), lang);
+   }
+
+   /** Админка [A8]: «Расширить радиус» за клиента (+5 км, пуш новым мастерам). */
+   @Transactional
+   public ServiceRequestDetailDto adminWiden(Long requestId, Lang lang) {
+      return widenRadius(requests.findForUpdate(requestId).filter(found -> !found.isHiddenByAdmin())
+            .orElseThrow(ServiceRequestService::notFound), lang);
+   }
+
+   private ServiceRequestDetailDto widenRadius(ServiceRequest request, Lang lang) {
+      Long requestId = request.getId();
       requireOpen(request);
       if (!request.canWiden()) {
          throw new ConflictException("RADIUS_LIMIT", "Радиус уже максимальный — " + ServiceRequest.MAX_RADIUS_KM + " км");

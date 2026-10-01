@@ -68,7 +68,7 @@ public interface RequestRecipientRepository extends JpaRepository<RequestRecipie
    @Query(nativeQuery = true, value = """
          select rr.* from request_recipients rr
          join part_requests r on r.id = rr.request_id
-         where rr.shop_id = :shopId and rr.replied_at is null and r.status = 'ACTIVE'
+         where not r.hidden_by_admin and rr.shop_id = :shopId and rr.replied_at is null and r.status = 'ACTIVE'
            and (rr.notified_at, rr.request_id) < (:at, :id)
          order by rr.notified_at desc, rr.request_id desc
          limit :limit""")
@@ -79,7 +79,7 @@ public interface RequestRecipientRepository extends JpaRepository<RequestRecipie
    @Query(nativeQuery = true, value = """
          select rr.* from request_recipients rr
          join part_requests r on r.id = rr.request_id
-         where rr.shop_id = :shopId and rr.status = 'HAVE'
+         where not r.hidden_by_admin and rr.shop_id = :shopId and rr.status = 'HAVE'
            and (r.status <> 'CLOSED' or r.closed_with_shop_id = :shopId)
            and (rr.notified_at, rr.request_id) < (:at, :id)
          order by rr.notified_at desc, rr.request_id desc
@@ -90,7 +90,8 @@ public interface RequestRecipientRepository extends JpaRepository<RequestRecipie
    /** «Истёкшие»: время вышло, бокс не ответил; покупатель ещё может продлить. */
    @Query(nativeQuery = true, value = """
          select rr.* from request_recipients rr
-         where rr.shop_id = :shopId and rr.status = 'EXPIRED'
+         join part_requests r on r.id = rr.request_id
+         where not r.hidden_by_admin and rr.shop_id = :shopId and rr.status = 'EXPIRED'
            and (rr.notified_at, rr.request_id) < (:at, :id)
          order by rr.notified_at desc, rr.request_id desc
          limit :limit""")
@@ -104,7 +105,7 @@ public interface RequestRecipientRepository extends JpaRepository<RequestRecipie
    @Query(nativeQuery = true, value = """
          select rr.* from request_recipients rr
          join part_requests r on r.id = rr.request_id
-         where rr.shop_id = :shopId and rr.replied_at is null and r.status <> 'ACTIVE'
+         where not r.hidden_by_admin and rr.shop_id = :shopId and rr.replied_at is null and r.status <> 'ACTIVE'
            and (rr.notified_at, rr.request_id) < (:at, :id)
          order by rr.notified_at desc, rr.request_id desc
          limit :limit""")

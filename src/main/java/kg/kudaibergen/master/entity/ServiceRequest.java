@@ -132,6 +132,13 @@ public class ServiceRequest {
    @Column(name = "media_id", nullable = false)
    private List<Long> photoIds = new ArrayList<>();
 
+   /** Скрыто администрацией (модерация). Пишет только админка, JPA поле не меняет. */
+   @Column(name = "hidden_by_admin", insertable = false, updatable = false)
+   private boolean hiddenByAdmin;
+
+   @Column(name = "hidden_reason", insertable = false, updatable = false)
+   private String hiddenReason;
+
    protected ServiceRequest() {
    }
 
@@ -339,5 +346,13 @@ public class ServiceRequest {
 
    public List<Long> getPhotoIds() {
       return List.copyOf(photoIds);
+   }
+
+   public boolean isHiddenByAdmin() {
+      return hiddenByAdmin;
+   }
+
+   public String getHiddenReason() {
+      return hiddenReason;
    }
 }

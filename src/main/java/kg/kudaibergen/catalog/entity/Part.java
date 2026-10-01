@@ -91,6 +91,13 @@ public class Part {
    @Column(name = "updated_at", nullable = false)
    private Instant updatedAt = Instant.now();
 
+   /** Скрыто администрацией (модерация). Пишет только админка, JPA поле не меняет. */
+   @Column(name = "hidden_by_admin", insertable = false, updatable = false)
+   private boolean hiddenByAdmin;
+
+   @Column(name = "hidden_reason", insertable = false, updatable = false)
+   private String hiddenReason;
+
    protected Part() {
    }
 
@@ -256,5 +263,13 @@ public class Part {
 
    public Instant getUpdatedAt() {
       return updatedAt;
+   }
+
+   public boolean isHiddenByAdmin() {
+      return hiddenByAdmin;
+   }
+
+   public String getHiddenReason() {
+      return hiddenReason;
    }
 }

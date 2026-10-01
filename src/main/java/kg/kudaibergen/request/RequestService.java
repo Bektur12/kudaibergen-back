@@ -204,7 +204,18 @@ public class RequestService {
       if (input != null && input.target() != null && input.target() != RequestTarget.MARKET) {
          throw new BadRequestException("WIDEN_TARGET", "Расширить запрос можно только до всего рынка");
       }
-      PartRequest request = ownForUpdate(principal, requestId);
+      return widenToMarket(ownForUpdate(principal, requestId));
+   }
+
+   /** Админка [A8]: «Расширить» до всего рынка за покупателя — та же рассылка новым продавцам. */
+   @Transactional
+   public WidenResultDto adminWiden(Long requestId) {
+      return widenToMarket(requests.findForUpdate(requestId).filter(found -> !found.isHiddenByAdmin())
+            .orElseThrow(RequestService::notFound));
+   }
+
+   private WidenResultDto widenToMarket(PartRequest request) {
+      Long requestId = request.getId();
       requireOpen(request);
       Instant now = clock.instant();
       reactivate(request, now);
