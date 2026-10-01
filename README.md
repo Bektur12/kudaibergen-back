@@ -104,7 +104,7 @@ ADMIN_BOOTSTRAP_PHONE=+996555000099 ADMIN_BOOTSTRAP_NAME="Имя Фамилия"
 | `ADMIN_COOKIE_SECURE`, `ADMIN_COOKIE_SAMESITE` | атрибуты cookie `admin_refresh`; админка на другом домене — `None` (и Secure) | `true`, `Strict` |
 | `OCR_PROVIDER`, `OCR_GOOGLE_API_KEY` | распознавание номера детали: `none` или `google` (Cloud Vision) | `none` |
 | `MEDIA_STORAGE` | вложения чата: `local` или `s3` | `local` |
-| `MEDIA_PUBLIC_URL` | для `local`: адрес сервера в ссылках на файлы (`http://192.168.1.10:8080`), чтобы телефон их открыл; пусто — ссылки `/media/…` | пусто |
+| `MEDIA_PUBLIC_URL` | для `local`: адрес сервера в ссылках на файлы. Пусто — подставляется сам: адрес, по которому обратился телефон, а вне запроса (события, пуши) — адрес компьютера в локальной сети. В проде — точный адрес | пусто |
 | `S3_ENDPOINT`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_BUCKET` | MinIO/S3 при `MEDIA_STORAGE=s3` | localhost:9000, бакет kudaibergen |
 | `FCM_ENABLED`, `FCM_CREDENTIALS` (путь к файлу) или `FCM_CREDENTIALS_JSON` (содержимое JSON, приоритетнее) | пуши через Firebase | `false` |
 

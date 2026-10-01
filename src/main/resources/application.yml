@@ -99,7 +99,8 @@ app:
     # local — папка на диске, отдаётся по /media/** (dev); s3 — приватный бакет MinIO/S3 + presigned-ссылки
     storage: ${MEDIA_STORAGE:local}
     upload-dir: ${MEDIA_UPLOAD_DIR:uploads}
-    # для local: адрес сервера в ссылках на файлы (http://192.168.1.10:8080) — телефон не откроет «/media/…»
+    # для local: адрес сервера в ссылках на файлы. Пусто — адрес из запроса (как телефон обратился к серверу),
+    # вне запроса — адрес компьютера в локальной сети. В проде — точный адрес (https://api.kudaibergen.kg)
     public-url: ${MEDIA_PUBLIC_URL:}
     s3:
       endpoint: ${S3_ENDPOINT:http://localhost:9000}
