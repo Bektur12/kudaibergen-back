@@ -99,8 +99,18 @@ public class MasterFeedService {
             .collect(Collectors.toMap(ServiceRequest::getId, Function.identity()));
       Map<Long, ServiceOffer> myOffers = offers.findByMasterIdAndRequestIdIn(master.getId(), ids).stream()
             .collect(Collectors.toMap(ServiceOffer::getRequestId, Function.identity()));
-      Map<Long, Long> chatOfRequest = chats.findByMasterIdAndServiceRequestIdIn(master.getId(), ids).stream()
-            .collect(Collectors.toMap(Chat::getServiceRequestId, Chat::getId, (a, b) -> a));
+      // чат с клиентом один на пару: показываем его у заявок, на которые мастер уже откликнулся
+      Map<Long, Long> chatOfBuyer = chats.findByMasterIdAndBuyerIdIn(master.getId(),
+                  byId.values().stream().map(ServiceRequest::getBuyerId).distinct().toList()).stream()
+            .collect(Collectors.toMap(Chat::getBuyerId, Chat::getId, (a, b) -> a));
+      Map<Long, Long> chatOfRequest = new java.util.HashMap<>();
+      myOffers.keySet().forEach(requestId -> {
+         ServiceRequest request = byId.get(requestId);
+         Long chat = request == null ? null : chatOfBuyer.get(request.getBuyerId());
+         if (chat != null) {
+            chatOfRequest.put(requestId, chat);
+         }
+      });
       Map<Long, String> names = buyerNames(byId.values());
       return CursorPage.of(rows, size, row -> row.getNotifiedAt() + "|" + row.getRequestId(), row -> {
          ServiceRequest request = byId.get(row.getRequestId());
@@ -168,8 +178,7 @@ public class MasterFeedService {
    }
 
    private Long chatId(ServiceRequest request, Long masterId) {
-      return chats.findByMasterIdAndServiceRequestIdIn(masterId, List.of(request.getId())).stream()
-            .map(Chat::getId).findFirst().orElse(null);
+      return chats.findByBuyerIdAndMasterId(request.getBuyerId(), masterId).map(Chat::getId).orElse(null);
    }
 
    private ServiceRecipient recipient(Long requestId, Long masterId) {

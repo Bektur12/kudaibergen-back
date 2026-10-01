@@ -64,7 +64,8 @@ public class RequestStatsView {
             .collect(Collectors.toMap(RequestReply::getShopId, Function.identity()));
       Map<Long, Shop> shopsById = shops.findAllById(have.stream().map(RequestRecipient::getShopId).toList())
             .stream().collect(Collectors.toMap(Shop::getId, Function.identity()));
-      Map<Long, Long> chatOfShop = have.isEmpty() ? Map.of() : chats.findByRequestId(requestId).stream()
+      Map<Long, Long> chatOfShop = have.isEmpty() ? Map.of() : chats.findByBuyerIdAndShopIdIn(request.getBuyerId(),
+            have.stream().map(RequestRecipient::getShopId).toList()).stream()
             .collect(Collectors.toMap(Chat::getShopId, Chat::getId, (a, b) -> a));
       MarketSnapshot snapshot = market.snapshot();
 

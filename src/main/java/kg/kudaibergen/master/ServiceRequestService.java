@@ -303,8 +303,9 @@ public class ServiceRequestService {
       var cards = masterMapper.cards(masters.findAllById(masterIds));
       Map<Long, Integer> distance = recipients.findByRequestIdAndMasterIdIn(requestId, masterIds).stream()
             .collect(Collectors.toMap(ServiceRecipient::getMasterId, ServiceRecipient::getDistanceM));
-      Map<Long, Long> chatOfMaster = chats.findByServiceRequestId(requestId).stream()
-            .filter(chat -> chat.getMasterId() != null)
+      Long buyerId = requests.findById(requestId).map(ServiceRequest::getBuyerId).orElse(null);
+      Map<Long, Long> chatOfMaster = buyerId == null || masterIds.isEmpty() ? Map.of()
+            : chats.findByBuyerIdAndMasterIdIn(buyerId, masterIds).stream()
             .collect(Collectors.toMap(Chat::getMasterId, Chat::getId, (a, b) -> a));
       return list.stream().map(offer -> mapper.offer(offer, cards.get(offer.getMasterId()),
             distance.getOrDefault(offer.getMasterId(), 0), chatOfMaster.get(offer.getMasterId()))).toList();

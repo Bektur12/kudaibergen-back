@@ -8,6 +8,7 @@ import java.util.UUID;
 import kg.kudaibergen.chat.entity.MessageType;
 import kg.kudaibergen.common.config.AppProperties;
 import kg.kudaibergen.common.error.BadRequestException;
+import kg.kudaibergen.media.MediaTypes;
 import kg.kudaibergen.media.storage.MediaStorage;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -40,7 +41,12 @@ public class ChatAttachments {
       if (file == null || file.isEmpty()) {
          throw new BadRequestException("FILE_REQUIRED", "Файл не передан");
       }
-      String mimeType = file.getContentType();
+      String mimeType = switch (type) {
+         case PHOTO -> MediaTypes.resolve(file, "image/");
+         case VOICE -> MediaTypes.resolve(file, "audio/");
+         case VIDEO -> MediaTypes.resolve(file, "video/");
+         default -> file.getContentType();
+      };
       DataSize limit = switch (type) {
          case PHOTO -> requirePrefix(mimeType, "image/", "Ожидалось изображение", config.maxPhotoSize());
          case VOICE -> requirePrefix(mimeType, "audio/", "Ожидалось аудио", config.maxVoiceSize());
@@ -50,8 +56,9 @@ public class ChatAttachments {
       if (file.getSize() > limit.toBytes()) {
          throw new BadRequestException("FILE_TOO_LARGE", "Файл больше допустимого размера (" + limit + ")");
       }
+      String extension = extensionOf(file.getOriginalFilename());
       String key = "chat/" + type.name().toLowerCase() + "/" + UUID.randomUUID()
-            + extensionOf(file.getOriginalFilename());
+            + (extension.isEmpty() ? extensionOfType(mimeType) : extension);
       try (InputStream content = file.getInputStream()) {
          storage.put(key, content, file.getSize(), mimeType);
       } catch (IOException e) {
@@ -65,6 +72,31 @@ public class ChatAttachments {
          throw new BadRequestException("BAD_MEDIA_TYPE", message);
       }
       return limit;
+   }
+
+   /** Файл пришёл без расширения — по типу, чтобы раздача отдала верный Content-Type. */
+   static String extensionOfType(String mimeType) {
+      if (mimeType == null) {
+         return "";
+      }
+      return switch (mimeType) {
+         case "image/jpeg" -> ".jpg";
+         case "image/png" -> ".png";
+         case "image/webp" -> ".webp";
+         case "image/gif" -> ".gif";
+         case "image/heic", "image/heif" -> ".heic";
+         case "video/mp4" -> ".mp4";
+         case "video/quicktime" -> ".mov";
+         case "video/3gpp", "audio/3gpp" -> ".3gp";
+         case "video/webm", "audio/webm" -> ".webm";
+         case "audio/mp4" -> ".m4a";
+         case "audio/aac" -> ".aac";
+         case "audio/mpeg" -> ".mp3";
+         case "audio/ogg" -> ".ogg";
+         case "audio/wav" -> ".wav";
+         case "audio/amr" -> ".amr";
+         default -> "";
+      };
    }
 
    /** Только короткое буквенно-цифровое расширение: имя файла от клиента в ключ не попадает. */

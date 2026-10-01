@@ -149,6 +149,24 @@ class ChatIT extends AbstractIntegrationTest {
       // своему боксу не пишут; по чужому запросу — нельзя
       JsonNode self = call(authed(jsonPost("/api/v1/chats", "{\"shopId\":" + shopId + "}"), seller), 400);
       assertThat(self.get("code").asText()).isEqualTo("SELF_CHAT");
+
+      // чат на двоих один: ответы «Есть» на разные запросы приходят в тот же чат, запрос — контекст
+      long carId = lacetti(buyer);
+      long chatId = opened.get("id").asLong();
+      for (String text : new String[]{"Фара левая", "Фара правая"}) {
+         long requestId = call(authed(jsonPost("/api/v1/requests",
+               "{\"carId\":" + carId + ",\"text\":\"" + text + "\",\"target\":\"MARKET\"}"), buyer), 201)
+               .get("id").asLong();
+         JsonNode have = call(authed(jsonPost("/api/v1/requests/" + requestId + "/replies",
+               "{\"answer\":\"HAVE\",\"condition\":\"NEW\",\"price\":2000}"), seller), 201);
+         assertThat(have.get("chatId").asLong()).isEqualTo(chatId);
+         assertThat(call(authed(jsonPost("/api/v1/chats", "{\"shopId\":" + shopId + ",\"requestId\":" + requestId
+               + "}"), buyer), 200).get("id").asLong()).isEqualTo(chatId);
+      }
+      assertThat(jdbc.queryForObject("select count(*) from chats where shop_id = ? and buyer_id = ?", Long.class,
+            shopId, userId(buyer))).isEqualTo(1);
+      assertThat(call(authed(get("/api/v1/chats/" + chatId), buyer), 200).get("request").get("text").asText())
+            .isEqualTo("Фара правая");
    }
 
    // ─────────────────────── хелперы ───────────────────────

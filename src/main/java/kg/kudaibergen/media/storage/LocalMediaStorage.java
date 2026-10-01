@@ -8,6 +8,8 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 
 import kg.kudaibergen.common.config.AppProperties;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
@@ -18,13 +20,25 @@ public class LocalMediaStorage implements MediaStorage {
 
    private final Path root;
 
-   public LocalMediaStorage(AppProperties properties) {
+   /**
+    * Адрес сервера для ссылок на файлы (MEDIA_PUBLIC_URL, например http://192.168.1.10:8080): телефон не может
+    * открыть относительный «/media/…». Пусто — ссылки относительные, клиент дописывает адрес API сам.
+    */
+   private final String publicUrl;
+
+   @Autowired
+   public LocalMediaStorage(AppProperties properties, @Value("${app.media.public-url:}") String publicUrl) {
       this.root = Path.of(properties.media().uploadDir()).toAbsolutePath().normalize();
+      this.publicUrl = publicUrl == null ? "" : publicUrl.strip().replaceAll("/+$", "");
+   }
+
+   public LocalMediaStorage(AppProperties properties) {
+      this(properties, "");
    }
 
    @Override
    public String urlFor(String key) {
-      return key == null ? null : "/media/" + key;
+      return key == null ? null : publicUrl + "/media/" + key;
    }
 
    @Override

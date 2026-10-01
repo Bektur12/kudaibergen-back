@@ -19,21 +19,19 @@ public interface ChatRepository extends JpaRepository<Chat, Long> {
    @Query("select c from Chat c where c.id = :id")
    Optional<Chat> findForUpdate(@Param("id") Long id);
 
-   Optional<Chat> findByBuyerIdAndShopIdAndRequestId(Long buyerId, Long shopId, Long requestId);
+   /** Чат покупателя с магазином — один на пару (запрос — только контекст). */
+   Optional<Chat> findByBuyerIdAndShopId(Long buyerId, Long shopId);
 
-   @Query("select c from Chat c where c.buyerId = :buyerId and c.shopId = :shopId and c.requestId is null")
-   Optional<Chat> findDirect(@Param("buyerId") Long buyerId, @Param("shopId") Long shopId);
+   /** Чат покупателя с мастером — один на пару. */
+   Optional<Chat> findByBuyerIdAndMasterId(Long buyerId, Long masterId);
 
-   List<Chat> findByRequestId(Long requestId);
+   List<Chat> findByBuyerIdAndShopIdIn(Long buyerId, Collection<Long> shopIds);
 
-   List<Chat> findByServiceRequestId(Long serviceRequestId);
+   List<Chat> findByBuyerIdAndMasterIdIn(Long buyerId, Collection<Long> masterIds);
 
-   List<Chat> findByMasterIdAndServiceRequestIdIn(Long masterId, Collection<Long> serviceRequestIds);
+   List<Chat> findByShopIdAndBuyerIdIn(Long shopId, Collection<Long> buyerIds);
 
-   Optional<Chat> findByBuyerIdAndMasterIdAndServiceRequestId(Long buyerId, Long masterId, Long serviceRequestId);
-
-   @Query("select c from Chat c where c.buyerId = :buyerId and c.masterId = :masterId and c.serviceRequestId is null")
-   Optional<Chat> findDirectWithMaster(@Param("buyerId") Long buyerId, @Param("masterId") Long masterId);
+   List<Chat> findByMasterIdAndBuyerIdIn(Long masterId, Collection<Long> buyerIds);
 
    /** Чаты мастера (вкладка «Чаты» мастера). Пустые чаты мастер не видит. */
    @Query(nativeQuery = true, value = """
@@ -51,7 +49,6 @@ public interface ChatRepository extends JpaRepository<Chat, Long> {
          where c.master_id = :masterId and not c.blocked_by_shop""")
    long totalUnreadForMaster(@Param("masterId") Long masterId);
 
-   List<Chat> findByShopIdAndRequestIdIn(Long shopId, Collection<Long> requestIds);
 
    /**
     * Чаты покупателя (16): свежие сверху. Ключ сортировки — время последнего сообщения, у пустого

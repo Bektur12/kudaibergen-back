@@ -371,7 +371,8 @@ public class RequestService {
       List<RequestReply> have = replies.findHave(requestId, ReplyAnswer.HAVE, afterId == null ? 0 : afterId);
       Map<Long, Shop> byId = shops.findAllById(have.stream().map(RequestReply::getShopId).toList()).stream()
             .collect(Collectors.toMap(Shop::getId, Function.identity()));
-      Map<Long, Long> chatOfShop = chats.findByRequestId(requestId).stream()
+      Map<Long, Long> chatOfShop = have.isEmpty() ? Map.of() : chats.findByBuyerIdAndShopIdIn(request.getBuyerId(),
+                  have.stream().map(RequestReply::getShopId).toList()).stream()
             .collect(Collectors.toMap(Chat::getShopId, Chat::getId, (a, b) -> a));
       Map<Long, PartCardDto> partCards = catalogView.cards(have.stream().map(RequestReply::getPartId)
                   .filter(Objects::nonNull).distinct().toList(), mapper.carFilter(request), principal.userId())

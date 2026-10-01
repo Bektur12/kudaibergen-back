@@ -86,7 +86,7 @@ public class MediaService {
       if (file == null || file.isEmpty()) {
          throw new BadRequestException("FILE_REQUIRED", "Файл не передан");
       }
-      String mimeType = file.getContentType();
+      String mimeType = MediaTypes.resolve(file, "video/");
       if (mimeType == null || !mimeType.startsWith("video/")) {
          throw new BadRequestException("BAD_MEDIA_TYPE", "Ожидалось видео");
       }

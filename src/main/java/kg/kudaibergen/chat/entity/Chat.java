@@ -27,13 +27,15 @@ public class Chat {
    @Column(name = "shop_id", updatable = false)
    private Long shopId;
 
-   @Column(name = "request_id", updatable = false)
+   /** Последний запрос, о котором шла речь (контекст чата, меняется с новым ответом «Есть»). */
+   @Column(name = "request_id")
    private Long requestId;
 
    @Column(name = "master_id", updatable = false)
    private Long masterId;
 
-   @Column(name = "service_request_id", updatable = false)
+   /** Последняя заявка, о которой шла речь (меняется с новым откликом «Могу помочь»). */
+   @Column(name = "service_request_id")
    private Long serviceRequestId;
 
    @Column(name = "last_message_id")
@@ -70,12 +72,26 @@ public class Chat {
       this.createdAt = now;
    }
 
-   /** Чат с мастером: по заявке на услугу или прямой (serviceRequestId = null). */
+   /** Чат с мастером. serviceRequestId — заявка, о которой говорили последней (null — пока ни о какой). */
    public static Chat withMaster(Long buyerId, Long masterId, Long serviceRequestId, Instant now) {
       Chat chat = new Chat(buyerId, null, null, now);
       chat.masterId = masterId;
       chat.serviceRequestId = serviceRequestId;
       return chat;
+   }
+
+   /** Чат один на пару; запрос, по которому пришёл новый ответ «Есть», становится контекстом чата. */
+   public void aboutRequest(Long requestId) {
+      if (requestId != null) {
+         this.requestId = requestId;
+      }
+   }
+
+   /** Заявка, по которой пришёл новый отклик «Могу помочь», становится контекстом чата. */
+   public void aboutServiceRequest(Long serviceRequestId) {
+      if (serviceRequestId != null) {
+         this.serviceRequestId = serviceRequestId;
+      }
    }
 
    public boolean withMaster() {

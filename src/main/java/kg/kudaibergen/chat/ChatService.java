@@ -124,8 +124,9 @@ public class ChatService {
    // ─────────────────────── открыть чат ───────────────────────
 
    /**
-    * «Написать» покупателя (07, 29, 30). По запросу — чат, созданный ответом «Есть»; без запроса —
-    * прямой чат с магазином (создаётся при первом открытии, бокс увидит его после первого сообщения).
+    * «Написать» покупателя (07, 29, 30). Чат с магазином один — из запроса, карточки товара или профиля
+    * открывается тот же (создаётся при первом открытии, бокс увидит его после первого сообщения).
+    * requestId — только проверка, что запрос свой; контекстом чата он становится, когда бокс ответил «Есть».
     */
    @Transactional
    public ChatDto open(Long buyerId, ChatInputs.OpenChat input, Lang lang) {
@@ -140,51 +141,43 @@ public class ChatService {
       if (shop.getId().equals(view.shopIdOf(buyerId))) {
          throw new BadRequestException("SELF_CHAT", "Нельзя написать своему боксу");
       }
-      Chat chat;
       if (input.requestId() != null) {
-         PartRequest request = requests.findById(input.requestId())
+         requests.findById(input.requestId())
                .filter(found -> found.getBuyerId().equals(buyerId))
                .orElseThrow(() -> new NotFoundException("REQUEST_NOT_FOUND", "Запрос не найден"));
-         chat = chats.findByBuyerIdAndShopIdAndRequestId(buyerId, shop.getId(), request.getId())
-               .orElseThrow(() -> new BadRequestException("SHOP_NOT_REPLIED",
-                     "Этот бокс не отвечал «Есть» на запрос"));
-      } else {
-         chat = chats.findDirect(buyerId, shop.getId()).orElseGet(() -> createChat(buyerId, shop.getId(), null));
-         if (input.partId() != null) {
-            attachPart(chat, buyerId, input.partId());
-         }
+      }
+      Chat chat = chats.findByBuyerIdAndShopId(buyerId, shop.getId())
+            .orElseGet(() -> createChat(buyerId, shop.getId(), input.requestId()));
+      if (input.partId() != null) {
+         attachPart(chat, buyerId, input.partId());
       }
       return view.chat(chat, ChatSide.BUYER, lang);
    }
 
-   /** Чат с мастером: по заявке — созданный откликом «Могу помочь», без заявки — прямой из профиля мастера. */
+   /** Чат с мастером — один на пару: из заявки и из профиля мастера открывается тот же. */
    private ChatDto openWithMaster(Long buyerId, ChatInputs.OpenChat input, Lang lang) {
       Master master = masters.findById(input.masterId()).filter(Master::isActive)
             .orElseThrow(() -> new NotFoundException("MASTER_NOT_FOUND", "Мастер не найден"));
       if (master.getOwnerId().equals(buyerId)) {
          throw new BadRequestException("SELF_CHAT", "Нельзя написать самому себе");
       }
-      Chat chat;
-      if (input.serviceRequestId() != null) {
-         chat = chats.findByBuyerIdAndMasterIdAndServiceRequestId(buyerId, master.getId(), input.serviceRequestId())
-               .orElseThrow(() -> new BadRequestException("MASTER_NOT_OFFERED",
-                     "Этот мастер не откликался на заявку"));
-      } else {
-         chat = chats.findDirectWithMaster(buyerId, master.getId())
-               .orElseGet(() -> createMasterChat(buyerId, master.getId(), null));
-      }
+      Chat chat = chats.findByBuyerIdAndMasterId(buyerId, master.getId())
+            .orElseGet(() -> createMasterChat(buyerId, master.getId(), input.serviceRequestId()));
       return view.chat(chat, ChatSide.BUYER, lang);
    }
 
    /**
-    * Мастер ответил «Могу помочь» (39): чат по заявке и первым сообщением — карточка отклика
-    * (REPLY с payload offerId, priceFrom, availableAt). Вызывается в транзакции отклика. Возвращает id чата.
+    * Мастер ответил «Могу помочь» (39): в чате клиента с мастером (один на пару) — карточка отклика
+    * (REPLY с payload serviceRequestId, offerId, priceFrom, availableAt); заявка становится контекстом чата.
+    * Вызывается в транзакции отклика. Возвращает id чата.
     */
    @Transactional(propagation = Propagation.MANDATORY)
    public Long openForServiceOffer(ServiceRequest request, ServiceOffer offer, Master master, Long authorId) {
-      Chat chat = chats.findByBuyerIdAndMasterIdAndServiceRequestId(request.getBuyerId(), master.getId(), request.getId())
+      Chat chat = chats.findByBuyerIdAndMasterId(request.getBuyerId(), master.getId())
             .orElseGet(() -> createMasterChat(request.getBuyerId(), master.getId(), request.getId()));
+      chat.aboutServiceRequest(request.getId());
       Map<String, Object> card = new LinkedHashMap<>();
+      card.put("serviceRequestId", request.getId());
       card.put("offerId", offer.getId());
       card.put("priceFrom", offer.getPriceFrom());
       card.put("availableAt", offer.getAvailableAt() == null ? null : offer.getAvailableAt().toString());
@@ -198,20 +191,22 @@ public class ChatService {
       try {
          return chats.saveAndFlush(Chat.withMaster(buyerId, masterId, serviceRequestId, now));
       } catch (DataIntegrityViolationException parallel) {
-         return (serviceRequestId == null ? chats.findDirectWithMaster(buyerId, masterId)
-               : chats.findByBuyerIdAndMasterIdAndServiceRequestId(buyerId, masterId, serviceRequestId)).orElseThrow();
+         return chats.findByBuyerIdAndMasterId(buyerId, masterId).orElseThrow();
       }
    }
 
    /**
-    * Бокс ответил «Есть» (12): чат по запросу создаётся, если его ещё нет, и первым сообщением
-    * в нём — карточка ответа. Вызывается в транзакции ответа. Возвращает id чата.
+    * Бокс ответил «Есть» (12): в чате покупателя с боксом (один на пару, создаётся, если его нет) —
+    * карточка ответа с requestId; запрос становится контекстом чата. Вызывается в транзакции ответа.
+    * Возвращает id чата.
     */
    @Transactional(propagation = Propagation.MANDATORY)
    public Long openForReply(PartRequest request, RequestReply reply, Long authorId) {
-      Chat chat = chats.findByBuyerIdAndShopIdAndRequestId(request.getBuyerId(), reply.getShopId(), request.getId())
+      Chat chat = chats.findByBuyerIdAndShopId(request.getBuyerId(), reply.getShopId())
             .orElseGet(() -> createChat(request.getBuyerId(), reply.getShopId(), request.getId()));
+      chat.aboutRequest(request.getId());
       Map<String, Object> card = new LinkedHashMap<>();
+      card.put("requestId", request.getId());
       card.put("replyId", reply.getId());
       card.put("condition", reply.getCondition() == null ? null : reply.getCondition().name());
       card.put("price", reply.getPrice());
@@ -250,8 +245,7 @@ public class ChatService {
       try {
          chat = chats.saveAndFlush(new Chat(buyerId, shopId, requestId, now));
       } catch (DataIntegrityViolationException parallel) {
-         return (requestId == null ? chats.findDirect(buyerId, shopId)
-               : chats.findByBuyerIdAndShopIdAndRequestId(buyerId, shopId, requestId)).orElseThrow();
+         return chats.findByBuyerIdAndShopId(buyerId, shopId).orElseThrow();
       }
       // плашка не делает чат «начатым»: last_message остаётся пустым до первого настоящего сообщения
       messages.save(Message.system(chat.getId(), SystemEvent.PAY_AT_BOX, null, now));
@@ -265,9 +259,10 @@ public class ChatService {
          return;
       }
       PartRequest request = requests.findById(event.requestId()).orElseThrow();
-      chats.findByBuyerIdAndShopIdAndRequestId(request.getBuyerId(), event.shopId(), request.getId())
+      chats.findByBuyerIdAndShopId(request.getBuyerId(), event.shopId())
             .ifPresent(chat -> {
                Map<String, Object> payload = new LinkedHashMap<>();
+               payload.put("requestId", request.getId());
                payload.put("stars", event.stars());
                add(chat, Message.system(chat.getId(), SystemEvent.REQUEST_CLOSED, payload, clock.instant()), false);
             });

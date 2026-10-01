@@ -131,8 +131,18 @@ public class IncomingRequestService {
       Map<Long, RequestReply> myReplies = replies.findByShopIdAndRequestIdIn(shop.getId(), ids).stream()
             .collect(Collectors.toMap(RequestReply::getRequestId, Function.identity()));
       Map<Long, String> buyerNames = buyerNames(byId.values());
-      Map<Long, Long> chatOfRequest = chats.findByShopIdAndRequestIdIn(shop.getId(), ids).stream()
-            .collect(Collectors.toMap(Chat::getRequestId, Chat::getId, (a, b) -> a));
+      // чат с покупателем один на пару: показываем его у запросов, на которые бокс уже ответил
+      Map<Long, Long> chatOfBuyer = chats.findByShopIdAndBuyerIdIn(shop.getId(),
+                  byId.values().stream().map(PartRequest::getBuyerId).distinct().toList()).stream()
+            .collect(Collectors.toMap(Chat::getBuyerId, Chat::getId, (a, b) -> a));
+      Map<Long, Long> chatOfRequest = new java.util.HashMap<>();
+      myReplies.keySet().forEach(requestId -> {
+         PartRequest request = byId.get(requestId);
+         Long chat = request == null ? null : chatOfBuyer.get(request.getBuyerId());
+         if (chat != null) {
+            chatOfRequest.put(requestId, chat);
+         }
+      });
       return CursorPage.of(rows, size, row -> row.getNotifiedAt() + "|" + row.getRequestId(), row -> {
          PartRequest request = byId.get(row.getRequestId());
          RequestReply reply = myReplies.get(row.getRequestId());
@@ -281,8 +291,7 @@ public class IncomingRequestService {
    }
 
    private Long chatId(PartRequest request, Long shopId) {
-      return chats.findByBuyerIdAndShopIdAndRequestId(request.getBuyerId(), shopId, request.getId())
-            .map(Chat::getId).orElse(null);
+      return chats.findByBuyerIdAndShopId(request.getBuyerId(), shopId).map(Chat::getId).orElse(null);
    }
 
    private RequestRecipient recipient(Long requestId, Long shopId) {
