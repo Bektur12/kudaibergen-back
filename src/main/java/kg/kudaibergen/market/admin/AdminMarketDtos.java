@@ -31,14 +31,36 @@ public final class AdminMarketDtos {
          @NotEmpty Map<Side, @NotNull @Min(0) @Max(200) Integer> counts) {
    }
 
-   /** Номер арендатора из базы рынка (для SMS-проверки продавца); пустая строка — убрать. */
+   /**
+    * Правка контейнера; null — не менять. tenantPhone / tenantName — арендатор из базы рынка (пустая строка — убрать).
+    * side / number / posInRow — перенумерация (сторона — из сторон ряда), active = false — выключить место.
+    */
    public record UpdateContainerRequest(
          @Pattern(regexp = "|" + PhoneFormat.E164_KG, message = PhoneFormat.MESSAGE) String tenantPhone,
-         Boolean active) {
+         Boolean active,
+         @Size(max = 120) String tenantName,
+         Side side,
+         @Min(1) @Max(500) Integer number,
+         @Min(1) @Max(500) Integer posInRow) {
+
+      public UpdateContainerRequest(String tenantPhone, Boolean active) {
+         this(tenantPhone, active, null, null, null, null);
+      }
+   }
+
+   /** Новое место в ряду; posInRow по умолчанию = number. */
+   public record CreateContainerRequest(
+         @NotNull Long rowId,
+         @NotNull Side side,
+         @NotNull @Min(1) @Max(500) Integer number,
+         @Min(1) @Max(500) Integer posInRow,
+         @Size(max = 120) String tenantName,
+         @Pattern(regexp = "|" + PhoneFormat.E164_KG, message = PhoneFormat.MESSAGE) String tenantPhone) {
    }
 
    public record AdminContainerDto(Long id, Long rowId, String rowCode, Side side, int number, boolean active,
-                                   @Nullable String tenantPhone, String qrToken) {
+                                   @Nullable String tenantPhone, String qrToken, int posInRow,
+                                   @Nullable String tenantName) {
    }
 
    public record AnchorDto(

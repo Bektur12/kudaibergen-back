@@ -65,6 +65,10 @@ public class MapVersion {
    @Column(name = "published_at", nullable = false)
    private Instant publishedAt = Instant.now();
 
+   /** Кто опубликовал (null — загружено миграцией). */
+   @Column(name = "published_by")
+   private Long publishedBy;
+
    protected MapVersion() {
    }
 
@@ -140,6 +144,14 @@ public class MapVersion {
 
    public void setGeoAffine(String geoAffine) {
       this.geoAffine = geoAffine;
+   }
+
+   public Long getPublishedBy() {
+      return publishedBy;
+   }
+
+   public void setPublishedBy(Long publishedBy) {
+      this.publishedBy = publishedBy;
    }
 
    public Instant getPublishedAt() {

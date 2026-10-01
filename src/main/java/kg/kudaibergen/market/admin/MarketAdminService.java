@@ -28,6 +28,7 @@ import kg.kudaibergen.market.MarketRowRepository;
 import kg.kudaibergen.market.MarketSnapshot;
 import kg.kudaibergen.market.admin.AdminMarketDtos.AdminContainerDto;
 import kg.kudaibergen.market.admin.AdminMarketDtos.CalibrationDto;
+import kg.kudaibergen.market.admin.AdminMarketDtos.CreateContainerRequest;
 import kg.kudaibergen.market.admin.AdminMarketDtos.GeoAnchorsRequest;
 import kg.kudaibergen.market.admin.AdminMarketDtos.MapUploadRequest;
 import kg.kudaibergen.market.admin.AdminMarketDtos.PublishedMapDto;
@@ -42,6 +43,7 @@ import kg.kudaibergen.market.geo.GeoCalibration;
 import kg.kudaibergen.market.geo.RowShape;
 import kg.kudaibergen.market.route.PassageGraph;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.util.HtmlUtils;
@@ -131,8 +133,25 @@ public class MarketAdminService {
    public AdminContainerDto updateContainer(Long containerId, UpdateContainerRequest request) {
       Container container = containers.findById(containerId)
             .orElseThrow(() -> new NotFoundException("CONTAINER_NOT_FOUND", "Контейнер не найден"));
+      MarketRow row = rows.findById(container.getRowId()).orElseThrow(rowNotFound());
       if (request.tenantPhone() != null) {
          container.setTenantPhone(request.tenantPhone().isBlank() ? null : request.tenantPhone());
+      }
+      if (request.tenantName() != null) {
+         container.setTenantName(request.tenantName().isBlank() ? null : request.tenantName().strip());
+      }
+      if (request.side() != null || request.number() != null || request.posInRow() != null) {
+         Side side = request.side() != null ? request.side() : container.getSide();
+         requireSide(row, side);
+         short number = request.number() != null ? request.number().shortValue() : container.getNumber();
+         short pos = request.posInRow() != null ? request.posInRow().shortValue()
+               : request.number() != null ? number : container.getPosInRow();
+         container.place(side, number, pos);
+         try {
+            containers.flush();
+         } catch (DataIntegrityViolationException e) {
+            throw containerExists(row, side, number);
+         }
       }
       if (request.active() != null && request.active() != container.isActive()) {
          if (!request.active()) {
@@ -145,6 +164,50 @@ public class MarketAdminService {
       }
       market.reload();
       return toDto(container, rows.findById(container.getRowId()).orElseThrow());
+   }
+
+   /** Новое место в ряду (A3). Номер на стороне ряда уникален. */
+   @Transactional
+   public AdminContainerDto createContainer(CreateContainerRequest request) {
+      MarketRow row = rows.findById(request.rowId()).orElseThrow(rowNotFound());
+      requireSide(row, request.side());
+      Container container = new Container(row.getId(), request.side(), request.number().shortValue(), newToken());
+      if (request.posInRow() != null) {
+         container.place(request.side(), request.number().shortValue(), request.posInRow().shortValue());
+      }
+      container.setTenantName(request.tenantName() == null || request.tenantName().isBlank() ? null
+            : request.tenantName().strip());
+      container.setTenantPhone(request.tenantPhone() == null || request.tenantPhone().isBlank() ? null
+            : request.tenantPhone());
+      try {
+         containers.saveAndFlush(container);
+      } catch (DataIntegrityViolationException e) {
+         throw containerExists(row, request.side(), request.number().shortValue());
+      }
+      market.reload();
+      return toDto(container, row);
+   }
+
+   /**
+    * Удалить место. Если в нём стоит (или переезжает) магазин — 409 CONTAINER_OCCUPIED; если на него есть ссылки
+    * в истории (проверки, запросы, споры) — 409 CONTAINER_IN_USE, такое место выключают (active = false).
+    */
+   @Transactional
+   public void deleteContainer(Long containerId) {
+      Container container = containers.findById(containerId)
+            .orElseThrow(() -> new NotFoundException("CONTAINER_NOT_FOUND", "Контейнер не найден"));
+      ContainerTenants provider = tenants.getIfAvailable();
+      if (provider != null && !provider.byContainers(List.of(containerId)).isEmpty()) {
+         throw new ConflictException("CONTAINER_OCCUPIED", "В контейнере стоит магазин — сначала переселите его");
+      }
+      try {
+         containers.delete(container);
+         containers.flush();
+      } catch (DataIntegrityViolationException e) {
+         throw new ConflictException("CONTAINER_IN_USE",
+               "У контейнера есть история (магазины, проверки, запросы) — выключите его вместо удаления");
+      }
+      market.reload();
    }
 
    // ─────────────────────── GPS ───────────────────────
@@ -186,6 +249,11 @@ public class MarketAdminService {
     */
    @Transactional
    public PublishedMapDto publishMap(MapUploadRequest request) {
+      return publishMap(request, null);
+   }
+
+   @Transactional
+   public PublishedMapDto publishMap(MapUploadRequest request, Long adminId) {
       validate(request);
       MapVersion previous = currentVersion();
       BigDecimal metersPerPx = request.metersPerPx() == null ? previous.getMetersPerPx()
@@ -196,6 +264,7 @@ public class MarketAdminService {
             metersPerPx, previous.getGeoAffine());
       versions.clearCurrent();
       next.setCurrent(true);
+      next.setPublishedBy(adminId);
       versions.save(next);
 
       Set<String> codes = new HashSet<>();
@@ -257,6 +326,56 @@ public class MarketAdminService {
 
    // ─────────────────────── внутреннее ───────────────────────
 
+   /** Ошибка схемы (как при публикации) или пусто — для проверки черновика без публикации. */
+   public java.util.Optional<String> check(MapUploadRequest request) {
+      try {
+         validate(request);
+         return java.util.Optional.empty();
+      } catch (BadRequestException e) {
+         return java.util.Optional.of(e.getMessage());
+      }
+   }
+
+   /** Текущая версия в формате загрузки — с неё начинается черновик в редакторе. */
+   @Transactional(readOnly = true)
+   public MapUploadRequest exportCurrent() {
+      MapVersion current = currentVersion();
+      List<RowUpload> rowUploads = rows.findAll().stream()
+            .filter(MarketRow::isActive)
+            .sorted(java.util.Comparator.comparing(MarketRow::getSortOrder).thenComparing(MarketRow::getCode))
+            .map(row -> new RowUpload(row.getCode(), row.getLabel(), row.getType(), read(row.getGeometry()),
+                  (int) row.getSortOrder()))
+            .toList();
+      return new MapUploadRequest(read(current.getBoundary()), read(current.getBlocks()), read(current.getPassages()),
+            read(current.getEntrances()), read(current.getPois()), read(current.getStreets()),
+            read(current.getLabels()), current.getMetersPerPx().doubleValue(), rowUploads);
+   }
+
+   @Transactional(readOnly = true)
+   public MapVersion current() {
+      return currentVersion();
+   }
+
+   private JsonNode read(String json) {
+      try {
+         return mapper.readTree(json);
+      } catch (JsonProcessingException e) {
+         throw new IllegalStateException("Испорчена сохранённая схема", e);
+      }
+   }
+
+   private static void requireSide(MarketRow row, Side side) {
+      if (!Set.of(Side.of(row.getType())).contains(side)) {
+         throw new BadRequestException("WRONG_SIDE", "У ряда " + row.getLabel() + " стороны "
+               + Set.of(Side.of(row.getType())));
+      }
+   }
+
+   private static ConflictException containerExists(MarketRow row, Side side, short number) {
+      return new ConflictException("CONTAINER_EXISTS", "В ряду " + row.getLabel() + " на этой стороне уже есть "
+            + "контейнер " + number);
+   }
+
    private void validate(MapUploadRequest request) {
       try {
          List<List<kg.kudaibergen.market.geo.Point>> lines = new ArrayList<>();
@@ -296,7 +415,8 @@ public class MarketAdminService {
 
    private static AdminContainerDto toDto(Container container, MarketRow row) {
       return new AdminContainerDto(container.getId(), row.getId(), row.getCode(), container.getSide(),
-            container.getNumber(), container.isActive(), container.getTenantPhone(), container.getQrToken());
+            container.getNumber(), container.isActive(), container.getTenantPhone(), container.getQrToken(),
+            container.getPosInRow(), container.getTenantName());
    }
 
    private static java.util.function.Supplier<NotFoundException> rowNotFound() {

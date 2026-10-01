@@ -50,7 +50,8 @@ public class MarketAdminController {
    @PatchMapping("/containers/{id}")
    @PreAuthorize("hasAuthority('MARKET_EDIT')")
    @Audited(action = "CONTAINER_UPDATE", entity = "CONTAINER", id = "#id")
-   @Operation(summary = "Номер арендатора и активность контейнера")
+   @Operation(summary = "Изменить контейнер", description = "Арендатор (tenantName, tenantPhone; пустая строка — "
+         + "убрать), перенумерация (side, number, posInRow), active = false — выключить место")
    public AdminContainerDto updateContainer(@PathVariable Long id,
                                             @Valid @RequestBody UpdateContainerRequest request) {
       return admin.updateContainer(id, request);
@@ -82,7 +83,7 @@ public class MarketAdminController {
    @PutMapping("/map")
    @PreAuthorize("hasAuthority('MARKET_MAP_PUBLISH')")
    @Audited(action = "MAP_PUBLISH", entity = "MAP")
-   @Operation(summary = "Опубликовать новую версию схемы",
+   @Operation(summary = "Опубликовать схему сразу, без черновика",
          description = "Формат market-map.json + ряды с кодами. Ряды сопоставляются по коду; приложения скачают новую версию")
    public PublishedMapDto publish(@Valid @RequestBody MapUploadRequest request) {
       return admin.publishMap(request);

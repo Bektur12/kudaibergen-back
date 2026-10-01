@@ -87,6 +87,13 @@ public class Container {
       this.tenantPhone = tenantPhone;
    }
 
+   /** Перенумерация и перенос на другую сторону — из админки (A3). */
+   public void place(Side side, short number, short posInRow) {
+      this.side = side;
+      this.number = number;
+      this.posInRow = posInRow;
+   }
+
    public String getTenantName() {
       return tenantName;
    }

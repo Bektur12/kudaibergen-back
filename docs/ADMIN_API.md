@@ -134,6 +134,7 @@ TOTP (Google Authenticator) вместо SMS-кода — позже, отдел
 | `SHOP_SMS_CODE`, `SHOP_WARN`, `SHOP_MESSAGE` | SHOP | SMS-код арендатору, предупреждение, «Написать» |
 | `DISPUTE_RESOLVE` | DISPUTE | решение спора |
 | `TENANTS_IMPORT_PREVIEW`, `TENANTS_IMPORT_APPLY` | TENANT_IMPORT | загрузка и применение списка (в журнал — итог, без строк) |
+| `MAP_DRAFT_SAVE`, `MAP_DRAFT_DISCARD`, `MAP_PUBLISH`, `CONTAINER_CREATE`, `CONTAINER_DELETE` | MAP, CONTAINER | черновик и публикация схемы, места |
 | `BRAND_*`, `MODEL_*`, `CATEGORY_*`, `SERVICE_TYPE_*` (код услуги — в комментарии), `SYNONYM_*`, `HINT_*`, `MEDIA_UPLOAD` | справочники | создание, правка, удаление, порядок, логотип |
 | `MASTER_CREATE`, `MASTER_APPROVE`, `MASTER_REJECT`, `MASTER_BLOCK`, `MASTER_UNBLOCK`, `MASTER_WARN`, `MASTER_MESSAGE` | MASTER | мастера |
 
@@ -296,6 +297,46 @@ TOTP (Google Authenticator) вместо SMS-кода — позже, отдел
 Алиасы («мерс, мерседес») хранятся массивом у марки и модели; публичный поиск марок и моделей ими пользуется.
 `PATCH` с `aliases` заменяет весь список.
 
+## Рынок и карта [A3]
+
+Пути — под `/api/v1/admin/market`. Права: `MARKET_VIEW` — смотреть и печатать QR, `MARKET_EDIT` — контейнеры и
+черновик, `MARKET_MAP_PUBLISH` — публикация схемы и GPS-точки.
+
+**Схема: черновик → публикация.**
+
+- `GET /map` → `{current, published, draft?}`:
+  - `current` — что видят приложения: «версия 7 · опубликована 21.09», кто опубликовал, рядов, масштаб, привязка
+    к GPS;
+  - `published` — та же схема в формате загрузки, с неё начинается редактирование;
+  - `draft` — черновик: `{data, basedOnVersion, outdated, valid, error?, updatedAt, updatedBy}`.
+- `PUT /map/draft` — сохранить черновик. Формат — `market-map.json` плюс ряды с кодами, как у прямой публикации.
+  Схема с ошибкой сохраняется, а ошибка видна в `draft.error`. Приложения черновик не видят.
+- `DELETE /map/draft` — удалить черновик.
+- `POST /map/publish` — новая версия из черновика, после чего черновик удаляется. `GET /api/v1/market/map` сразу
+  отдаёт новый `version`, и приложения перекачивают карту.
+  - Ряды сопоставляются по коду: контейнеры и магазины остаются на своих рядах, ряды, которых нет в схеме,
+    выключаются.
+  - 400 `BAD_MAP`, 409 `NO_DRAFT`.
+- `PUT /map` — опубликовать сразу, без черновика (как раньше).
+
+Редактор MVP — JSON схемы с SVG-превью на фронте: в `data` есть всё для отрисовки (`boundary`, `blocks`, `passages`,
+`entrances`, `rows[].geometry`). Визуальный редактор полигонов — отдельная задача. В задаче `market_map_version`
+хранит `data` и статус `DRAFT / PUBLISHED`. Здесь опубликованные версии лежат в `map_versions` (как было, плюс
+`published_by`), а черновик — в `map_drafts`, один на рынок.
+
+**Ряды и места.**
+
+| эндпоинт | что |
+| --- | --- |
+| `GET /rows?includeInactive=` | ряды со счётчиками: `containers`, `withShop`, `free`, `disabled`, `bySide` («Контейнеров 16 · С продавцом 13 · Свободно 3 · Северная 8 · Южная 8»); `counts` — по всему рынку |
+| `GET /rows/{id}` | ряд и сетка мест по сторонам; в клетке — номер, позиция, арендатор (ФИО, телефон), кто стоит (`shop`), кто переезжает сюда (`incoming`), QR |
+| `PUT /rows/{id}/containers {counts}` | число мест на сторонах (недостающие создаются, лишние выключаются) |
+| `POST /containers {rowId, side, number, posInRow?, tenantName?, tenantPhone?}` | новое место. 409 `CONTAINER_EXISTS`, 400 `WRONG_SIDE` |
+| `PATCH /containers/{id}` | арендатор (`tenantName`, `tenantPhone`; пустая строка — убрать), перенумерация (`side`, `number`, `posInRow`), `active` |
+| `DELETE /containers/{id}` | только пустое место без истории. 409 `CONTAINER_OCCUPIED` — стоит магазин; `CONTAINER_IN_USE` — есть история, выключите |
+| `GET /qr/{token}.png`, `GET /qr/sheet?rowId=` | QR и лист наклеек |
+| `GET /geo-anchors`, `PUT /geo-anchors {anchors}` | опорные GPS-точки; PUT заменяет набор и пересчитывает привязку |
+
 ## Эндпоинты, которые уже были, — теперь по правам
 
 | Эндпоинт | Право |
@@ -307,7 +348,7 @@ TOTP (Google Authenticator) вместо SMS-кода — позже, отдел
 | `GET /admin/market/qr/{token}.png`, `GET /admin/market/qr/sheet?rowId=` | `MARKET_VIEW` |
 | `PUT /admin/market/geo-anchors`, `PUT /admin/market/map` | `MARKET_MAP_PUBLISH` |
 
-Эндпоинты карты в фазе 4 заменятся полноценным экраном A3 (ряды со счётчиками, черновик схемы).
+Эндпоинты карты дополнены разделом A3 (выше).
 
 ## Первый суперадмин
 
@@ -365,3 +406,11 @@ TOTP (Google Authenticator) вместо SMS-кода — позже, отдел
   - радиус заявки на услугу по умолчанию берётся из справочника;
   - у загруженного логотипа `logoUrl = /api/v1/brands/{id}/logo`.
 - `brand_alias` из задачи не нужен: алиасы уже хранятся массивом `brands.aliases`, и поиск ими пользуется.
+
+### Фаза 4 — рынок и карта
+
+- Миграция V18: `map_versions.published_by`, таблица `map_drafts`.
+- Черновик и публикация схемы, ряды со счётчиками и сеткой мест, создание и удаление контейнеров, просмотр
+  GPS-точек.
+- `PATCH /admin/market/containers/{id}` принимает `tenantName`, `side`, `number`, `posInRow`.
+  В `AdminContainerDto` добавлены `posInRow` и `tenantName`.
