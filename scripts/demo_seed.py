@@ -448,7 +448,13 @@ def main():
     cur = conn.cursor()
 
     # ── очистка ──
-    cur.execute("""truncate users, media, idempotency_keys, device_tokens, refresh_tokens, complaints cascade""")
+    # TRUNCATE users / media CASCADE снёс бы и справочники со схемой рынка (марки ссылаются на логотип, версии карты —
+    # на автора). Поэтому служебные таблицы — TRUNCATE (на них никто не ссылается), а пользователи и медиа — DELETE:
+    # каскады и SET NULL внешних ключей уберут их данные и оставят справочники
+    cur.execute("""truncate idempotency_keys, device_tokens, refresh_tokens, complaints, container_disputes, sanctions,
+                            broadcasts, tenant_imports, admin_audit_log, map_drafts cascade""")
+    cur.execute("delete from users")
+    cur.execute("delete from media")
     for sub in os.listdir(upload_dir) if os.path.isdir(upload_dir) else []:
         target = os.path.join(upload_dir, sub)
         shutil.rmtree(target) if os.path.isdir(target) else os.remove(target)
@@ -681,14 +687,20 @@ def main():
                 reply_id = cur.fetchone()[0]
                 if answer == "HAVE":
                     have_shops.append((s, reply_id, replied, price, condition, message, part))
-        # чаты по «Есть»
+        # чаты по «Есть»: чат один на пару «покупатель + бокс», ответы по разным запросам — карточками в нём
         for s, reply_id, replied, price, condition, message, part in have_shops:
-            cur.execute("""insert into chats (buyer_id, shop_id, request_id, created_at) values (%s, %s, %s, %s) returning id""",
-                        (buyer_id, s["id"], rid, replied))
-            chat = cur.fetchone()[0]
-            add_message(chat, "SYSTEM", None, "SYSTEM", None, replied, code="PAY_AT_BOX")
+            cur.execute("select id from chats where buyer_id = %s and shop_id = %s", (buyer_id, s["id"]))
+            row = cur.fetchone()
+            if row:
+                chat = row[0]
+            else:
+                cur.execute("""insert into chats (buyer_id, shop_id, request_id, created_at) values (%s, %s, %s, %s) returning id""",
+                            (buyer_id, s["id"], rid, replied))
+                chat = cur.fetchone()[0]
+                add_message(chat, "SYSTEM", None, "SYSTEM", None, replied, code="PAY_AT_BOX")
             last = add_message(chat, "SHOP", s["owner"], "REPLY", message, replied,
-                               payload={"replyId": reply_id, "condition": condition, "price": price, "partId": part["id"] if part else None})
+                               payload={"requestId": rid, "replyId": reply_id, "condition": condition, "price": price,
+                                        "partId": part["id"] if part else None})
             last_at = replied
             first_buyer = None
             buyer_read = last
@@ -706,9 +718,18 @@ def main():
                     at += timedelta(minutes=RNG.randint(20, 90))
                     last = add_message(chat, "BUYER", buyer_id, "QUICK", "Покупатель подошёл", at, code="ARRIVED")
                     last_at, buyer_read, shop_read = at, last, last
-            cur.execute("""update chats set last_message_id = %s, last_message_at = %s, buyer_first_message_at = %s,
-                                            buyer_read_message_id = %s, shop_read_message_id = %s where id = %s""",
-                        (last, last_at, first_buyer, buyer_read, shop_read, chat))
+            cur.execute("""update chats set
+                               last_message_id = case when last_message_at is null or %(at)s >= last_message_at
+                                                      then %(last)s else last_message_id end,
+                               request_id = case when last_message_at is null or %(at)s >= last_message_at
+                                                 then %(rid)s else request_id end,
+                               last_message_at = greatest(coalesce(last_message_at, %(at)s), %(at)s),
+                               buyer_first_message_at = least(coalesce(buyer_first_message_at, %(first)s),
+                                                              coalesce(%(first)s, buyer_first_message_at)),
+                               buyer_read_message_id = greatest(buyer_read_message_id, %(br)s),
+                               shop_read_message_id = greatest(shop_read_message_id, %(sr)s)
+                           where id = %(chat)s""",
+                        dict(last=last, at=last_at, rid=rid, first=first_buyer, br=buyer_read, sr=shop_read, chat=chat))
         # закрытие с оценкой
         closed_with = None
         if status == "CLOSED" and have_shops:
@@ -717,7 +738,7 @@ def main():
             closed_at = max(h[2] for h in have_shops) + timedelta(hours=RNG.randint(1, 5))
             cur.execute("update part_requests set closed_with_shop_id = %s, closed_at = %s where id = %s", (s["id"], closed_at, rid))
             chat_id = None
-            cur.execute("select id from chats where request_id = %s and shop_id = %s", (rid, s["id"]))
+            cur.execute("select id from chats where buyer_id = %s and shop_id = %s", (buyer_id, s["id"]))
             row = cur.fetchone()
             if row:
                 add_message(row[0], "SYSTEM", None, "SYSTEM", None, closed_at, code="REQUEST_CLOSED")
@@ -939,6 +960,29 @@ def main():
     cur.execute("""insert into complaints (author_id, type, target_id, text, created_at)
                    select %s, 'MASTER', m.id, 'Взял предоплату и не приехал', now() - interval '6 hours'
                    from masters m join users u on u.id = m.owner_id where u.phone = '+996701100013'""", (bakyt,))
+
+    # рассылки: отправленная продавцам Toyota (с открытиями) и черновик для мастеров
+    cur.execute("""insert into broadcasts (audience, filters, title_ru, title_kg, body_ru, body_kg, status, scheduled_at,
+                                         started_at, sent_at, created_by, created_at)
+                   values ('SELLERS', jsonb_build_object('brandIds', jsonb_build_array(%s)),
+                           'Покупатели ищут детали на Toyota', 'Сатып алуучулар Toyota тетиктерин издешет',
+                           'Проверьте, что бокс открыт и марка Toyota в списке — запросов стало больше',
+                           'Бокс ачык экенин жана Toyota тизмеде экенин текшериңиз',
+                           'SENT', now() - interval '3 days', now() - interval '3 days', now() - interval '3 days', %s,
+                           now() - interval '3 days') returning id""", (brand_id["toyota"], admin_id))
+    sent = cur.fetchone()[0]
+    cur.execute("""insert into broadcast_recipients (broadcast_id, user_id, delivered_at, opened_at)
+                   select %s, m.user_id, now() - interval '3 days',
+                          case when random() < .45 then now() - interval '3 days' + interval '20 minutes' end
+                   from shop_members m join shops s on s.id = m.shop_id
+                   where s.status = 'ACTIVE' and exists (select 1 from shop_brands sb where sb.shop_id = s.id and sb.brand_id = %s)
+                   on conflict do nothing""", (sent, brand_id["toyota"]))
+    cur.execute("""update broadcasts b set recipients_count = r.n, delivered_count = r.n, opened_count = r.o
+                   from (select count(*) n, count(opened_at) o from broadcast_recipients where broadcast_id = %s) r
+                   where b.id = %s""", (sent, sent))
+    cur.execute("""insert into broadcasts (audience, filters, title_ru, body_ru, created_by)
+                   values ('MASTERS', '{"serviceTypes": ["TIRE_SERVICE"]}', 'Сезон переобувки',
+                           'С 15 октября много заявок на шиномонтаж — включите «Принимаю»', %s)""", (admin_id,))
 
     # избранное Бакыта
     for p in RNG.sample([p for p in all_parts if p["shop"] in (azamat["id"], japan["id"])], 3):

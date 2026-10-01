@@ -119,7 +119,7 @@ TOTP (Google Authenticator) вместо SMS-кода — позже, отдел
 - Строка журнала пишется в одной транзакции с действием. Если действие упало, в журнал ничего не пишется.
 - Тест `AdminEndpointsTest` не даёт добавить эндпоинт админки без права или изменяющий эндпоинт без журнала.
 - Вход и смена пароля тоже пишутся: `ADMIN_LOGIN`, `ADMIN_PASSWORD_SET`.
-- Просмотр журнала (`GET /admin/audit`) — фаза 7.
+- Просмотр — раздел «Журнал» ниже.
 
 Коды действий фазы 1:
 
@@ -136,6 +136,10 @@ TOTP (Google Authenticator) вместо SMS-кода — позже, отдел
 | `COMPLAINT_RESOLVE` | COMPLAINT | решение жалобы (комментарий — из поля «Комментарий для журнала и для продавца») |
 | `PART_REQUEST_WIDEN`, `PART_REQUEST_HIDE`, `SERVICE_REQUEST_WIDEN`, `SERVICE_REQUEST_HIDE` | запросы | мониторинг A8 |
 | `TENANTS_IMPORT_PREVIEW`, `TENANTS_IMPORT_APPLY` | TENANT_IMPORT | загрузка и применение списка (в журнал — итог, без строк) |
+| `BROADCAST_CREATE`, `BROADCAST_UPDATE`, `BROADCAST_SCHEDULE`, `BROADCAST_CANCEL` | BROADCAST | рассылки |
+| `USER_BLOCK`, `USER_UNBLOCK`, `USER_MESSAGE` | USER | пользователи |
+| `STAFF_CREATE`, `STAFF_UPDATE`, `ROLE_PERMISSIONS_SET` | STAFF, ROLE | сотрудники и права |
+| `EXPORT_XLSX`, `DASHBOARD_REFRESH` | EXPORT, DASHBOARD | выгрузки, пересчёт сводки |
 | `MAP_DRAFT_SAVE`, `MAP_DRAFT_DISCARD`, `MAP_PUBLISH`, `CONTAINER_CREATE`, `CONTAINER_DELETE` | MAP, CONTAINER | черновик и публикация схемы, места |
 | `BRAND_*`, `MODEL_*`, `CATEGORY_*`, `SERVICE_TYPE_*` (код услуги — в комментарии), `SYNONYM_*`, `HINT_*`, `MEDIA_UPLOAD` | справочники | создание, правка, удаление, порядок, логотип |
 | `MASTER_CREATE`, `MASTER_APPROVE`, `MASTER_REJECT`, `MASTER_BLOCK`, `MASTER_UNBLOCK`, `MASTER_WARN`, `MASTER_MESSAGE` | MASTER | мастера |
@@ -441,6 +445,70 @@ relatedServiceRequestId?}`.
 Ответ — файл с `Content-Disposition: attachment; filename="prodavcy-2026-10-01.xlsx"`. Фронт скачивает его с тем
 же Bearer-токеном: `fetch` → `blob` → ссылка.
 
+## Рассылки [A6]
+
+Права: `BROADCASTS_VIEW` — смотреть и считать аудиторию, `BROADCASTS_SEND` — создавать, планировать и отменять.
+
+- `GET /admin/broadcasts/estimate?audience=ALL|BUYERS|SELLERS|MASTERS&brandIds=&rowIds=&serviceTypes=` →
+  `{recipients, withDevices, label: "Получат 64 продавца"}`.
+  - Фильтры: `brandIds` — продавцы и мастера этих марок, покупатели с машиной этой марки; `rowIds` — только
+    продавцы; `serviceTypes` — только мастера. Неподходящий фильтр — 400 `BAD_FILTER`.
+  - Аудитория: только незаблокированные пользователи. Продавцы — люди действующих боксов; мастера — действующие
+    профили; покупатели — в режиме «покупатель».
+- `POST /admin/broadcasts {audience, filters, titleRu, titleKg?, bodyRu, bodyKg?}` → черновик.
+  `PATCH /admin/broadcasts/{id}` — только черновик, иначе 409 `BROADCAST_NOT_DRAFT`.
+- `POST /admin/broadcasts/{id}/schedule {at}` или `{now: true}`. Время в тихих часах 22:00–07:00 (Бишкек)
+  переносится на 07:00, тогда в ответе `deferred = true`.
+- `POST /admin/broadcasts/{id}/cancel` — черновик, запланированную или идущую: оставшиеся получатели её не
+  получат. Завершённую отменить нельзя — 409 `BROADCAST_FINISHED`.
+- `GET /admin/broadcasts?status=&cursor=` — история: заголовок, кому, `recipients`, `delivered` (у кого есть
+  приложение с пушами), `opened`, `openedPct`. `counts`: `{all, drafts, scheduled, sent}`. `GET /admin/broadcasts/{id}`.
+- **Отправка — фоновая задача.**
+  - Раз в 20 секунд запланированные к этому времени фиксируют получателей и уходят батчами по 500.
+  - Текст — на языке получателя; если KG не задан, уходит русский.
+  - Пуш: `{type: BROADCAST, broadcastId}`. В тихие часы отправка стоит и продолжается в 07:00.
+- **Открытие.** Приложение по нажатию на пуш вызывает `POST /api/v1/broadcasts/{id}/opened`. Каждый получатель
+  засчитывается один раз.
+
+## Пользователи
+
+`USERS_VIEW` — смотреть, `USERS_BLOCK` — блокировать, `MESSAGE_USERS` — «Написать».
+
+- `GET /admin/users?role=ALL|BUYER|SELLER|MASTER|BLOCKED&q=&cursor=` — список:
+  - колонки: телефон, имя, роли (`BUYER` всегда, плюс `SELLER` и `MASTER`), текущий режим, дата регистрации,
+    последний вход, число запросов и заявок, блокировка;
+  - `q` — имя или цифры телефона;
+  - `counts`: `{all, buyers, sellers, masters, blocked}`.
+- `GET /admin/users/{id}` — карточка: гараж, бокс (с ролью в нём), профиль мастера, последние запросы и заявки,
+  жалобы от пользователя и на его отзывы и сообщения, санкции.
+- `POST /admin/users/{id}/block {reason}` — сессии закрываются, вход запрещён, бокс и профиль мастера
+  блокируются вместе с аккаунтом. 409 `ALREADY_BLOCKED`, `SELF_BLOCK`.
+- `POST /admin/users/{id}/unblock` — возвращает и то, что было заблокировано вместе с аккаунтом.
+- `POST /admin/users/{id}/message {text}` — пуш `ADMIN_MESSAGE`.
+
+## Журнал
+
+`AUDIT_VIEW`.
+
+- `GET /admin/audit?adminId=&action=&entityType=&entityId=&from=&to=&cursor=` — новые сверху: кто (имя
+  сотрудника), действие, объект, комментарий, IP, время. `counts`: `{today, week}`.
+- `GET /admin/audit/facets` → `{actions, entityTypes}` — для фильтров.
+- `GET /admin/audit/{id}` — запись с `before` и `after` (JSON объекта; у действий без объекта — `null`).
+
+## Сотрудники
+
+`STAFF_MANAGE` — по умолчанию только у `SUPER_ADMIN`.
+
+- `GET /admin/staff` — сотрудники: роль, подпись, активен ли, задан ли пароль (`hasPassword`), последний вход.
+- `POST /admin/staff {phone, fullName, title?, role}` — пользователь создаётся, если его нет. Пароль сотрудник
+  задаёт сам через «Задать пароль» на экране входа (SMS-код). 409 `STAFF_EXISTS`.
+- `PATCH /admin/staff/{userId} {role?, title?, fullName?, isActive?}` — смена роли или отключение сразу закрывает
+  сессии сотрудника. Себя и последнего активного `SUPER_ADMIN` отключить или понизить нельзя: 409 `STAFF_SELF`,
+  `LAST_SUPER_ADMIN`.
+- `GET /admin/staff/roles` → `{roles: [{role, defaultTitle, editable, permissions}], allPermissions}`.
+- `PUT /admin/staff/roles/{role}/permissions {permissions}` — права роли целиком; действуют сразу. У
+  `SUPER_ADMIN` все права всегда, их не меняют — 400 `ROLE_FIXED`.
+
 ## Эндпоинты, которые уже были, — теперь по правам
 
 | Эндпоинт | Право |
@@ -457,7 +525,7 @@ relatedServiceRequestId?}`.
 При старте, если активного `SUPER_ADMIN` нет и задан `ADMIN_BOOTSTRAP_PHONE`, этот номер становится суперадмином.
 Пользователь создаётся, если его нет; имя берётся из `ADMIN_BOOTSTRAP_NAME`. Пароль суперадмин задаёт сам:
 `POST /admin/auth/password/code`, затем `POST /admin/auth/password`. Остальных сотрудников заводит суперадмин
-(`/admin/staff`, фаза 7). Пока экрана сотрудников нет — вставкой в `admin_members`.
+(`POST /admin/staff`).
 
 ## История изменений
 
@@ -535,3 +603,20 @@ relatedServiceRequestId?}`.
 
 - Сводка A1 с кэшем на 90 секунд и `generatedAt`, «Обновить».
 - Выгрузки Excel: сводка, продавцы, мастера, запросы, заявки. Миграций нет.
+
+### Фаза 7 — рассылки, пользователи, журнал, сотрудники
+
+- Миграция V21: `broadcasts`, `broadcast_recipients`.
+- Новое: рассылки с фоновой отправкой; раздел «Пользователи»; просмотр журнала; сотрудники и права ролей.
+- Приложение:
+  - пуш `BROADCAST {broadcastId}`;
+  - `POST /api/v1/broadcasts/{id}/opened`.
+- В задаче было `POST /notifications/{id}/opened`. Списка уведомлений в приложении нет, поэтому отметка «открыто»
+  сделана для рассылки.
+
+## Готовность
+
+Все экраны A1–A9 и разделы сайдбара («Пользователи», «Журнал», «Сотрудники») собираются из ответов API без
+вычислений на клиенте. Каждое изменяющее действие идёт через `@Audited`, и тест `AdminEndpointsTest` не даст
+это нарушить. Права проверяются только на бэке. Интеграционные тесты `*IT` (Testcontainers) запускаются с Docker:
+`mvn test`.

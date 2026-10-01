@@ -82,8 +82,31 @@ ADMIN_BOOTSTRAP_PHONE=+996555000099 ADMIN_BOOTSTRAP_NAME="Имя Фамилия"
 При старте, если активного суперадмина нет, этот номер становится `SUPER_ADMIN`. Пароль он задаёт сам по SMS-коду:
 `POST /api/v1/admin/auth/password/code {phone}`, затем `POST /api/v1/admin/auth/password {phone, code, password}`.
 Вход в админку: `POST /api/v1/admin/auth/login {phone, password}` → SMS-код → `POST /api/v1/admin/auth/verify`.
-Роли: `SUPER_ADMIN` — все права, `MARKET_ADMIN` — все, кроме управления сотрудниками. Таблица прав — в
-[docs/ADMIN_API.md](docs/ADMIN_API.md).
+Остальных сотрудников суперадмин добавляет в разделе «Сотрудники» (`POST /api/v1/admin/staff`), пароль каждый
+задаёт себе сам.
+
+| Роль | Кто | Права |
+| --- | --- | --- |
+| `SUPER_ADMIN` | владелец, техадмин | все, всегда |
+| `MARKET_ADMIN` | «Администратор рынка» | все, кроме `STAFF_MANAGE` (сотрудники и права ролей); набор можно поменять в `PUT /admin/staff/roles/MARKET_ADMIN/permissions` |
+
+Права: `DASHBOARD_VIEW`, `EXPORT_EXCEL`, `SELLERS_VIEW`, `SELLERS_VERIFY`, `SELLERS_BLOCK`, `DISPUTES_RESOLVE`,
+`MASTERS_VIEW`, `MASTERS_VERIFY`, `MASTERS_BLOCK`, `MASTERS_CREATE`, `MARKET_VIEW`, `MARKET_EDIT`,
+`MARKET_MAP_PUBLISH`, `TENANTS_IMPORT`, `REQUESTS_VIEW`, `REQUESTS_MANAGE`, `COMPLAINTS_VIEW`,
+`COMPLAINTS_RESOLVE`, `CONTENT_REMOVE`, `SELLER_WARN`, `DICTIONARIES_VIEW`, `DICTIONARIES_EDIT`,
+`BROADCASTS_VIEW`, `BROADCASTS_SEND`, `USERS_VIEW`, `USERS_BLOCK`, `PII_VIEW` (без него телефоны маской),
+`MESSAGE_USERS`, `AUDIT_VIEW`, `STAFF_MANAGE`. Что открывает каждое — в [docs/ADMIN_API.md](docs/ADMIN_API.md).
+
+### Фоновые задачи
+
+| Задача | Когда | Что делает |
+| --- | --- | --- |
+| Рассылки (`BroadcastSender`) | каждые 20 с | запланированные — фиксирует получателей и шлёт пуши батчами по 500; в 22:00–07:00 (Бишкек) стоит |
+| Сводка админки (`DashboardService`) | по запросу, кэш 90 с | KPI, графики, марки без ответа; `POST /admin/dashboard/refresh` — пересчитать сразу |
+| Истечение запросов и заявок | каждую минуту | статус «время вышло», пуши покупателю |
+| Очистка медиа | 03:45 | неприкреплённые фото и видео старше суток |
+| Refresh-токены | 03:30 | удаляет просроченные |
+| Удаление аккаунтов | ночью | через 30 дней после запроса на удаление |
 
 ### Переменные окружения
 

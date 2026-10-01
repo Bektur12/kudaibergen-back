@@ -108,6 +108,7 @@ enum QuickReply {                                                   // быст�
 | `ACCOUNT_STATUS` | людям бокса / мастеру | решение администрации: `target` `SHOP` / `MASTER`, `id`, `event` `APPROVED` / `REJECTED` / `BLOCKED` / `UNBLOCKED`; вести в «Мой бокс» / профиль мастера |
 | `DISPUTE_RESOLVED` | обеим сторонам спора | спор за контейнер решён: `disputeId`, `won` `true` / `false` |
 | `COMPLAINT_RESOLVED` | заявителю | жалоба рассмотрена: `complaintId`, `upheld` (меры приняты / нарушений нет) |
+| `BROADCAST` | получателям рассылки | рассылка администрации: `broadcastId`; при нажатии — `POST /broadcasts/{broadcastId}/opened` |
 
 ---
 
