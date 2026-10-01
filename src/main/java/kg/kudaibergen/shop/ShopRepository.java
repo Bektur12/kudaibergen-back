@@ -17,12 +17,24 @@ public interface ShopRepository extends JpaRepository<Shop, Long> {
    @Query("select s.id from Shop s where s.publicId = :publicId")
    Optional<Long> findIdByPublicId(@Param("publicId") String publicId);
 
-   /** Кто стоит (или переезжает) в этих контейнерах — для серых клеток экрана 10а. */
-   @Query("select s from Shop s where s.containerId in :ids or s.pendingContainerId in :ids")
+   /** Кто стоит (или переезжает) в этих контейнерах — для серых клеток экрана 10а. Отклонённые место не держат. */
+   @Query("""
+         select s from Shop s
+         where (s.containerId in :ids or s.pendingContainerId in :ids)
+           and s.status <> kg.kudaibergen.shop.entity.ShopStatus.REJECTED""")
    List<Shop> findOccupying(@Param("ids") Collection<Long> containerIds);
 
-   @Query("select count(s) > 0 from Shop s where s.containerId = :id or s.pendingContainerId = :id")
+   @Query("""
+         select count(s) > 0 from Shop s
+         where (s.containerId = :id or s.pendingContainerId = :id)
+           and s.status <> kg.kudaibergen.shop.entity.ShopStatus.REJECTED""")
    boolean isContainerTaken(@Param("id") Long containerId);
+
+   /** Кто сейчас стоит в контейнере (отклонённые не в счёт). */
+   @Query("""
+         select s from Shop s
+         where s.containerId = :id and s.status <> kg.kudaibergen.shop.entity.ShopStatus.REJECTED""")
+   Optional<Shop> findStandingIn(@Param("id") Long containerId);
 
    /** Действующие магазины с фильтрами «Списком» (15) и «Боксу» (06); курсор — по id. */
    @Query("""

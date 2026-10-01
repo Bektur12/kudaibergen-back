@@ -8,5 +8,7 @@ public enum ComplaintType {
    PHOTO,
    REVIEW,
    /** «Пожаловаться» из меню чата. */
-   CHAT
+   CHAT,
+   /** На мастера / СТО. */
+   MASTER
 }

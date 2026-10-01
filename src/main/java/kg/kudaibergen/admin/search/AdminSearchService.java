@@ -111,7 +111,7 @@ public class AdminSearchService {
    }
 
    /** «Ряд 14 · 12» → (14, 12); не похоже на контейнер — null. */
-   static ContainerQuery parseContainer(String q) {
+   public static ContainerQuery parseContainer(String q) {
       Matcher matcher = CONTAINER.matcher(q.strip());
       if (!matcher.matches()) {
          return null;
@@ -120,7 +120,7 @@ public class AdminSearchService {
    }
 
    /** Цифры номера телефона: от 3 подряд, иначе null (поиск по телефону не нужен). */
-   static String phoneDigits(String q) {
+   public static String phoneDigits(String q) {
       if (!q.matches("[+\\d\\s()\\-]+")) {
          return null;
       }
@@ -132,6 +132,6 @@ public class AdminSearchService {
       return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
    }
 
-   record ContainerQuery(String row, int number) {
+   public record ContainerQuery(String row, int number) {
    }
 }

@@ -15,6 +15,9 @@ public interface ShopVerificationRepository extends JpaRepository<ShopVerificati
    Optional<ShopVerification> findFirstByShopIdAndContainerIdAndStatusOrderByCreatedAtDesc(
          Long shopId, Long containerId, VerificationStatus status);
 
+   /** История проверок магазина для карточки админки. */
+   List<ShopVerification> findByShopIdOrderByCreatedAtDescIdDesc(Long shopId, Pageable page);
+
    /** Очередь админки «подтвердите меня». */
    List<ShopVerification> findByStatusOrderByCreatedAtAsc(VerificationStatus status, Pageable page);
 }

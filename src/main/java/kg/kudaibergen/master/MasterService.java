@@ -78,6 +78,17 @@ public class MasterService {
    /** «Стать мастером» (38): пользователь переходит в режим мастера. */
    @Transactional
    public MyMasterDto create(Long userId, MasterInputs.CreateMaster input, Lang lang) {
+      Master master = register(userId, input, verificationRequired);
+      userService.changeRole(userId, UserRole.MASTER);
+      return mapper.mine(master, lang);
+   }
+
+   /**
+    * Профиль мастера. pending — ждать проверки администрации; админка создаёт профиль сразу действующим
+    * и режим приложения пользователя не переключает.
+    */
+   @Transactional
+   public Master register(Long userId, MasterInputs.CreateMaster input, boolean pending) {
       if (masters.findByOwnerId(userId).isPresent()) {
          throw new ConflictException("ALREADY_MASTER", "Профиль мастера уже есть");
       }
@@ -91,12 +102,10 @@ public class MasterService {
       applySchedule(master, input.openFrom(), input.openTo(), input.workDays());
       master.setPhone(input.phone() == null || input.phone().isBlank()
             ? users.findById(userId).map(User::getPhone).orElse(null) : input.phone());
-      if (verificationRequired) {
+      if (pending) {
          master.pending();
       }
-      masters.save(master);
-      userService.changeRole(userId, UserRole.MASTER);
-      return mapper.mine(master, lang);
+      return masters.save(master);
    }
 
    @Transactional

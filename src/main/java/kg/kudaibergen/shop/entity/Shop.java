@@ -128,24 +128,50 @@ public class Shop {
       updatedAt = Instant.now();
    }
 
-   /** Проверка пройдена: новый магазин становится действующим, при переезде — занимает новое место. */
+   /** Проверка пройдена: новый (или отклонённый) магазин становится действующим, при переезде — занимает новое место. */
    public void verified() {
       if (pendingContainerId != null) {
          containerId = pendingContainerId;
          pendingContainerId = null;
       }
-      if (status == ShopStatus.PENDING_VERIFICATION) {
+      if (status == ShopStatus.PENDING_VERIFICATION || status == ShopStatus.REJECTED) {
          status = ShopStatus.ACTIVE;
+         blockReason = null;
       }
       verifiedAt = Instant.now();
    }
 
-   /** Непроверенный магазин выбрал другой контейнер — место меняется сразу, проверка будет уже на нём. */
+   /**
+    * Непроверенный или отклонённый магазин выбрал другой контейнер — место меняется сразу,
+    * отклонённый снова уходит на проверку.
+    */
    public void moveUnverified(Long containerId) {
-      if (status != ShopStatus.PENDING_VERIFICATION) {
+      if (status != ShopStatus.PENDING_VERIFICATION && status != ShopStatus.REJECTED) {
          throw new IllegalStateException("Проверенный магазин переезжает через pendingContainerId");
       }
       this.containerId = containerId;
+      if (status == ShopStatus.REJECTED) {
+         status = ShopStatus.PENDING_VERIFICATION;
+         blockReason = null;
+      }
+   }
+
+   /** Не на проверке и не действует, а место не подтверждено: продавец выбирает контейнер заново. */
+   public boolean isRejected() {
+      return status == ShopStatus.REJECTED;
+   }
+
+   /**
+    * Отказ администрации. Новый магазин — «Отклонён»: скрыт и контейнер больше не держит.
+    * Переезд — отменяется, магазин остаётся на старом месте.
+    */
+   public void reject(String reason) {
+      if (pendingContainerId != null) {
+         pendingContainerId = null;
+         return;
+      }
+      status = ShopStatus.REJECTED;
+      blockReason = reason;
    }
 
    /** Контейнер, который сейчас надо подтвердить; null — подтверждать нечего. */
@@ -153,7 +179,7 @@ public class Shop {
       if (pendingContainerId != null) {
          return pendingContainerId;
       }
-      return status == ShopStatus.PENDING_VERIFICATION ? containerId : null;
+      return status == ShopStatus.PENDING_VERIFICATION || status == ShopStatus.REJECTED ? containerId : null;
    }
 
    public void block(String reason) {

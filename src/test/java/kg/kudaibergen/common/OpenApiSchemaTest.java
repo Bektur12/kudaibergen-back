@@ -44,7 +44,7 @@ class OpenApiSchemaTest {
       assertThat(shop.getNullable()).isTrue();
       assertThat(((Schema<?>) shop.getAllOf().get(0)).get$ref()).endsWith("/ShopRef");
       Schema<?> status = (Schema<?>) schemas.get("ShopRef").getProperties().get("status");
-      assertThat(status.getEnum()).map(String::valueOf).containsExactly("PENDING_VERIFICATION", "ACTIVE", "BLOCKED");
+      assertThat(status.getEnum()).map(String::valueOf).containsExactly("PENDING_VERIFICATION", "ACTIVE", "BLOCKED", "REJECTED");
    }
 
    @Test

@@ -885,6 +885,61 @@ def main():
         cur.execute("""insert into admin_members (user_id, admin_role, full_name, title, password_hash, password_changed_at)
                        values (%s, %s, %s, %s, %s, now())""", (admin_user, admin_role, full_name, title, ADMIN_PASSWORD_HASH))
 
+    # ── админка: список арендаторов, статусы, спор, санкции ──
+    # арендаторы по базе рынка: у большинства боксов телефон владельца, у части — другой («Нет в списке»)
+    cur.execute("update containers set tenant_name = null, tenant_phone = null")
+    cur.execute("""select s.id, s.container_id, u.phone, u.name from shops s join users u on u.id = s.owner_id
+                   order by s.id""")
+    for n, (sid, cid, owner_phone, owner_name) in enumerate(cur.fetchall()):
+        if n % 5 == 4:
+            continue                                            # «Ждёт сверки»: арендатора в базе нет
+        tenant_phone = owner_phone if n % 7 != 3 else phone("777", 300000 + n)
+        cur.execute("update containers set tenant_name = %s, tenant_phone = %s where id = %s",
+                    (f"{owner_name or 'Арендатор'} {RNG.choice('АБДЕКМНСТ')}.", tenant_phone, cid))
+
+    def shop_of(seller_phone):
+        cur.execute("select s.id from shops s join users u on u.id = s.owner_id where u.phone = %s", (seller_phone,))
+        return cur.fetchone()[0]
+
+    admin_id = admin_user
+    # на проверке (видно при SHOP_VERIFICATION_REQUIRED=true; иначе при старте подтверждаются сами)
+    for seller_phone in ("+996700100020", "+996700100021"):
+        sid = shop_of(seller_phone)
+        cur.execute("update shops set status = 'PENDING_VERIFICATION', verified_at = null where id = %s", (sid,))
+        cur.execute("""insert into shop_verifications (shop_id, container_id, method, status, created_at)
+                       select id, container_id, 'ADMIN', 'PENDING', now() - interval '3 hours' from shops where id = %s""",
+                    (sid,))
+    sid = shop_of("+996700100022")
+    cur.execute("update shops set status = 'REJECTED', block_reason = 'Нет в списке арендаторов' where id = %s", (sid,))
+    sid = shop_of("+996700100023")
+    cur.execute("update shops set status = 'BLOCKED', block_reason = 'Продаёт контрафакт под видом оригинала' where id = %s",
+                (sid,))
+    cur.execute("""insert into sanctions (target_type, target_id, type, reason, admin_id, created_at)
+                   values ('SHOP', %s, 'BLOCK', 'Продаёт контрафакт под видом оригинала', %s, now() - interval '2 days')""",
+                (sid, admin_id))
+    sid = shop_of("+996700100024")
+    cur.execute("""insert into sanctions (target_type, target_id, type, reason, admin_id, active_until, created_at)
+                   values ('SHOP', %s, 'WARNING', 'Цены без наличия', %s, now() + interval '80 days',
+                           now() - interval '10 days')""", (sid, admin_id))
+    # спор: покупатель говорит, что контейнер продавца 19 — его
+    sid = shop_of("+996700100019")
+    claimant = add_user("+996555000020", "Нурлан", "BUYER", NOW - timedelta(days=2))
+    cur.execute("""insert into container_disputes (container_id, claimant_user_id, current_shop_id, text, created_at)
+                   select container_id, %s, id, 'Арендую этот контейнер с 2019 года, договор есть',
+                          now() - interval '5 hours' from shops where id = %s""", (claimant, sid))
+    # мастера: двое на проверке, один заблокирован, на одного жалоба
+    cur.execute("""update masters set status = 'PENDING_VERIFICATION'
+                   where owner_id in (select id from users where phone in ('+996701100010', '+996701100011'))""")
+    cur.execute("""update masters set status = 'BLOCKED', block_reason = 'Не приезжал по заявкам'
+                   where owner_id = (select id from users where phone = '+996701100012') returning id""")
+    blocked_master = cur.fetchone()[0]
+    cur.execute("""insert into sanctions (target_type, target_id, type, reason, admin_id, created_at)
+                   values ('MASTER', %s, 'BLOCK', 'Не приезжал по заявкам', %s, now() - interval '1 day')""",
+                (blocked_master, admin_id))
+    cur.execute("""insert into complaints (author_id, type, target_id, text, created_at)
+                   select %s, 'MASTER', m.id, 'Взял предоплату и не приехал', now() - interval '6 hours'
+                   from masters m join users u on u.id = m.owner_id where u.phone = '+996701100013'""", (bakyt,))
+
     # избранное Бакыта
     for p in RNG.sample([p for p in all_parts if p["shop"] in (azamat["id"], japan["id"])], 3):
         cur.execute("insert into favorite_parts (user_id, part_id, created_at) values (%s, %s, now())", (bakyt, p["id"]))

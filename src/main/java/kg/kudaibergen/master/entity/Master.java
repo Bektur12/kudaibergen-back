@@ -189,6 +189,29 @@ public class Master {
       status = ShopStatus.PENDING_VERIFICATION;
    }
 
+   /** Профиль подтверждён администрацией. */
+   public void approve() {
+      status = ShopStatus.ACTIVE;
+      blockReason = null;
+   }
+
+   /** Профиль не подтверждён: заявки не приходят, мастер видит причину. */
+   public void reject(String reason) {
+      status = ShopStatus.REJECTED;
+      blockReason = reason;
+   }
+
+   public void block(String reason) {
+      status = ShopStatus.BLOCKED;
+      blockReason = reason;
+   }
+
+   /** Снятие блокировки — профиль снова действует. */
+   public void unblock() {
+      status = ShopStatus.ACTIVE;
+      blockReason = null;
+   }
+
    public Long getId() {
       return id;
    }

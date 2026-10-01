@@ -10,6 +10,6 @@ public interface UserMasters {
    Optional<MasterRef> of(Long userId);
 
    record MasterRef(Long id, String name,
-                    @Schema(allowableValues = {"PENDING_VERIFICATION", "ACTIVE", "BLOCKED"}) String status) {
+                    @Schema(allowableValues = {"PENDING_VERIFICATION", "ACTIVE", "BLOCKED", "REJECTED"}) String status) {
    }
 }

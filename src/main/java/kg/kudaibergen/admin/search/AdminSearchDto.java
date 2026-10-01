@@ -20,12 +20,12 @@ public record AdminSearchDto(@Nullable List<SearchUserHit> users, @Nullable List
 
    /** location — «Ряд 14 · 12»; null, если магазин без места. */
    public record SearchShopHit(Long id, String name,
-                               @Schema(allowableValues = {"PENDING_VERIFICATION", "ACTIVE", "BLOCKED"}) String status,
+                               @Schema(allowableValues = {"PENDING_VERIFICATION", "ACTIVE", "BLOCKED", "REJECTED"}) String status,
                                @Nullable String location, @MaskedPhone String ownerPhone) {
    }
 
    public record SearchMasterHit(Long id, String name,
-                                 @Schema(allowableValues = {"PENDING_VERIFICATION", "ACTIVE", "BLOCKED"}) String status,
+                                 @Schema(allowableValues = {"PENDING_VERIFICATION", "ACTIVE", "BLOCKED", "REJECTED"}) String status,
                                  String address, @MaskedPhone String ownerPhone) {
    }
 

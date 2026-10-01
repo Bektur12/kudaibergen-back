@@ -9,7 +9,8 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import kg.kudaibergen.admin.audit.Audited;
 import kg.kudaibergen.common.security.AuthPrincipal;
-import kg.kudaibergen.market.MarketMapService;
+import kg.kudaibergen.shop.dispute.ContainerDispute;
+import kg.kudaibergen.shop.dispute.ContainerDisputeService;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -28,21 +29,22 @@ import org.springframework.web.bind.annotation.RestController;
 public class ComplaintController {
 
    private final ComplaintService complaints;
-   private final MarketMapService market;
+   private final ContainerDisputeService disputes;
 
-   public ComplaintController(ComplaintService complaints, MarketMapService market) {
+   public ComplaintController(ComplaintService complaints, ContainerDisputeService disputes) {
       this.complaints = complaints;
-      this.market = market;
+      this.disputes = disputes;
    }
 
    @PostMapping("/market/containers/{id}/claim")
    @ResponseStatus(HttpStatus.CREATED)
-   @Operation(summary = "«Это мой контейнер»", description = "Контейнер занят в приложении другим магазином — жалоба админу рынка")
+   @Operation(summary = "«Это мой контейнер»", description = "Контейнер занят в приложении другим магазином — спор "
+         + "уходит админу рынка. 409 CONTAINER_FREE — контейнер свободен, 400 OWN_CONTAINER — там ваш магазин")
    public ComplaintDto claimContainer(@AuthenticationPrincipal AuthPrincipal principal, @PathVariable Long id,
                                       @Valid @RequestBody(required = false) TextRequest request) {
-      market.container(id);
-      return complaints.create(principal.userId(), ComplaintType.CONTAINER_CLAIM, id,
-            request == null ? null : request.text());
+      ContainerDispute dispute = disputes.claim(principal.userId(), id, request == null ? null : request.text());
+      return new ComplaintDto(dispute.getId(), dispute.getClaimantUserId(), ComplaintType.CONTAINER_CLAIM,
+            dispute.getContainerId(), dispute.getText(), ComplaintStatus.OPEN, null, dispute.getCreatedAt());
    }
 
    @GetMapping("/admin/complaints")

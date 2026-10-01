@@ -17,9 +17,9 @@ public record AdminMeDto(Long userId, String phone, String fullName, String titl
    /**
     * Бейджи сайдбара. null — у сотрудника нет права смотреть этот раздел.
     * shopsPending — продавцы на проверке (новые и переезды), mastersPending — мастера на проверке,
-    * complaintsNew — жалобы без решения.
+    * complaintsNew — жалобы без решения, disputesOpen — открытые споры за контейнер.
     */
    public record AdminBadgesDto(@Nullable Long shopsPending, @Nullable Long mastersPending,
-                                @Nullable Long complaintsNew) {
+                                @Nullable Long complaintsNew, @Nullable Long disputesOpen) {
    }
 }

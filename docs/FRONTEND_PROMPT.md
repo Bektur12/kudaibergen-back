@@ -108,7 +108,7 @@ enum Theme           { LIGHT, DARK, SYSTEM }                        // [19]
 enum RowType         { ROW, VROW, STALL }                           // ряд / вертикальный ряд / жайма
 enum Side            { NORTH, SOUTH, EAST, WEST }                   // «северная сторона» [10, 18, 22, 30]
 
-enum ShopStatus      { PENDING_VERIFICATION, ACTIVE, BLOCKED }      // на проверке / работает / заблокирован
+enum ShopStatus      { PENDING_VERIFICATION, ACTIVE, BLOCKED, REJECTED }  // на проверке / работает / заблокирован / отклонён (и у мастера)
 
 // Категории — таблица (GET /categories), не енам: suspension, brakes, engine, lights, body, electrics,
 // cooling, transmission, interior, service («Фильтры и ТО»), other («Другое»).
@@ -173,6 +173,9 @@ enum QuickReply {                                                   // быст�
 | `SERVICE_NO_OFFERS` | клиенту | [37] время вышло без откликов — «Расширить радиус» |
 | `SERVICE_EXPIRED` | клиенту | [37] время вышло, отклики есть — «Продлить» |
 | `SERVICE_DEAL` | мастеру | клиент выбрал его («Договорились») |
+| `ADMIN_MESSAGE` | продавцу / мастеру | сообщение администрации (`kind`: `MESSAGE` или `WARNING` — предупреждение); текст в body, ответить нельзя |
+| `ACCOUNT_STATUS` | людям бокса / мастеру | решение администрации: `target` `SHOP` / `MASTER`, `id`, `event` `APPROVED` / `REJECTED` / `BLOCKED` / `UNBLOCKED`; вести в «Мой бокс» / профиль мастера |
+| `DISPUTE_RESOLVED` | обеим сторонам спора | спор за контейнер решён: `disputeId`, `won` `true` / `false` |
 
 ---
 
@@ -195,7 +198,7 @@ enum QuickReply {                                                   // быст�
 
 ### 3. Пользователь и гараж
 
-- `GET /me` → `{id, phone, name?, avatarUrl?, role, lang, adminRole?, onboarded, hasShop, shop? {id, name, status, role}, createdAt}` (тот же объект — `user` в ответе `POST /auth/otp/verify`). **Роль ещё не выбрана — `onboarded = false`** (в ответе входа это же — `isNewUser = true`): вести на [03], даже если человек уже входил и закрыл приложение на выборе роли. `role` до выбора — `BUYER` по умолчанию, по нему не ориентироваться. `hasShop = false` — продавца ведут на регистрацию [10а]; `hasMaster` / `master? {id, name, status}` — профиль мастера, нет — в режиме мастера вести на [38]; `shop.status` — `PENDING_VERIFICATION` / `ACTIVE` / `BLOCKED`, `shop.role` — `OWNER` / `STAFF`; `adminRole` — `SUPER_ADMIN` / `MARKET_ADMIN`, если пользователь сотрудник веб-админки (в приложении ничего не открывает, только признак); `PATCH /me {name?, lang?, avatarMediaId?}`; `DELETE /me/avatar`; `PUT /me/role {role}` [03].
+- `GET /me` → `{id, phone, name?, avatarUrl?, role, lang, adminRole?, onboarded, hasShop, shop? {id, name, status, role}, createdAt}` (тот же объект — `user` в ответе `POST /auth/otp/verify`). **Роль ещё не выбрана — `onboarded = false`** (в ответе входа это же — `isNewUser = true`): вести на [03], даже если человек уже входил и закрыл приложение на выборе роли. `role` до выбора — `BUYER` по умолчанию, по нему не ориентироваться. `hasShop = false` — продавца ведут на регистрацию [10а]; `hasMaster` / `master? {id, name, status}` — профиль мастера, нет — в режиме мастера вести на [38]; `shop.status` — `PENDING_VERIFICATION` / `ACTIVE` / `BLOCKED` / `REJECTED`, `shop.role` — `OWNER` / `STAFF`; `adminRole` — `SUPER_ADMIN` / `MARKET_ADMIN`, если пользователь сотрудник веб-админки (в приложении ничего не открывает, только признак); `PATCH /me {name?, lang?, avatarMediaId?}`; `DELETE /me/avatar`; `PUT /me/role {role}` [03].
 - `GET/PATCH /me/settings` → `{notifyReplies, notifyChat, newRequestSound, theme}` [19, 21].
 - `POST /devices {token, platform}` / `DELETE /devices/{token}` — FCM.
 - Гараж [04]: `GET /me/cars`, `POST /me/cars {modelId, year, engine?, vin?, engineVolume?, fuel?, origin?, …}`, `PATCH /me/cars/{id}`, `POST /me/cars/{id}/primary`, `DELETE /me/cars/{id}`. Машина: `brand`, модель, `year`, `isPrimary`, `engineVolume?`, `fuel?`, `origin` (по умолчанию — по стране марки: Toyota — `JAPAN`); подпись «Camry 50 · 2012».
@@ -277,6 +280,8 @@ enum QuickReply {                                                   // быст�
 
 - Сетка выбора бокса [10а]: `GET /market/rows`, `GET /market/rows/{id}` — контейнеры по сторонам, `occupied` — серые.
 - Регистрация: `POST /shops {containerId, name, brandIds[], categoryIds[], openFrom?, openTo?, workDays?}` → **сразу `ACTIVE`**: проверка места пока выключена (`SHOP_VERIFICATION_REQUIRED=false`), экран «На проверке» и сканирование QR не показывать, переезд (`POST /my/shop/relocation`) тоже сразу. Когда проверку включат, магазин будет `PENDING_VERIFICATION` до подтверждения: `GET /my/shop/verification` (`required`), `POST /my/shop/verification/qr {qrToken, lat?, lon?}`, SMS арендатора (`…/sms/send`, `…/sms/confirm`) или админ (`…/admin-request`).
+- **Отклонён** (`status = REJECTED`, причина в `blockReason`): администрация не подтвердила место. Магазин скрыт и контейнер больше не держит. Показать причину и «Выбрать другой контейнер» → `POST /my/shop/relocation {containerId}` (можно и тот же): магазин снова уходит на проверку (или сразу действует, пока проверка выключена). У мастера то же: `master.status = REJECTED`, причина — в профиле.
+- **«Это мой контейнер»**: `POST /market/containers/{id}/claim {text?}` → 201 — спор уходит администрации, ответ придёт пушем `DISPUTE_RESOLVED`. 409 `CONTAINER_FREE` — контейнер свободен, можно регистрироваться; 400 `OWN_CONTAINER` — там уже ваш магазин.
 - `GET /my/shop`; `PATCH /my/shop {name?, openFrom?, openTo?, workDays?, phone?, phoneVisible?}`; `PUT /my/shop/brands {brandIds}` [23] («Сохранить · 4 марки»); `PUT /my/shop/categories {categoryIds}`.
 - Тумблер «Бокс закрыт» [11, 21]: `PATCH /my/shop/open {isOpen}` — закрытым запросы не рассылаются.
 - Аватар: `PUT /my/shop/avatar {mediaId}`, `DELETE /my/shop/avatar`. Фото места (до 8, первое — обложка): `GET/POST /my/shop/photos`, `PUT /my/shop/photos/order`, `POST /my/shop/photos/{mediaId}/cover`, `DELETE /my/shop/photos/{mediaId}`.

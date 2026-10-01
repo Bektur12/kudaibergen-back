@@ -35,7 +35,9 @@ public class AdminProfiles {
             permissions.contains(AdminPermission.MASTERS_VIEW)
                   ? count("select count(*) from masters where status = 'PENDING_VERIFICATION'") : null,
             permissions.contains(AdminPermission.COMPLAINTS_VIEW)
-                  ? count("select count(*) from complaints where status = 'OPEN'") : null);
+                  ? count("select count(*) from complaints where status = 'OPEN'") : null,
+            permissions.contains(AdminPermission.SELLERS_VIEW)
+                  ? count("select count(*) from container_disputes where status = 'OPEN'") : null);
    }
 
    private Long count(String sql) {

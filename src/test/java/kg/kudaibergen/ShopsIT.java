@@ -163,8 +163,9 @@ class ShopsIT extends AbstractIntegrationTest {
       assertThat(requested.get("waitingForAdmin").asBoolean()).isTrue();
 
       String admin = admin("+996700400432");
-      JsonNode queue = call(authed(get("/api/v1/admin/shops/verification-queue"), admin), 200);
-      assertThat(queue.findValuesAsText("name")).contains("Радиаторы");
+      JsonNode queue = call(authed(get("/api/v1/admin/shops").param("tab", "PENDING"), admin), 200);
+      assertThat(queue.get("items").findValuesAsText("name")).contains("Радиаторы");
+      assertThat(queue.get("counts").get("pending").asLong()).isPositive();
 
       JsonNode approved = call(authed(jsonPost("/api/v1/admin/shops/" + shopId + "/approve", "{}"), admin), 200);
       assertThat(approved.get("status").asText()).isEqualTo("ACTIVE");

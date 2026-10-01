@@ -17,7 +17,7 @@ public interface UserShops {
     * (значения ShopStatus и MemberRole).
     */
    record ShopRef(Long id, String name,
-                  @Schema(allowableValues = {"PENDING_VERIFICATION", "ACTIVE", "BLOCKED"}) String status,
+                  @Schema(allowableValues = {"PENDING_VERIFICATION", "ACTIVE", "BLOCKED", "REJECTED"}) String status,
                   @Schema(allowableValues = {"OWNER", "STAFF"}) String role) {
    }
 }

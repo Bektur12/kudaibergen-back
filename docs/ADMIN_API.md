@@ -98,8 +98,8 @@ TOTP (Google Authenticator) вместо SMS-кода — позже, отдел
 ```
 
 Бейджи сайдбара: `shopsPending` — продавцы на проверке, новые и переезды; `mastersPending` — мастера на проверке;
-`complaintsNew` — жалобы без решения. `null` — у сотрудника нет права на этот раздел. Бейдж «споры» добавится
-в фазе 2.
+`complaintsNew` — жалобы без решения; `disputesOpen` — открытые споры за контейнер. `null` — у сотрудника нет права
+на этот раздел.
 
 ## Поиск в шапке
 
@@ -131,14 +131,142 @@ TOTP (Google Authenticator) вместо SMS-кода — позже, отдел
 | `ROW_CONTAINERS_SET`, `CONTAINER_UPDATE` | ROW, CONTAINER | места в ряду, арендатор контейнера |
 | `GEO_ANCHORS_SET`, `MAP_PUBLISH` | MAP | GPS-точки, новая схема |
 | `ADMIN_LOGIN`, `ADMIN_PASSWORD_SET` | ADMIN | вход, пароль |
+| `SHOP_SMS_CODE`, `SHOP_WARN`, `SHOP_MESSAGE` | SHOP | SMS-код арендатору, предупреждение, «Написать» |
+| `DISPUTE_RESOLVE` | DISPUTE | решение спора |
+| `TENANTS_IMPORT_PREVIEW`, `TENANTS_IMPORT_APPLY` | TENANT_IMPORT | загрузка и применение списка (в журнал — итог, без строк) |
+| `MASTER_CREATE`, `MASTER_APPROVE`, `MASTER_REJECT`, `MASTER_BLOCK`, `MASTER_UNBLOCK`, `MASTER_WARN`, `MASTER_MESSAGE` | MASTER | мастера |
+
+## Продавцы [A2]
+
+### Список
+
+`GET /admin/shops?tab=ALL|PENDING|DISPUTES|BLOCKED|REJECTED&q=&cursor=&limit=` — право `SELLERS_VIEW`.
+Ответ — `{items: AdminShopRow[], nextCursor, counts: {all, pending, disputes, blocked, rejected}}`.
+
+- Порядок: новые сверху.
+- `counts` считаются по всем табам с учётом `q`, но без учёта выбранного таба.
+- `q` — название, цифры телефона владельца или «14 12» (ряд + номер).
+- Табы: `PENDING` — новые магазины и переезды на проверке; `DISPUTES` — с открытым спором; `REJECTED` — отклонённые.
+
+`AdminShopRow` — колонки таблицы:
+
+| поле | что |
+| --- | --- |
+| `name`, `avatarUrl?` | магазин |
+| `ownerPhone` | телефон владельца (маска без `PII_VIEW`) |
+| `location`, `pendingLocation?` | где стоит и куда переезжает (`LocationDto`: `rowLabel`, `number`, `side`…) — «Ряд 14 · 12» |
+| `tenantMatch` | сверка со списком арендаторов, см. ниже |
+| `submittedAt` | когда подал на проверку (последняя заявка, иначе регистрация) |
+| `status` | `PENDING_VERIFICATION` / `ACTIVE` / `BLOCKED` / `REJECTED` |
+| `warned` | действует предупреждение (90 дней) — «Предупреждён» |
+| `openDisputes` | открытых споров с участием магазина |
+
+`tenantMatch` считается для контейнера, который проверяется (при переезде — новое место). Значения перечислены по
+приоритету:
+
+| значение | подпись | когда |
+| --- | --- | --- |
+| `CONTAINER_TAKEN` | Контейнер занят | открыт спор за контейнер с участием магазина |
+| `SMS_CONFIRMED` | Подтверждён по SMS | арендатор ввёл SMS-код |
+| `IN_TENANT_LIST` | В списке аренды | телефон арендатора по базе рынка совпадает с телефоном владельца или сотрудника |
+| `NOT_IN_LIST` | Нет в списке | телефон арендатора есть, но другой |
+| `AWAITING_CHECK` | Ждёт сверки | телефона арендатора в базе нет |
+
+### Карточка
+
+`GET /admin/shops/{id}` → `AdminShopDetailDto` (правая панель). В карточке:
+
+- владелец: `owner {userId, name, phone}`, телефон магазина;
+- место: `location`, `pendingLocation`;
+- арендатор по списку: `tenant {name, phone, matches}` («Токтосунов А. · совпадает») и `tenantMatch`;
+- марки, категории, часы работы, рейтинг, число товаров и людей в боксе;
+- история проверок (`verifications`), открытые споры;
+- для решения о санкциях: `complaints90d`, `warnings90d` и история санкций `sanctions`.
+
+`statusReason` — причина блокировки или отказа.
+
+### Действия
+
+Каждое действие возвращает обновлённую карточку и пишется в журнал (до и после).
+
+| эндпоинт | право | что делает |
+| --- | --- | --- |
+| `POST /admin/shops/{id}/approve` | `SELLERS_VERIFY` | новый или отклонённый магазин становится действующим, переезд занимает новое место. 409 `NOTHING_TO_VERIFY`, `CONTAINER_TAKEN` |
+| `POST /admin/shops/{id}/reject {reason}` | `SELLERS_VERIFY` | новый магазин → `REJECTED`: скрыт, контейнер свободен, продавец видит причину и выбирает место заново. Переезд — отменяется. 409 `ALREADY_REJECTED` |
+| `POST /admin/shops/{id}/send-sms-code` | `SELLERS_VERIFY` | SMS-код на телефон арендатора проверяемого контейнера; продавец вводит его в приложении. Ответ `{sentTo, expiresIn, resendIn, debugCode?}`. 409 `SMS_UNAVAILABLE` |
+| `POST /admin/shops/{id}/block {reason}` | `SELLERS_BLOCK` | скрыт, запросы не приходят. 409 `ALREADY_BLOCKED`, `SHOP_REJECTED` |
+| `POST /admin/shops/{id}/unblock` | `SELLERS_BLOCK` | 409 `NOT_BLOCKED` |
+| `POST /admin/shops/{id}/warn {reason}` | `SELLER_WARN` | предупреждение на 90 дней |
+| `POST /admin/shops/{id}/message {text}` | `MESSAGE_USERS` | пуш всем людям бокса → `{recipients}` |
+
+Продавец получает пуш. При решениях по месту и блокировке это `ACCOUNT_STATUS` (`event`: `APPROVED`, `REJECTED`,
+`BLOCKED`, `UNBLOCKED`). При предупреждении и сообщении — `ADMIN_MESSAGE` (`kind`: `WARNING` или `MESSAGE`).
+
+### Споры за контейнер
+
+Спор открывает человек, чьё место в приложении занято чужим магазином: «Это мой контейнер»,
+`POST /api/v1/market/containers/{id}/claim`. Магазина у заявителя может не быть.
+
+- `GET /admin/disputes?status=OPEN|RESOLVED&cursor=` (`SELLERS_VIEW`) → `{items: AdminDisputeDto[], nextCursor,
+  counts: {open, resolved}}`.
+- `GET /admin/disputes/{id}` — один спор.
+- В споре видны обе стороны (`claimant`, `current`: человек, телефон, магазин) и арендатор контейнера по базе рынка.
+  `tenantSide` подсказывает, на чьей стороне арендатор по телефону: `CLAIMANT` / `CURRENT` / `NONE` / `UNKNOWN`.
+- `POST /admin/disputes/{id}/resolve {winner: CURRENT|CLAIMANT, comment?}` (`DISPUTES_RESOLVE`):
+  - `CURRENT` — всё остаётся как есть.
+  - `CLAIMANT` — стоявший магазин отклоняется и освобождает место. Магазин заявителя, если он есть, встаёт в
+    контейнер сразу. Телефон заявителя становится телефоном арендатора — без магазина он регистрируется на этом
+    месте обычным путём.
+  - Обеим сторонам уходит пуш `DISPUTE_RESOLVED`. 409 `DISPUTE_RESOLVED` — спор уже решён.
+
+В задаче было `{winnerShopId}`. Сделано `winner`, потому что у заявителя часто нет магазина: его место занято.
+
+### Импорт арендаторов
+
+Право `TENANTS_IMPORT`.
+
+- `GET /admin/tenants/import/template.xlsx` — шаблон.
+- `POST /admin/tenants/import` (multipart, поле `file`, xlsx или csv до 5 МБ) — предпросмотр, ничего не меняет.
+  Колонки: ряд («14» или «Ряд 14»), номер контейнера, сторона (С / Ю / З / В, можно пусто, если номер в ряду один),
+  ФИО, телефон (любая запись: 0555 12 34 56, +996…).
+- Ответ `TenantImportDto {id, status: PREVIEW, rowsTotal, rowsOk, rowsError, changed, changes[≤200], errors[{line, message}]}`.
+  `changes` — что изменится: было и стало по ФИО и телефону.
+- `GET /admin/tenants/import/{id}` — тот же отчёт.
+- `POST /admin/tenants/import/{id}/apply` — записывает ФИО и телефоны в контейнеры, строки с ошибками пропускаются.
+  409 `IMPORT_APPLIED`, `IMPORT_EXPIRED` (предпросмотр действует 24 часа).
+- Пустая ячейка ФИО или телефона значение не стирает.
+- Сам файл не хранится — только разобранные строки. Поэтому вместо `file_key` из задачи — `file_name`.
+
+## Мастера [A7]
+
+`GET /admin/masters?tab=ALL|PENDING|MOBILE|BLOCKED|REJECTED&service=&brandId=&q=&cursor=` (`MASTERS_VIEW`) →
+`{items: AdminMasterRow[], nextCursor, counts: {all, pending, mobile, blocked, rejected}}`.
+
+- Фильтры: `service` — код услуги; `brandId` — работает с маркой, включая мастеров «все марки»;
+  `q` — название, адрес, цифры телефона.
+- Колонки строки: мастер или СТО, `ownerPhone`, `phone`, `services` (коды; названия — `GET /service-types`).
+- Место: `address`, `mobile`, `radiusKm`. Подпись собирает фронт: «Садыгалиева 41 · 5 км» или «выезд · 10 км».
+- `check` — колонка «Проверка»: `COMPLAINT` (есть жалоба без решения), `NO_PHOTOS` или `PHOTOS`.
+  «Документы» появятся вместе с загрузкой документов мастера.
+- Ещё в строке: `status`, `warned`, рейтинг.
+
+`GET /admin/masters/{id}` — карточка. В ней профиль целиком, фото и статистика за 30 дней (`stats30d`: пришло
+заявок, откликов «Могу помочь», «Договорились»). Ещё жалобы (`openComplaints`, `complaints90d`), предупреждения
+и история санкций.
+
+| эндпоинт | право | что делает |
+| --- | --- | --- |
+| `POST /admin/masters` | `MASTERS_CREATE` | «+ Добавить вручную»: `{ownerPhone, ownerName?, profile: <тело POST /masters из приложения>}`. Пользователь создаётся, если его нет; режим его приложения не меняется; профиль сразу `ACTIVE`. 201 + карточка; 409 `ALREADY_MASTER` |
+| `POST /admin/masters/{id}/approve` | `MASTERS_VERIFY` | на проверке или отклонён → действует. 409 `NOTHING_TO_VERIFY` |
+| `POST /admin/masters/{id}/reject {reason}` | `MASTERS_VERIFY` | `REJECTED`: заявки не приходят, мастер видит причину |
+| `POST /admin/masters/{id}/block {reason}`, `/unblock` | `MASTERS_BLOCK` | 409 `ALREADY_BLOCKED` / `NOT_BLOCKED` |
+| `POST /admin/masters/{id}/warn {reason}` | `MASTERS_BLOCK` | предупреждение на 90 дней. Отдельного права «предупредить мастера» в задаче нет |
+| `POST /admin/masters/{id}/message {text}` | `MESSAGE_USERS` | пуш `ADMIN_MESSAGE` |
 
 ## Эндпоинты, которые уже были, — теперь по правам
 
 | Эндпоинт | Право |
 | --- | --- |
-| `GET /admin/shops?status=`, `GET /admin/shops/verification-queue` | `SELLERS_VIEW` |
-| `POST /admin/shops/{id}/approve`, `/reject {reason}` | `SELLERS_VERIFY` |
-| `POST /admin/shops/{id}/block {reason}`, `/unblock` | `SELLERS_BLOCK` |
 | `GET /admin/complaints` | `COMPLAINTS_VIEW` |
 | `POST /admin/complaints/{id}/resolve {status, resolution}` | `COMPLAINTS_RESOLVE` |
 | `DELETE /admin/parts/{id}` | `CONTENT_REMOVE` |
@@ -146,7 +274,7 @@ TOTP (Google Authenticator) вместо SMS-кода — позже, отдел
 | `GET /admin/market/qr/{token}.png`, `GET /admin/market/qr/sheet?rowId=` | `MARKET_VIEW` |
 | `PUT /admin/market/geo-anchors`, `PUT /admin/market/map` | `MARKET_MAP_PUBLISH` |
 
-Эти эндпоинты в фазах 2–4 заменятся полноценными экранами A2 и A3 (списки с `counts`, карточки, черновик карты).
+Эндпоинты карты в фазе 4 заменятся полноценным экраном A3 (ряды со счётчиками, черновик схемы).
 
 ## Первый суперадмин
 
@@ -168,3 +296,24 @@ TOTP (Google Authenticator) вместо SMS-кода — позже, отдел
 - Токен мобильного приложения больше не открывает админку, даже если пользователь — сотрудник.
 - `GET /me` мобильного приложения: `adminRole` теперь `SUPER_ADMIN` / `MARKET_ADMIN`. В приложении это только
   признак.
+
+### Фаза 2 — продавцы и мастера
+
+- Миграция V15:
+  - статус `REJECTED` у магазинов и мастеров. Отклонённый магазин не держит контейнер: уникальность места теперь
+    только среди неотклонённых;
+  - `containers.tenant_name`;
+  - таблицы `tenant_imports`, `container_disputes`, `sanctions`;
+  - тип жалобы `MASTER`.
+  - Открытые жалобы `CONTAINER_CLAIM` перенесены в споры.
+- Список продавцов теперь с табами и `counts`: `GET /admin/shops?tab=` вместо `?status=`.
+  `GET /admin/shops/verification-queue` убран — вместо него таб `PENDING`.
+- Новое: карточка продавца, `send-sms-code`, `warn`, `message`; споры; импорт арендаторов; раздел мастеров.
+- Бейдж `disputesOpen` в `/admin/me`.
+- Мобильное приложение:
+  - статус `REJECTED` у магазина и мастера;
+  - пуши `ADMIN_MESSAGE`, `ACCOUNT_STATUS`, `DISPUTE_RESOLVED`;
+  - «Это мой контейнер» отвечает 409 `CONTAINER_FREE` и 400 `OWN_CONTAINER`.
+  - Всё это описано в `BACKEND_SPEC.md` и `FRONTEND_PROMPT.md`.
+- Блокировка пользователя целиком (`users.blocked_at`, `blocked_reason`) перенесена в фазу 7, к разделу
+  «Пользователи».

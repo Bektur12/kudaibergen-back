@@ -37,6 +37,10 @@ public class Container {
    @Column(name = "tenant_phone", length = 16)
    private String tenantPhone;
 
+   /** ФИО арендатора из базы рынка (импорт списка арендаторов). */
+   @Column(name = "tenant_name", length = 120)
+   private String tenantName;
+
    @Column(name = "is_active", nullable = false)
    private boolean active = true;
 
@@ -81,6 +85,14 @@ public class Container {
 
    public void setTenantPhone(String tenantPhone) {
       this.tenantPhone = tenantPhone;
+   }
+
+   public String getTenantName() {
+      return tenantName;
+   }
+
+   public void setTenantName(String tenantName) {
+      this.tenantName = tenantName;
    }
 
    public boolean isActive() {

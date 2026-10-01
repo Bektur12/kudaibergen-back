@@ -119,7 +119,10 @@ public class ShopVerificationService {
 
    /** Код на номер арендатора, закреплённый за контейнером в базе рынка. */
    public SmsVerificationSentDto sendSms(Long userId, String clientIp, Lang lang) {
-      Shop shop = ownerShop(userId);
+      return sendSmsFor(ownerShop(userId), clientIp, lang);
+   }
+
+   private SmsVerificationSentDto sendSmsFor(Shop shop, String clientIp, Lang lang) {
       MarketSnapshot.ContainerView target = market.container(requireTarget(shop));
       String tenantPhone = target.container().getTenantPhone();
       if (tenantPhone == null) {
@@ -160,15 +163,15 @@ public class ShopVerificationService {
    @Transactional
    public void relocate(Long userId, Long containerId) {
       Shop shop = ownerShop(userId);
-      if (containerId.equals(shop.getContainerId())) {
+      if (containerId.equals(shop.getContainerId()) && !shop.isRejected()) {
          throw new BadRequestException("SAME_CONTAINER", "Магазин уже стоит в этом контейнере");
       }
       market.container(containerId);
       if (shops.isContainerTaken(containerId)) {
          throw ShopService.containerTaken();
       }
-      if (shop.getStatus() == ShopStatus.PENDING_VERIFICATION) {
-         // ещё нигде не подтверждён — просто выбрал другой контейнер, проверять будем уже его
+      if (shop.getStatus() == ShopStatus.PENDING_VERIFICATION || shop.isRejected()) {
+         // ещё нигде не подтверждён (или отклонён) — просто выбрал контейнер, проверять будем уже его
          shop.moveUnverified(containerId);
       } else {
          shop.setPendingContainerId(containerId);
@@ -191,33 +194,99 @@ public class ShopVerificationService {
 
    // ─────────────────────── администрация ───────────────────────
 
+   /** Подтвердить место. Отклонённый магазин возвращается, только если его контейнер никто не занял. */
    @Transactional
    public void adminApprove(Long shopId, Long adminId) {
       Shop shop = shop(shopId);
       Long target = requireTarget(shop);
+      if (shop.isRejected() && shops.findStandingIn(target).filter(other -> !other.getId().equals(shopId)).isPresent()) {
+         throw ShopService.containerTaken();
+      }
       verifications.findFirstByShopIdAndContainerIdAndStatusOrderByCreatedAtDesc(shopId, target,
                   VerificationStatus.PENDING)
             .ifPresentOrElse(pending -> {
                pending.approve(adminId);
                shop.verified();
             }, () -> approve(shop, target, VerificationMethod.ADMIN, adminId));
+      try {
+         shops.saveAndFlush(shop);
+      } catch (DataIntegrityViolationException race) {
+         throw ShopService.containerTaken();
+      }
       log.info("Админ {} подтвердил магазин {} в контейнере {}", adminId, shopId, target);
    }
 
-   /** Отказ: магазин остаётся на проверке (или на старом месте при переезде), продавец видит причину. */
+   /**
+    * Отказ. Новый магазин — «Отклонён»: скрыт, контейнер свободен, продавец видит причину и выбирает место заново.
+    * Переезд — отменяется, магазин остаётся на старом месте; причина — в последней проверке.
+    */
    @Transactional
    public void adminReject(Long shopId, Long adminId, String reason) {
       Shop shop = shop(shopId);
+      if (shop.isRejected()) {
+         throw new ConflictException("ALREADY_REJECTED", "Магазин уже отклонён");
+      }
       Long target = requireTarget(shop);
       ShopVerification verification = verifications.findFirstByShopIdAndContainerIdAndStatusOrderByCreatedAtDesc(
                   shopId, target, VerificationStatus.PENDING)
             .orElseGet(() -> verifications.save(new ShopVerification(shopId, target, VerificationMethod.ADMIN)));
       verification.reject(adminId, reason);
+      shop.reject(reason);
+   }
+
+   /**
+    * Спор за контейнер решён в пользу заявителя: магазин, который стоял, отклоняется и место освобождает.
+    * Если у заявителя есть магазин — он встаёт в этот контейнер сразу (решение администрации = проверка).
+    */
+   @Transactional
+   public void transferContainer(Long containerId, Long loserShopId, Long winnerShopId, Long adminId, String reason) {
+      if (loserShopId != null) {
+         Shop loser = shop(loserShopId);
+         ShopVerification lost = new ShopVerification(loserShopId, containerId, VerificationMethod.ADMIN);
+         lost.reject(adminId, reason);
+         verifications.save(lost);
+         loser.setPendingContainerId(null);
+         loser.reject(reason);
+         shops.saveAndFlush(loser);
+      }
+      if (winnerShopId != null) {
+         Shop winner = shop(winnerShopId);
+         if (winner.getStatus() == ShopStatus.BLOCKED) {
+            throw new ConflictException("SHOP_BLOCKED", "Магазин заявителя заблокирован — сначала снимите блокировку");
+         }
+         if (!containerId.equals(winner.getContainerId()) || winner.isRejected()
+               || winner.getStatus() == ShopStatus.PENDING_VERIFICATION) {
+            if (winner.isActive()) {
+               winner.setPendingContainerId(containerId.equals(winner.getContainerId()) ? null : containerId);
+            } else {
+               winner.moveUnverified(containerId);
+            }
+         }
+         approve(winner, containerId, VerificationMethod.ADMIN, adminId);
+         try {
+            shops.saveAndFlush(winner);
+         } catch (DataIntegrityViolationException race) {
+            throw ShopService.containerTaken();
+         }
+      }
+   }
+
+   /** Админка: SMS-код на номер арендатора контейнера, который проверяется; код продавец вводит в приложении. */
+   public SmsVerificationSentDto adminSendSms(Long shopId, String clientIp, Lang lang) {
+      Shop shop = shop(shopId);
+      return sendSmsFor(shop, clientIp, lang);
    }
 
    @Transactional
    public void block(Long shopId, String reason) {
-      shop(shopId).block(reason);
+      Shop shop = shop(shopId);
+      if (shop.isRejected()) {
+         throw new ConflictException("SHOP_REJECTED", "Магазин отклонён и уже скрыт — блокировать не нужно");
+      }
+      if (shop.getStatus() == ShopStatus.BLOCKED) {
+         throw new ConflictException("ALREADY_BLOCKED", "Магазин уже заблокирован");
+      }
+      shop.block(reason);
    }
 
    @Transactional
