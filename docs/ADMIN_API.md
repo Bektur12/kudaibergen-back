@@ -410,6 +410,37 @@ relatedServiceRequestId?}`.
   `DISPATCHED`, `REPLY`, `EXPIRED`, `CLOSED`, `HIDDEN`. В задаче был STOMP, но живые события в проекте идут через
   Centrifugo; в его конфиге добавлено пространство `admin`.
 
+## Сводка [A1]
+
+Право `DASHBOARD_VIEW`. Агрегаты кэшируются на 90 секунд. В каждом ответе есть `generatedAt` — по нему
+пишется «данные обновлены 2 мин назад». `POST /admin/dashboard/refresh` пересчитывает сводку сразу. Дни
+считаются по Бишкеку.
+
+| эндпоинт | что |
+| --- | --- |
+| `GET /admin/dashboard/kpi` | `requestsToday` и `requestsDeltaPct` — % к среднему за прошлые 7 дней; `haveIn30Pct` — доля запросов за 7 дней с «Есть» за 30 минут, `haveIn30DeltaPp` — в п.п. к прошлой неделе; `activeShops` и `activeShopsNewWeek`; `serviceRequestsToday` и `serviceDeltaPct` — % к вчера. `null` — не с чем сравнить |
+| `GET /admin/dashboard/requests-by-day?range=D14\|D30\|QUARTER` | точки `{date, requests, withHave, serviceRequests}`, пустые дни — нули |
+| `GET /admin/dashboard/unanswered-by-brand?period=WEEK\|MONTH` | марки от 3 запросов: `requests`, `unanswered` (без «Есть» за 30 минут), `pct`, `sellers` (действующих боксов с маркой), по убыванию `pct`. `hint` — у худшей марки от 20%: готовый `text` («Lada: 80% запросов без ответа за 30 минут — её продают всего 2 бокса…») и `broadcastBrandIds` для кнопки «Сделать рассылку» (аудитория SELLERS, фильтр марок) |
+| `GET /admin/dashboard/top-searched?period=WEEK\|MONTH` | топ-10 «Чаще всего ищут»: по подсказке «Что ищем?», иначе по тексту запроса; `requests`, `havePct` |
+| `GET /admin/dashboard/pending` | «Ждут действий»: `shops`, `masters`, `complaints`, `disputes` и `latest` — 10 свежих `{kind, id, title, phone, createdAt}` |
+
+## Выгрузки Excel
+
+`GET …/export.xlsx` — те же фильтры, что у списка, все страницы (до 10 000 строк). Права: `EXPORT_EXCEL` плюс
+право на сам раздел. Телефоны выгружаются с учётом `PII_VIEW`. Каждая выгрузка пишется в журнал
+(`EXPORT_XLSX`, в комментарии — что выгружено, в `after` — сколько строк).
+
+| файл | эндпоинт |
+| --- | --- |
+| сводка (KPI, по дням за 30 дней, без ответа по маркам, чаще всего ищут) | `GET /admin/dashboard/export.xlsx` |
+| продавцы | `GET /admin/shops/export.xlsx?tab=&q=` |
+| мастера | `GET /admin/masters/export.xlsx?tab=&q=&service=&brandId=` |
+| запросы на запчасти | `GET /admin/part-requests/export.xlsx?period=&status=&noReplies=&q=` |
+| заявки на услуги | `GET /admin/service-requests/export.xlsx?period=&status=&noReplies=&service=&q=` |
+
+Ответ — файл с `Content-Disposition: attachment; filename="prodavcy-2026-10-01.xlsx"`. Фронт скачивает его с тем
+же Bearer-токеном: `fetch` → `blob` → ссылка.
+
 ## Эндпоинты, которые уже были, — теперь по правам
 
 | Эндпоинт | Право |
@@ -499,3 +530,8 @@ relatedServiceRequestId?}`.
   - скрытое не видно в поиске, отзывах и лентах;
   - у сообщения появился `code = HIDDEN_BY_ADMIN`;
   - пуши `COMPLAINT_RESOLVED` и `ADMIN_MESSAGE` с `kind = CONTENT_REMOVED`.
+
+### Фаза 6 — сводка и выгрузки
+
+- Сводка A1 с кэшем на 90 секунд и `generatedAt`, «Обновить».
+- Выгрузки Excel: сводка, продавцы, мастера, запросы, заявки. Миграций нет.
