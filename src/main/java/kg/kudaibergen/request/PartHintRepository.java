@@ -17,6 +17,7 @@ public interface PartHintRepository extends JpaRepository<PartHint, Long> {
          select h.* from part_hints h
          left join part_requests r on r.hint_id = h.id and r.brand_id = :brandId
                                   and r.created_at > now() - interval '90 days'
+         where h.is_active
          group by h.id
          order by coalesce(sum(case when r.model_id = :modelId then 3 else 1 end)
                            filter (where r.id is not null), 0) desc,

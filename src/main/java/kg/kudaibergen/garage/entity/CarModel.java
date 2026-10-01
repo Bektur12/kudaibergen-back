@@ -43,17 +43,35 @@ public class CarModel {
    @Column(nullable = false, columnDefinition = "text[]")
    private List<String> aliases = new ArrayList<>();
 
+   @Column(name = "is_active", nullable = false)
+   private boolean active = true;
+
+   /** Подпись из админки вместо «модель + поколение». */
+   @Column(name = "display_name", length = 80)
+   private String displayName;
+
    protected CarModel() {
    }
 
-   /** «Camry 50», «E-класс W211», «Sprinter». */
+   /** «Camry 50», «E-класс W211», «Sprinter»; подпись из админки, если задана. */
    public String label() {
+      if (displayName != null && !displayName.isBlank()) {
+         return displayName;
+      }
       return generation == null ? name : name + " " + generation;
    }
 
    /** Год входит в годы выпуска (открытые границы не ограничивают). */
    public boolean covers(int year) {
       return (yearFrom == null || year >= yearFrom) && (yearTo == null || year <= yearTo);
+   }
+
+   public boolean isActive() {
+      return active;
+   }
+
+   public String getDisplayName() {
+      return displayName;
    }
 
    public Long getId() {

@@ -28,6 +28,6 @@ public class CategoryController {
    public List<CategoryDto> list(@Parameter(hidden = true)
                                  @RequestHeader(value = HttpHeaders.ACCEPT_LANGUAGE, required = false) String language) {
       var lang = Langs.fromHeader(language);
-      return categories.all().stream().map(category -> CategoryDto.of(category, lang)).toList();
+      return categories.all().stream().filter(category -> category.isActive()).map(category -> CategoryDto.of(category, lang)).toList();
    }
 }

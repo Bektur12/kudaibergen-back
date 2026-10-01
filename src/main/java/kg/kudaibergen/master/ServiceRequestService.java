@@ -114,17 +114,17 @@ public class ServiceRequestService {
    @Transactional(readOnly = true)
    public ServiceEstimateDto estimate(Long buyerId, String service, Long carId, Long brandId, CarOrigin origin,
                                       double lat, double lng, Integer radiusKm, Lang lang) {
-      ServiceType type = catalog.require(service);
+      ServiceType type = catalog.requireActive(service);
       ServiceRequest.CarSnapshot car = car(buyerId, carId, brandId, null, null, null, null, origin);
       Brand brand = directory.brand(car.brandId());
-      int count = finder.find(buyerId, service, car.brandId(), car.origin(), lat, lng, radius(radiusKm)).size();
+      int count = finder.find(buyerId, service, car.brandId(), car.origin(), lat, lng, radius(radiusKm, type)).size();
       return new ServiceEstimateDto(count, type.name(lang) + " · " + brand.getName());
    }
 
    /** «Отправить» (36): заявка уходит подходящим мастерам рядом, им — пуш. Некому — 409 NO_RECIPIENTS. */
    @Transactional
    public ServiceRequestDetailDto create(Long buyerId, ServiceInputs.CreateServiceRequest input, Lang lang) {
-      ServiceType type = catalog.require(input.service());
+      ServiceType type = catalog.requireActive(input.service());
       ServiceRequest.CarSnapshot car = car(buyerId, input.carId(), input.brandId(), input.modelId(), input.year(),
             input.engineVolume(), input.fuel(), input.origin());
       if ((input.when() == ServiceWhen.AT_TIME) != (input.atTime() != null)) {
@@ -136,7 +136,7 @@ public class ServiceRequestService {
       }
       Instant now = clock.instant();
       checkLimits(buyerId, now);
-      int radius = radius(input.radiusKm());
+      int radius = radius(input.radiusKm(), type);
       List<ServiceRecipientFinder.Match> found = finder.find(buyerId, type.getCode(), car.brandId(), car.origin(),
             input.lat(), input.lng(), radius);
       if (found.isEmpty()) {
@@ -235,8 +235,9 @@ public class ServiceRequestService {
             engineVolume, fuel, origin != null ? origin : CarOrigins.of(brand.getSlug()));
    }
 
-   private static int radius(Integer radiusKm) {
-      return radiusKm == null ? DEFAULT_RADIUS_KM : radiusKm;
+   /** Радиус заявки: выбранный клиентом, иначе — по умолчанию для услуги (справочник). */
+   private static int radius(Integer radiusKm, ServiceType type) {
+      return radiusKm == null ? type.getDefaultRadiusKm() : radiusKm;
    }
 
    /** Не больше активных заявок и новых за сутки, чем запросов на запчасти (app.requests). */

@@ -39,6 +39,13 @@ public class ServiceType {
    @Column(nullable = false)
    private boolean urgent;
 
+   /** «Скрыть услугу»: нет в плитках и у мастеров нельзя выбрать, старые заявки показываются. */
+   @Column(name = "is_active", nullable = false)
+   private boolean active = true;
+
+   @Column(name = "default_radius_km", nullable = false)
+   private short defaultRadiusKm = 5;
+
    protected ServiceType() {
    }
 
@@ -64,6 +71,14 @@ public class ServiceType {
 
    public short getDurationMin() {
       return durationMin;
+   }
+
+   public boolean isActive() {
+      return active;
+   }
+
+   public int getDefaultRadiusKm() {
+      return defaultRadiusKm;
    }
 
    public boolean isUrgent() {

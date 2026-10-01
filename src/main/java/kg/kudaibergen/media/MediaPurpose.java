@@ -11,5 +11,7 @@ public enum MediaPurpose {
    REQUEST,
    REPLY,
    MASTER,
-   SERVICE
+   SERVICE,
+   /** Логотип марки (админка, справочники). */
+   BRAND
 }

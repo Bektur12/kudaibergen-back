@@ -112,6 +112,8 @@ enum QuickReply {                                                   // быст�
 
 ## 2. Справочники
 
+**Версия справочников:** `GET /dictionaries/version` → `{version, updatedAt}` — растёт при правке марок, моделей, категорий, услуг и подсказок в админке; изменилась — перекачать справочники. Списки справочников отдают `ETag` (повтор с `If-None-Match` → 304). Скрытое в админке в списках не появляется.
+
 ### 2.1 Марки — `GET /brands?popular=&q=`, `GET /brands/{id}/models`, `GET /models?brandId=&q=`
 `BrandDto {id, slug, name, shortName, logoUrl?, placeholder, color, popular}`. `shortName` — подпись в плитке [23, 28] («Mercedes»). `logoUrl = null` — круг с буквой `placeholder` цветом `color`. Поиск `q` — по названию, короткому имени и народным названиям («мерс», «бэха», «камри»).
 

@@ -29,11 +29,19 @@ public class Category {
    @Column(name = "sort_order", nullable = false)
    private short sortOrder;
 
+   /** Скрыта в админке: нет в списках приложения. */
+   @Column(name = "is_active", nullable = false)
+   private boolean active = true;
+
    protected Category() {
    }
 
    public String name(Lang lang) {
       return lang == Lang.KG ? nameKg : nameRu;
+   }
+
+   public boolean isActive() {
+      return active;
    }
 
    public Long getId() {

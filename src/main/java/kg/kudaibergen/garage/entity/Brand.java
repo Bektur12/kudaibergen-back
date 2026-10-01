@@ -50,6 +50,13 @@ public class Brand {
    @Column(nullable = false, columnDefinition = "text[]")
    private List<String> aliases = new ArrayList<>();
 
+   /** Скрыта в админке: нет в списках приложения, но уже выбранная работает. */
+   @Column(name = "is_active", nullable = false)
+   private boolean active = true;
+
+   @Column(name = "logo_media_id")
+   private Long logoMediaId;
+
    protected Brand() {
    }
 
@@ -69,7 +76,11 @@ public class Brand {
       return shortName == null ? name : shortName;
    }
 
+   /** Логотип: загруженный в админке отдаётся по стабильной ссылке, иначе — статичный файл из assets. */
    public String getLogoUrl() {
+      if (logoMediaId != null) {
+         return "/api/v1/brands/" + id + "/logo";
+      }
       return logoUrl;
    }
 
@@ -79,6 +90,14 @@ public class Brand {
 
    public String getColor() {
       return color;
+   }
+
+   public boolean isActive() {
+      return active;
+   }
+
+   public Long getLogoMediaId() {
+      return logoMediaId;
    }
 
    public boolean isPopular() {

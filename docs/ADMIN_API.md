@@ -134,6 +134,7 @@ TOTP (Google Authenticator) вместо SMS-кода — позже, отдел
 | `SHOP_SMS_CODE`, `SHOP_WARN`, `SHOP_MESSAGE` | SHOP | SMS-код арендатору, предупреждение, «Написать» |
 | `DISPUTE_RESOLVE` | DISPUTE | решение спора |
 | `TENANTS_IMPORT_PREVIEW`, `TENANTS_IMPORT_APPLY` | TENANT_IMPORT | загрузка и применение списка (в журнал — итог, без строк) |
+| `BRAND_*`, `MODEL_*`, `CATEGORY_*`, `SERVICE_TYPE_*` (код услуги — в комментарии), `SYNONYM_*`, `HINT_*`, `MEDIA_UPLOAD` | справочники | создание, правка, удаление, порядок, логотип |
 | `MASTER_CREATE`, `MASTER_APPROVE`, `MASTER_REJECT`, `MASTER_BLOCK`, `MASTER_UNBLOCK`, `MASTER_WARN`, `MASTER_MESSAGE` | MASTER | мастера |
 
 ## Продавцы [A2]
@@ -263,6 +264,38 @@ TOTP (Google Authenticator) вместо SMS-кода — позже, отдел
 | `POST /admin/masters/{id}/warn {reason}` | `MASTERS_BLOCK` | предупреждение на 90 дней. Отдельного права «предупредить мастера» в задаче нет |
 | `POST /admin/masters/{id}/message {text}` | `MESSAGE_USERS` | пуш `ADMIN_MESSAGE` |
 
+## Справочники [A5, A9]
+
+Права: `DICTIONARIES_VIEW` — смотреть, `DICTIONARIES_EDIT` — менять. Все пути — под `/api/v1/admin/dictionaries`.
+Списки отдаются целиком (`nextCursor = null`), `counts` — по табам «все / действуют / скрыты».
+
+- **Скрытие вместо удаления.** `active = false` убирает запись из списков приложения: марки, модели, категории,
+  плитки услуг, подсказки. То, что уже выбрано (машины в гаражах, марки магазинов, старые заявки), продолжает
+  работать. Скрытую услугу нельзя выбрать в новой заявке (400 `SERVICE_HIDDEN`) и мастеру.
+- **Удаление** возможно, только если запись нигде не используется. Иначе 409 `IN_USE`, а в `detail` — где она
+  используется: «Марка используется: моделей 19, продавцов 13, мастеров 2, машин 4».
+- **Изменения сразу видны в приложении.** Растёт `GET /api/v1/dictionaries/version` → `{version, updatedAt}`
+  (публичный). У публичных списков (`/brands`, `/brands/{id}/models`, `/models`, `/categories`, `/service-types`,
+  `/requests/hints`) есть `ETag`: повтор с `If-None-Match` получает 304. Кэши сервера перечитываются после
+  коммита правки.
+
+| что | эндпоинты |
+| --- | --- |
+| марки | `GET /brands?q=` (со счётчиками `modelsCount`, `sellersCount`, `mastersCount`, `carsCount`), `GET /brands/{id}`, `POST /brands`, `PATCH /brands/{id}`, `DELETE /brands/{id}`, `PUT /brands/order {ids}` |
+| логотип | `POST /api/v1/admin/media/photos` (multipart `file`) → `id`; `PUT /brands/{id}/logo {mediaId}`, `DELETE /brands/{id}/logo`. В приложении `logoUrl = /api/v1/brands/{id}/logo` — постоянная ссылка с редиректом на файл. Картинка пережимается в JPEG: прозрачный фон станет белым |
+| модели | `GET /brands/{brandId}/models?q=`, `POST /brands/{brandId}/models`, `PATCH /models/{id}`, `DELETE /models/{id}`. `displayName` заменяет подпись «модель + поколение» в приложении; пустая строка — стереть |
+| категории | `GET /categories`, `POST /categories {slug, nameRu, nameKg}` (встаёт в конец), `PATCH /categories/{id}`, `DELETE /categories/{id}`, `PUT /categories/order {ids}` |
+| услуги [A9] | `GET /service-types` (с `mastersCount`, `requests30d`), `POST /service-types`, `PATCH /service-types/{code}`, `DELETE /service-types/{code}`, `PUT /service-types/order {codes}` (все коды по порядку, drag-and-drop) |
+| синонимы | `GET /synonyms?q=`, `POST /synonyms {term, synonym, bidirectional = true}` → созданные пары, `DELETE /synonyms/{id}` |
+| подсказки | `GET /hints` (с `requestsCount`), `POST /hints`, `PATCH /hints/{id}` (`categoryId = 0` — убрать категорию), `DELETE /hints/{id}` |
+
+Поля услуги в правой панели [A9]: названия RU / KG, `icon`, `needsLocation` («точка на карте»), `urgent`
+(«Срочно»), `defaultDuration` («ожидание»: `MIN_15` / `MIN_30` / `HOUR_1` / `HOUR_3`), `defaultRadiusKm` — радиус
+заявки, если клиент его не выбрал. «Скрыть услугу» — `active = false`.
+
+Алиасы («мерс, мерседес») хранятся массивом у марки и модели; публичный поиск марок и моделей ими пользуется.
+`PATCH` с `aliases` заменяет весь список.
+
 ## Эндпоинты, которые уже были, — теперь по правам
 
 | Эндпоинт | Право |
@@ -317,3 +350,18 @@ TOTP (Google Authenticator) вместо SMS-кода — позже, отдел
   - Всё это описано в `BACKEND_SPEC.md` и `FRONTEND_PROMPT.md`.
 - Блокировка пользователя целиком (`users.blocked_at`, `blocked_reason`) перенесена в фазу 7, к разделу
   «Пользователи».
+
+### Фаза 3 — справочники
+
+- Миграция V17:
+  - `is_active` у марок, моделей, категорий, услуг и подсказок;
+  - `brands.logo_media_id`, `models.display_name`, `service_types.default_radius_km`;
+  - `id` у синонимов;
+  - назначение медиа `BRAND`;
+  - таблица `dictionary_version`.
+- Приложение:
+  - скрытое не попадает в публичные списки;
+  - новый `GET /api/v1/dictionaries/version` и `ETag` у списков справочников;
+  - радиус заявки на услугу по умолчанию берётся из справочника;
+  - у загруженного логотипа `logoUrl = /api/v1/brands/{id}/logo`.
+- `brand_alias` из задачи не нужен: алиасы уже хранятся массивом `brands.aliases`, и поиск ими пользуется.

@@ -39,6 +39,7 @@ public class SecurityConfig {
          "/api/v1/shops/**",
          "/api/v1/masters/**",
          "/api/v1/service-types",
+         "/api/v1/dictionaries/version",
          "/api/v1/reviews/tags"
    };
 

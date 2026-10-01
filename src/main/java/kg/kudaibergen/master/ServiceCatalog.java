@@ -40,6 +40,16 @@ public class ServiceCatalog {
       return type;
    }
 
+   /** Услуга для новой заявки: скрытую выбрать нельзя. */
+   public ServiceType requireActive(String code) {
+      ServiceType type = require(code);
+      if (!type.isActive()) {
+         throw new BadRequestException("SERVICE_HIDDEN", "Эта услуга сейчас недоступна");
+      }
+      return type;
+   }
+
+   /** Услуги мастера: только действующие (скрытая услуга, уже выбранная раньше, остаётся). */
    public Set<String> requireAll(Collection<String> codes) {
       Map<String, ServiceType> known = byCode();
       if (codes == null || codes.isEmpty() || !known.keySet().containsAll(codes)) {
@@ -48,8 +58,9 @@ public class ServiceCatalog {
       return Set.copyOf(codes);
    }
 
+   /** Плитки услуг: скрытые не показываются. */
    public List<ServiceTypeDto> list(Lang lang) {
-      return byCode().values().stream().map(type -> dto(type, lang)).toList();
+      return byCode().values().stream().filter(ServiceType::isActive).map(type -> dto(type, lang)).toList();
    }
 
    public List<ServiceTypeDto> dtos(Collection<String> codes, Lang lang) {
