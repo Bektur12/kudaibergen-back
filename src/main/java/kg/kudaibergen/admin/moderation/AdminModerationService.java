@@ -285,19 +285,23 @@ public class AdminModerationService {
 
    private PartyDto shopParty(Long shopId) {
       return jdbc.query("""
-            select s.id, s.name, s.status, s.container_id, u.phone from shops s join users u on u.id = s.owner_id
+            select s.id, s.name, s.status, s.container_id, s.rating, s.reviews_count, u.phone
+              from shops s join users u on u.id = s.owner_id
             where s.id = :id""", Map.of("id", shopId), (rs, n) -> {
          LocationDto location = market.location(rs.getLong("container_id"));
          return new PartyDto(SanctionTarget.SHOP, rs.getLong("id"), rs.getString("name"), rs.getString("phone"),
-               rs.getString("status"), location.rowLabel() + " · " + location.number());
+               rs.getString("status"), location.rowLabel() + " · " + location.number(), rs.getBigDecimal("rating"),
+               rs.getInt("reviews_count"));
       }).stream().findFirst().orElse(null);
    }
 
    private PartyDto masterParty(Long masterId) {
       return jdbc.query("""
-            select m.id, m.name, m.status, m.address, u.phone from masters m join users u on u.id = m.owner_id
+            select m.id, m.name, m.status, m.address, m.rating, m.reviews_count, u.phone
+              from masters m join users u on u.id = m.owner_id
             where m.id = :id""", Map.of("id", masterId), (rs, n) -> new PartyDto(SanctionTarget.MASTER, rs.getLong("id"),
-            rs.getString("name"), rs.getString("phone"), rs.getString("status"), rs.getString("address")))
+            rs.getString("name"), rs.getString("phone"), rs.getString("status"), rs.getString("address"),
+            rs.getBigDecimal("rating"), rs.getInt("reviews_count")))
             .stream().findFirst().orElse(null);
    }
 
@@ -307,7 +311,7 @@ public class AdminModerationService {
       }
       return jdbc.query("select id, name, phone, is_blocked from users where id = :id", Map.of("id", userId),
             (rs, n) -> new PartyDto(SanctionTarget.USER, rs.getLong("id"), nvl(rs.getString("name"), "Пользователь"),
-                  rs.getString("phone"), rs.getBoolean("is_blocked") ? "BLOCKED" : "ACTIVE", null))
+                  rs.getString("phone"), rs.getBoolean("is_blocked") ? "BLOCKED" : "ACTIVE", null, null, null))
             .stream().findFirst().orElse(null);
    }
 

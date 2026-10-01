@@ -58,8 +58,11 @@ public final class AdminRequestDtos {
                                      List<AdminReplyDto> replies, List<MediaItemDto> photos) {
    }
 
-   /** Отклик мастера: answeredAfterMin — через сколько минут после того, как заявка пришла мастеру. */
-   public record AdminOfferDto(Long id, Long masterId, String masterName, String answer, @Nullable Integer priceFrom,
+   /**
+    * Отклик мастера: answeredAfterMin — через сколько минут после того, как заявка пришла мастеру;
+    * masterMobile — выездной («выезд» вместо времени визита).
+    */
+   public record AdminOfferDto(Long id, Long masterId, String masterName, boolean masterMobile, String answer, @Nullable Integer priceFrom,
                                @Nullable Instant availableAt, @Nullable String message, Instant createdAt,
                                @Nullable Integer answeredAfterMin, boolean hidden) {
    }

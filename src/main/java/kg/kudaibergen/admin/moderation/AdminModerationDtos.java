@@ -30,10 +30,12 @@ public final class AdminModerationDtos {
 
    /**
     * Ответственный за объект жалобы — тот, кого предупреждают или блокируют: магазин, мастер или пользователь
-    * (автор отзыва, собеседник в чате). location — «Ряд 14 · 12» у магазина, адрес у мастера.
+    * (автор отзыва, собеседник в чате). location — «Ряд 14 · 12» у магазина, адрес у мастера; rating и reviewsCount —
+    * у магазина и мастера («★ 4.8»), у пользователя null.
     */
    public record PartyDto(SanctionTarget kind, Long id, String name, @Nullable @MaskedPhone String phone,
-                          @Nullable String status, @Nullable String location) {
+                          @Nullable String status, @Nullable String location, @Nullable java.math.BigDecimal rating,
+                          @Nullable Integer reviewsCount) {
    }
 
    /** Строка ленты: subjectTitle — что за объект («Колодки Toyota Camry 50», «Отзыв ★1», текст сообщения). */

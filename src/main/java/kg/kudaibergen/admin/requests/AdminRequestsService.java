@@ -253,14 +253,14 @@ public class AdminRequestsService {
 
    private List<AdminOfferDto> offers(Long requestId) {
       return jdbc.query("""
-            select o.id, o.master_id, ms.name, o.answer, o.price_from, o.available_at, o.message, o.created_at,
+            select o.id, o.master_id, ms.name, ms.is_mobile, o.answer, o.price_from, o.available_at, o.message, o.created_at,
                    o.hidden_by_admin, (extract(epoch from o.created_at - sr.notified_at) / 60)::int as after_min
               from service_offers o
               join masters ms on ms.id = o.master_id
               left join service_recipients sr on sr.request_id = o.request_id and sr.master_id = o.master_id
              where o.request_id = :id order by o.created_at""", Map.of("id", requestId),
             (rs, n) -> new AdminOfferDto(rs.getLong("id"), rs.getLong("master_id"), rs.getString("name"),
-                  rs.getString("answer"), integer(rs, "price_from"), instant(rs, "available_at"),
+                  rs.getBoolean("is_mobile"), rs.getString("answer"), integer(rs, "price_from"), instant(rs, "available_at"),
                   rs.getString("message"), instant(rs, "created_at"), integer(rs, "after_min"),
                   rs.getBoolean("hidden_by_admin")));
    }
