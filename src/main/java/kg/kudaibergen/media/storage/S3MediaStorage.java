@@ -36,11 +36,39 @@ public class S3MediaStorage implements MediaStorage {
 
    public S3MediaStorage(AppProperties properties) {
       this.s3 = properties.media().s3();
-      this.client = MinioClient.builder()
-            .endpoint(s3.endpoint())
-            .credentials(s3.accessKey(), s3.secretKey())
-            .region(s3.region())
-            .build();
+      if (blank(s3.accessKey()) || blank(s3.secretKey())) {
+         throw new IllegalStateException("MEDIA_STORAGE=s3, но не заданы S3_ACCESS_KEY и S3_SECRET_KEY. "
+               + "Задайте ключи MinIO/S3 или храните файлы на диске: MEDIA_STORAGE=local");
+      }
+      if (blank(s3.bucket())) {
+         throw new IllegalStateException("MEDIA_STORAGE=s3, но не задан S3_BUCKET");
+      }
+      try {
+         this.client = MinioClient.builder()
+               .endpoint(endpoint(s3.endpoint()))
+               .credentials(s3.accessKey(), s3.secretKey())
+               .region(s3.region())
+               .build();
+      } catch (IllegalArgumentException e) {
+         throw new IllegalStateException("Неверный S3_ENDPOINT «" + s3.endpoint() + "»: " + e.getMessage()
+               + ". Нужен адрес без пути, например http://minio:9000", e);
+      }
+   }
+
+   /** «minio:9000» → «http://minio:9000»; хвостовой «/» убирается — MinIO не принимает путь в адресе. */
+   static String endpoint(String raw) {
+      String value = raw == null ? "" : raw.strip();
+      if (!value.contains("://")) {
+         value = "http://" + value;
+      }
+      while (value.endsWith("/")) {
+         value = value.substring(0, value.length() - 1);
+      }
+      return value;
+   }
+
+   private static boolean blank(String value) {
+      return value == null || value.isBlank();
    }
 
    @Override
