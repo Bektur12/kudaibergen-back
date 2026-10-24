@@ -35,17 +35,24 @@ public class MediaService {
    public static final int MAX_VIDEO_SECONDS = 30;
    /** Видео разрешено только во вложениях заявки на услугу. */
    static final Set<MediaPurpose> VIDEO_PURPOSES = Set.of(MediaPurpose.SERVICE);
+   /** Голосовое — к запросу (04), ответу «Есть» (14), заявке (16) и отклику мастера (19). */
+   public static final Set<MediaPurpose> VOICE_PURPOSES = Set.of(MediaPurpose.REQUEST, MediaPurpose.REPLY,
+         MediaPurpose.SERVICE, MediaPurpose.OFFER);
 
    private final MediaRepository media;
    private final MediaStorage storage;
    private final DataSize maxPhotoSize;
    private final DataSize maxVideoSize;
+   private final DataSize maxVoiceSize;
+   private final int maxVoiceSeconds;
 
    public MediaService(MediaRepository media, MediaStorage storage, AppProperties properties) {
       this.media = media;
       this.storage = storage;
       this.maxPhotoSize = properties.media().maxPhotoSize();
       this.maxVideoSize = properties.media().maxVideoSize();
+      this.maxVoiceSize = properties.media().maxVoiceSize();
+      this.maxVoiceSeconds = properties.media().maxVoiceSeconds();
    }
 
    /** Пережатие идёт до транзакции: пока файл обрабатывается, соединение с базой не занято. */
@@ -127,6 +134,97 @@ public class MediaService {
       return item(saved);
    }
 
+   /** Голосовое прошло проверки: тип, байты и длина — для распознавания и записи. */
+   public record VoiceFile(byte[] bytes, String mimeType, int durationSec, String extension) {
+   }
+
+   /**
+    * Проверка голосового до распознавания: аудио, не больше max-voice-size и max-voice-seconds (60 с).
+    * Длина — от клиента (запись идёт на телефоне), у M4A — из файла.
+    */
+   public VoiceFile checkVoice(MediaPurpose purpose, MultipartFile file, Integer durationSec) {
+      if (!VOICE_PURPOSES.contains(purpose)) {
+         throw new BadRequestException("VOICE_NOT_ALLOWED", "Голосовое можно прикрепить к запросу, ответу и заявке");
+      }
+      if (file == null || file.isEmpty()) {
+         throw new BadRequestException("FILE_REQUIRED", "Файл не передан");
+      }
+      String mimeType = MediaTypes.resolve(file, "audio/");
+      if (mimeType == null || !mimeType.startsWith("audio/")) {
+         throw new BadRequestException("BAD_MEDIA_TYPE", "Ожидалось аудио");
+      }
+      if (file.getSize() > maxVoiceSize.toBytes()) {
+         throw new BadRequestException("FILE_TOO_LARGE", "Голосовое больше " + maxVoiceSize.toMegabytes() + " МБ");
+      }
+      Optional<Double> measured;
+      try (InputStream content = file.getInputStream()) {
+         measured = Mp4Duration.read(content);
+      } catch (IOException e) {
+         measured = Optional.empty();
+      }
+      double seconds;
+      if (measured.isPresent()) {
+         seconds = measured.get();
+      } else if (durationSec != null && durationSec > 0) {
+         seconds = durationSec;
+      } else {
+         throw new BadRequestException("DURATION_REQUIRED", "Передайте длительность голосового в секундах (durationSec)");
+      }
+      if (seconds > maxVoiceSeconds + 0.5) {
+         throw new BadRequestException("VOICE_TOO_LONG", "Голосовое — не длиннее " + maxVoiceSeconds + " секунд");
+      }
+      byte[] bytes;
+      try {
+         bytes = file.getBytes();
+      } catch (IOException e) {
+         throw new UncheckedIOException("Не удалось прочитать файл", e);
+      }
+      return new VoiceFile(bytes, mimeType, Math.max(1, (int) Math.round(seconds)),
+            extension(file.getOriginalFilename(), mimeType));
+   }
+
+   /** Запись проверенного голосового с распознанным текстом (null — не распознано). */
+   public Media storeVoice(Long ownerId, MediaPurpose purpose, VoiceFile voice, List<Double> waveform,
+                           String transcript) {
+      String key = purpose.name().toLowerCase() + "/voice/" + UUID.randomUUID() + voice.extension();
+      storage.put(key, new ByteArrayInputStream(voice.bytes()), voice.bytes().length, voice.mimeType());
+      return media.save(Media.audio(ownerId, purpose, key, voice.mimeType(), voice.durationSec(),
+            voice.bytes().length, waveform, transcript));
+   }
+
+   /** Голосовое для показа; null — id нет или это не голосовое. */
+   @Transactional(readOnly = true)
+   public VoiceDto voice(Long mediaId) {
+      return mediaId == null ? null : media.findById(mediaId).filter(Media::isAudio).map(this::voice).orElse(null);
+   }
+
+   /** Голосовые пачкой: id → голосовое. */
+   @Transactional(readOnly = true)
+   public Map<Long, VoiceDto> voices(Collection<Long> mediaIds) {
+      Map<Long, VoiceDto> byId = new LinkedHashMap<>();
+      List<Long> ids = mediaIds.stream().filter(Objects::nonNull).distinct().toList();
+      if (!ids.isEmpty()) {
+         media.findAllById(ids).stream().filter(Media::isAudio).forEach(item -> byId.put(item.getId(), voice(item)));
+      }
+      return byId;
+   }
+
+   public VoiceDto voice(Media item) {
+      return new VoiceDto(item.getId(), storage.urlFor(item.getFileKey()), item.getDurationSec(),
+            item.getWaveform() == null ? List.of() : item.getWaveform(), item.getTranscript());
+   }
+
+   /**
+    * Голосовое можно прикрепить: оно есть, это голосовое, загружено одним из owners для одной из purposes.
+    * Иначе 400 BAD_VOICE — клиент записывает заново.
+    */
+   @Transactional(readOnly = true)
+   public Media requireVoice(Long mediaId, Collection<Long> owners, Set<MediaPurpose> purposes) {
+      return media.findById(mediaId)
+            .filter(item -> item.isAudio() && purposes.contains(item.getPurpose()) && owners.contains(item.getOwnerId()))
+            .orElseThrow(() -> new BadRequestException("BAD_VOICE", "Голосовое не найдено — запишите его заново"));
+   }
+
    /** Длительность: из MP4 / MOV, иначе от клиента. Больше 30 с — 400 VIDEO_TOO_LONG. */
    static int videoSeconds(MultipartFile file, Integer clientSeconds) {
       Optional<Double> measured;
@@ -163,6 +261,14 @@ public class MediaService {
          case "video/quicktime" -> ".mov";
          case "video/webm" -> ".webm";
          case "video/3gpp" -> ".3gp";
+         case "audio/mp4" -> ".m4a";
+         case "audio/aac" -> ".aac";
+         case "audio/mpeg" -> ".mp3";
+         case "audio/ogg" -> ".ogg";
+         case "audio/wav" -> ".wav";
+         case "audio/webm" -> ".webm";
+         case "audio/amr" -> ".amr";
+         case "audio/3gpp" -> ".3gp";
          default -> "";
       };
    }
@@ -179,8 +285,12 @@ public class MediaService {
    }
 
    public MediaItemDto item(Media item) {
+      if (item.isAudio()) {
+         return new MediaItemDto(item.getId(), MediaKind.AUDIO, storage.urlFor(item.getFileKey()), null, null, null,
+               item.getDurationSec());
+      }
       if (item.isVideo()) {
-         return new MediaItemDto(item.getId(), MediaKind.VIDEO, storage.urlFor(item.getVideoKey()),
+         return new MediaItemDto(item.getId(), MediaKind.VIDEO, storage.urlFor(item.getFileKey()),
                item.getKey320() == null ? null : storage.urlFor(item.getKey320()), item.getWidth(), item.getHeight(),
                item.getDurationSec());
       }
@@ -204,7 +314,7 @@ public class MediaService {
       media.findAllById(ids).forEach(item -> found.put(item.getId(), item));
       ids.forEach(id -> {
          Media item = found.get(id);
-         if (item != null && !item.isVideo()) {
+         if (item != null && item.isPhoto()) {
             byId.put(id, dto(item));
          }
       });
@@ -241,7 +351,7 @@ public class MediaService {
    public void requireUsable(Collection<Long> mediaIds, Collection<Long> owners, Set<MediaPurpose> purposes,
                              boolean videoAllowed) {
       List<Media> found = media.findAllById(mediaIds);
-      if (!videoAllowed && found.stream().anyMatch(Media::isVideo)) {
+      if (found.stream().anyMatch(Media::isAudio) || !videoAllowed && found.stream().anyMatch(Media::isVideo)) {
          throw new BadRequestException("BAD_PHOTO", "Сюда можно прикрепить только фото");
       }
       boolean ok = found.size() == new HashSet<>(mediaIds).size() && found.stream()

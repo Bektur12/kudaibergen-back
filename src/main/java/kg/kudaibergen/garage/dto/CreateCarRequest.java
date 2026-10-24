@@ -15,6 +15,7 @@ import kg.kudaibergen.garage.entity.FuelType;
 /**
  * Марка определяется моделью: марка → модель/поколение → год (обязательны), остальное — по желанию.
  * engineVolume, fuel, origin — для заявок мастерам (34–35); origin по умолчанию — по стране марки.
+ * fromTechPassport — поля взяты из POST /ocr/tech-passport (04): «Техпаспорт сфотан» в профиле (10).
  */
 public record CreateCarRequest(
       @NotNull(message = "Выберите модель") Long modelId,
@@ -27,5 +28,6 @@ public record CreateCarRequest(
       @DecimalMin(value = "0.5", message = "Объём — от 0.5 до 9.9 л") @DecimalMax(value = "9.9", message = "Объём — от 0.5 до 9.9 л")
       BigDecimal engineVolume,
       FuelType fuel,
-      CarOrigin origin) {
+      CarOrigin origin,
+      Boolean fromTechPassport) {
 }

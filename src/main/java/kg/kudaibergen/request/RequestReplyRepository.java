@@ -25,4 +25,17 @@ public interface RequestReplyRepository extends JpaRepository<RequestReply, Long
                                @Param("afterId") long afterId);
 
    List<RequestReply> findByShopIdAndRequestIdIn(Long shopId, Collection<Long> requestIds);
+
+   /** «от 2 900 с» в «Мои запросы» (03): самая низкая цена «Есть» по каждому запросу. */
+   @Query("""
+         select r.requestId as requestId, min(r.price) as price from RequestReply r
+         where r.requestId in :requestIds and r.answer = :have and r.price is not null
+         group by r.requestId""")
+   List<MinPrice> minPrices(@Param("requestIds") Collection<Long> requestIds, @Param("have") ReplyAnswer have);
+
+   interface MinPrice {
+      Long getRequestId();
+
+      Integer getPrice();
+   }
 }

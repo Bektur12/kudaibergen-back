@@ -17,6 +17,8 @@ import kg.kudaibergen.master.entity.ServiceRequest;
 import kg.kudaibergen.master.entity.ServiceOffer;
 import kg.kudaibergen.master.entity.Master;
 import kg.kudaibergen.master.MasterRepository;
+import kg.kudaibergen.media.Media;
+import kg.kudaibergen.media.MediaService;
 import kg.kudaibergen.chat.dto.ChatListAs;
 import kg.kudaibergen.chat.dto.ChatInputs;
 import kg.kudaibergen.chat.dto.ChatListItemDto;
@@ -91,13 +93,15 @@ public class ChatService {
    private final Clock clock;
    private final ChatProviders providers;
    private final MasterRepository masters;
+   private final MediaService files;
 
    public ChatService(ChatRepository chats, MessageRepository messages, ReplyTemplateRepository templates,
                       ChatAccess access, ChatView view, ChatAttachments media, CentrifugoTokens tokens,
                       ShopRepository shops, ShopAccess shopAccess, ShopMapper shopMapper,
                       PartRequestRepository requests, PartRepository parts, UserRepository users, ComplaintService complaints,
                       ApplicationEventPublisher events, TransactionTemplate tx, ObjectMapper json,
-                      AppProperties properties, Clock clock, ChatProviders providers, MasterRepository masters) {
+                      AppProperties properties, Clock clock, ChatProviders providers, MasterRepository masters,
+                      MediaService files) {
       this.chats = chats;
       this.messages = messages;
       this.templates = templates;
@@ -119,6 +123,7 @@ public class ChatService {
       this.clock = clock;
       this.providers = providers;
       this.masters = masters;
+      this.files = files;
    }
 
    // ─────────────────────── открыть чат ───────────────────────
@@ -183,6 +188,7 @@ public class ChatService {
       card.put("availableAt", offer.getAvailableAt() == null ? null : offer.getAvailableAt().toString());
       // о «Могу помочь» клиенту уже пришёл пуш модуля заявок — второй не нужен
       add(chat, Message.reply(chat.getId(), authorId, offer.getMessage(), card, clock.instant()), false);
+      addVoice(chat, authorId, offer.getVoiceMediaId());
       return chat.getId();
    }
 
@@ -211,9 +217,23 @@ public class ChatService {
       card.put("condition", reply.getCondition() == null ? null : reply.getCondition().name());
       card.put("price", reply.getPrice());
       card.put("partId", reply.getPartId());
+      card.put("original", reply.getOriginal());
+      card.put("manufacturer", reply.getManufacturer());
+      card.put("tags", reply.getTags());
       // о «Есть» покупателю уже пришёл пуш модуля запросов — второй не нужен
       add(chat, Message.reply(chat.getId(), authorId, reply.getMessage(), card, clock.instant()), false);
+      addVoice(chat, authorId, reply.getVoiceMediaId());
       return chat.getId();
+   }
+
+   /** Голосовое продавца или мастера — следом за карточкой ответа, тем же файлом (14 → 07). */
+   private void addVoice(Chat chat, Long authorId, Long voiceMediaId) {
+      if (voiceMediaId == null) {
+         return;
+      }
+      files.findAll(List.of(voiceMediaId)).stream().filter(Media::isAudio).findFirst().ifPresent(voice ->
+            add(chat, Message.media(chat.getId(), ChatSide.SHOP, authorId, MessageType.VOICE, null, voice.getFileKey(),
+                  voice.getMimeType(), voice.getDurationSec(), voice.getWaveform(), null, clock.instant()), false));
    }
 
    /**

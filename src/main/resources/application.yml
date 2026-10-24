@@ -140,6 +140,17 @@ app:
       api-key: ${OCR_GOOGLE_API_KEY:}
       url: ${OCR_GOOGLE_URL:https://vision.googleapis.com}
     per-user-hourly: 30
+  voice:
+    # распознавание голосовых ответов (v23): none — выключено (голосовое без текста, поля заполняют руками),
+    # openai — API /v1/audio/transcriptions (OpenAI Whisper или совместимый сервер)
+    provider: ${VOICE_PROVIDER:none}
+    openai:
+      api-key: ${VOICE_OPENAI_API_KEY:}
+      url: ${VOICE_OPENAI_URL:https://api.openai.com}
+      model: ${VOICE_OPENAI_MODEL:whisper-1}
+      prompt: "Есть, нет, оригинал, копия, новые, б/у, контрактные, пара, KYB, Denso. Три двести сом. Могу сегодня в три, от полутора тысяч."
+      timeout: 20s
+    per-user-hourly: 120
   fcm:
     enabled: ${FCM_ENABLED:false}
     credentials-path: ${FCM_CREDENTIALS:}

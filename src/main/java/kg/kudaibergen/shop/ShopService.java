@@ -14,6 +14,7 @@ import kg.kudaibergen.common.error.NotFoundException;
 import kg.kudaibergen.common.web.CursorPage;
 import kg.kudaibergen.garage.VehicleDirectory;
 import kg.kudaibergen.market.MarketMapService;
+import kg.kudaibergen.market.dto.LocationDto;
 import kg.kudaibergen.shop.dto.MemberDto;
 import kg.kudaibergen.shop.dto.MyShopDto;
 import kg.kudaibergen.shop.dto.ShopCardDto;
@@ -89,12 +90,19 @@ public class ShopService {
       if (members.findByUserId(userId).isPresent()) {
          throw new ConflictException("ALREADY_IN_SHOP", "Вы уже состоите в боксе");
       }
-      String name = ShopNames.validate(request.name());
       Set<Long> brandIds = requireBrands(request.brandIds());
-      Set<Long> categoryIds = categories.requireExisting(request.categoryIds());
+      Set<Long> categoryIds = request.categoryIds() == null || request.categoryIds().isEmpty() ? Set.of()
+            : categories.requireExisting(request.categoryIds());
       Long containerId = requireFreeContainer(request.containerId());
+      String name = request.name() == null || request.name().isBlank() ? defaultName(containerId)
+            : ShopNames.validate(request.name());
 
       Shop shop = new Shop(userId, name, containerId);
+      // «Позвонить» — главная кнопка у покупателя (05, 06): сразу номер владельца, скрыть можно в профиле
+      users.findById(userId).ifPresent(owner -> {
+         shop.setPhone(owner.getPhone());
+         shop.setPhoneVisible(true);
+      });
       if (!verificationRequired) {
          shop.verified();
       }
@@ -110,6 +118,12 @@ public class ShopService {
       members.save(new ShopMember(shop.getId(), userId, MemberRole.OWNER));
       userService.changeRole(userId, UserRole.SELLER);
       return mine(access.requireMember(userId), lang);
+   }
+
+   /** «Ряд 14, конт. 12» — пока продавец не назвал бокс. */
+   private String defaultName(Long containerId) {
+      LocationDto location = market.location(containerId);
+      return location.rowLabel() + ", конт. " + location.number();
    }
 
    @Transactional(readOnly = true)

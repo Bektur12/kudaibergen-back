@@ -1,5 +1,7 @@
 package kg.kudaibergen.request;
 
+import java.time.Clock;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
@@ -17,7 +19,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Кто получит запрос (спецификация 3.7а): магазин проверен, не закрыт вручную, сейчас его рабочее время.
+ * Кто получит запрос (спецификация 3.7а): магазин проверен, не закрыт вручную, сейчас его рабочее время и он не на
+ * паузе за «сказали «есть», а не было» (15).
  * «Всему рынку» и «Рядам» — только магазины с маркой машины (для рядов — ещё и в выбранных рядах);
  * «Контейнерам» — выбранные боксы без фильтра по марке: покупатель выбрал их сам.
  * Свой бокс покупателю не шлём. Магазинов на рынке — до 2 000, поэтому часы и ряд проверяются в памяти.
@@ -29,12 +32,15 @@ public class RecipientFinder {
    private final ShopHours hours;
    private final ShopAccess access;
    private final MarketMapService market;
+   private final Clock clock;
 
-   public RecipientFinder(ShopRepository shops, ShopHours hours, ShopAccess access, MarketMapService market) {
+   public RecipientFinder(ShopRepository shops, ShopHours hours, ShopAccess access, MarketMapService market,
+                          Clock clock) {
       this.shops = shops;
       this.hours = hours;
       this.access = access;
       this.market = market;
+      this.clock = clock;
    }
 
    @Transactional(readOnly = true)
@@ -47,7 +53,9 @@ public class RecipientFinder {
             : shops.findReceiving(ShopStatus.ACTIVE, brandId);
       Set<Long> rows = target == RequestTarget.ROWS ? Set.copyOf(rowIds) : Set.of();
       MarketSnapshot snapshot = market.snapshot();
+      Instant now = clock.instant();
       return candidates.stream()
+            .filter(shop -> !shop.requestsPausedAt(now))
             .filter(shop -> !Objects.equals(shop.getId(), ownShopId))
             .filter(shop -> target != RequestTarget.ROWS || snapshot.container(shop.getContainerId())
                   .map(container -> rows.contains(container.row().row().getId())).orElse(false))

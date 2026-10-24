@@ -39,6 +39,10 @@ public class ServiceOffer {
    @Column(updatable = false, length = 300)
    private String message;
 
+   /** Голосовое мастера (19): клиент слушает его в чате. */
+   @Column(name = "voice_media_id", updatable = false)
+   private Long voiceMediaId;
+
    @Column(name = "created_at", nullable = false, updatable = false)
    private Instant createdAt;
 
@@ -56,7 +60,7 @@ public class ServiceOffer {
    }
 
    public ServiceOffer(Long requestId, Long masterId, OfferAnswer answer, Integer priceFrom, Instant availableAt,
-                       String message, Instant now) {
+                       String message, Long voiceMediaId, Instant now) {
       this.requestId = requestId;
       this.masterId = masterId;
       this.answer = answer;
@@ -64,8 +68,13 @@ public class ServiceOffer {
       this.priceFrom = canHelp ? priceFrom : null;
       this.availableAt = canHelp ? availableAt : null;
       this.message = canHelp ? message : null;
+      this.voiceMediaId = canHelp ? voiceMediaId : null;
       this.createdAt = now;
       this.updatedAt = now;
+   }
+
+   public Long getVoiceMediaId() {
+      return voiceMediaId;
    }
 
    public boolean canHelp() {

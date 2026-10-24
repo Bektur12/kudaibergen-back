@@ -369,3 +369,64 @@ enum QuickReply {                                                   // быст�
 - `GET /my/master/requests/{id}`, `POST /my/master/requests/{id}/seen`.
 - `POST /my/master/requests/{id}/offer {answer: CAN_HELP|NOT_MINE, priceFrom?, availableAt?, message?}` (Idempotency-Key) — один раз; после срока — 409 `REQUEST_EXPIRED`, повтор — 409 `ALREADY_ANSWERED`. «Могу помочь» → клиенту пуш и чат (`chatId` в ответе).
 - `GET /my/master/stats?period=WEEK|MONTH` → `{received, canHelp, notMine, wroteInChat, deals, unanswered, avgReplyMinutes?, topServices[{code, name, count}]}`.
+
+---
+
+## 13. v23 «простая версия» — ответы голосом
+
+Макет — «Кудайберген v23 — ответы голосом» (20 экранов). Остальные эндпоинты не удалены (ими пользуется админка
+и вторая версия), приложение их просто не вызывает: каталог и «Выложить запчасть», выбор рядов / контейнеров /
+времени (запрос всегда «Всему рынку» на 30 минут), воронка статистики, GPS-точка, отзывы и звёзды.
+
+### 13.1 Голосовые — `POST /media/voices`
+multipart: `file` (аудио до 60 с и 15 МБ), `durationSec` (у M4A сервер читает сам), `waveform?` (JSON до 100 чисел 0..1),
+`purpose`: `REQUEST` (запрос 04) · `REPLY` (ответ продавца 14) · `SERVICE` (заявка 16) · `OFFER` (отклик мастера 19).
+→ `VoiceUploadDto {voice: VoiceDto, reply?, offer?}`:
+- `VoiceDto {id, url, durationSec, waveform[], transcript?}` — `transcript` распознаёт сервер (`VOICE_PROVIDER=openai`:
+  OpenAI Whisper или совместимый сервер по `VOICE_OPENAI_URL`; `none` — без текста, поля заполняют руками).
+- `reply` (только `REPLY`): `{price?, condition?, original?, manufacturer?, tags[]}` — «Есть, оригинал KYB, новые, пара —
+  три двести» → `3200, NEW, true, "KYB", ["Пара"]`. Понимает цифры и слова по-русски и по-кыргызски («три двести»,
+  «полторы тысячи», «үч миң эки жүз»).
+- `offer` (только `OFFER`): `{priceFrom?, when?: NOW|TODAY|TOMORROW, availableAt?}` — «Могу сегодня в три, от полутора
+  тысяч» → `1500, TODAY, сегодня 15:00`; «через 20 минут» → `NOW`; «завтра» без часа → 10:00.
+Не понятое — `null`: поле без пометки «из голоса».
+
+### 13.2 Запрос (04, 05, 08)
+- `POST /requests`: `text` необязателен; нужно хоть что-то: фото (`mediaIds`), голосовое (`voiceMediaId`) или текст
+  от 3 символов (400 `TEXT_REQUIRED` / `TEXT_TOO_SHORT`). Без текста подпись — распознанное голосовое, иначе
+  «Голосовой запрос» / «Запчасть по фото». `target` по умолчанию `MARKET`.
+- `RequestDetailDto.voice`, `IncomingRequestDto.voice` — голосовое покупателя. `RequestSummaryDto.minPrice` — «3 есть · от 2 900 с».
+- `ReplyDto`: `voice?`, `original?`, `manufacturer?`, `tags[]`, `walkMinutes?` (пешком от главного входа — «Ряд Ц · конт. 4 ·
+  5 мин», сортировка «Ближе ко входу»), `shop.phone?` — «Позвонить». «Нет · 7» и «Спросили 43 · ответили 10» —
+  из `GET /requests/{id}/stats` (`counts`, `notHave[]`).
+- «Ещё 30 мин» / «Ещё ищу» — `POST /requests/{id}/extend {minutes: 30}`. «Да, купил — у кого?» —
+  `POST /requests/{id}/close {shopId}` (без звёзд).
+- **«Сказали «есть», а не было»** — `POST /requests/{id}/false-have {shopId}` → 204. Только бокс, ответивший «Есть»
+  (400 `SHOP_NOT_REPLIED`), один раз (409 `ALREADY_MARKED`). Три разных покупателя за 30 дней — бокс 7 дней не получает
+  запросов. Запрос не закрывается.
+
+### 13.3 Продавец (11–15)
+- Регистрация `POST /shops {containerId, brandIds}` — `name` и `categoryIds` необязательны (название по умолчанию
+  «Ряд 14, конт. 12», телефон — номер владельца, виден покупателям). Контейнер — по ряду и номеру из `GET /market/rows/{id}`.
+- Ответ `POST /requests/{id}/replies {answer, price, condition?, original?, voiceMediaId?, manufacturer?, tags?}` —
+  **для «Есть» обязательна цена** (400 `PRICE_REQUIRED`), состояние — по желанию. Голосовое продавца приходит
+  покупателю в чат следом за карточкой ответа (в `payload` карточки — `original`, `manufacturer`, `tags`).
+- Пуш `NEW_REQUEST` (12): заголовок — машина («Toyota Camry 50 · 2012»), текст — что нужно; в `data` —
+  `voiceUrl?`, `voiceDurationSec?`, `photoUrl?`. Кнопка «Есть» с полем цены → тот же `POST /requests/{id}/replies`.
+- «Мой бокс» (15): `GET /my/shop/stats?period=MONTH` → ещё `answeredPercent?` («92% ответили»), `falseHave`
+  («0 «не было»»), `requestsPausedUntil?` (бокс на паузе), `avgReplyMinutes` — «3 мин ср. ответ».
+
+### 13.4 Рынок, профиль (09, 10)
+- `GET /market/map/highlight` → ещё `rows[{rowId, rowCode, rowLabel, containers}]` — «Ряд 14 · 9 контейнеров с Toyota»,
+  больше контейнеров — выше.
+- **Техпаспорт** — `POST /ocr/tech-passport` (multipart `file`) → `{brand?, model?, year?, vin?, engineVolume?, fuel?}`
+  (фото не сохраняется; 503 `OCR_UNAVAILABLE` без OCR). Дальше `POST /me/cars {…, fromTechPassport: true}`;
+  `CarDto.fromTechPassport` — «Техпаспорт сфотан — продавцы видят точную модель», `subtitle` — «2012 · 2.5 бензин».
+
+### 13.5 Мастера (16–20)
+- `POST /service-requests`: `when` по умолчанию `NOW`, `where` — `I_COME` (эвакуатор — `PICKUP_POINT`, выездной —
+  `MASTER_COMES`); `description` необязателен при фото / видео / `voiceMediaId` (400 `DESCRIPTION_REQUIRED` /
+  `DESCRIPTION_TOO_SHORT`). «Рядом с рынком Кудайберген» — координаты рынка в `lat/lng`.
+- `ServiceRequestDetailDto.voice`, `MasterFeedItemDto.voice` — голосовое клиента; `ServiceOfferDto.voice` — мастера.
+- Отклик `POST /my/master/requests/{id}/offer {answer, priceFrom?, availableAt?, voiceMediaId?}`; голосовое мастера
+  приходит клиенту в чат. «Выезжаю к клиенту в радиусе 5 км» — `PATCH /my/master {mobile, radiusKm}`.

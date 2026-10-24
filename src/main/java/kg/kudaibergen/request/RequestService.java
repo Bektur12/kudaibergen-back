@@ -32,6 +32,7 @@ import kg.kudaibergen.garage.VehicleDirectory;
 import kg.kudaibergen.garage.entity.Car;
 import kg.kudaibergen.market.MarketMapService;
 import kg.kudaibergen.market.MarketSnapshot;
+import kg.kudaibergen.media.Media;
 import kg.kudaibergen.media.MediaPurpose;
 import kg.kudaibergen.media.MediaService;
 import kg.kudaibergen.request.dto.PartHintDto;
@@ -43,6 +44,7 @@ import kg.kudaibergen.request.dto.RequestStatsDto;
 import kg.kudaibergen.request.dto.RequestSummaryDto;
 import kg.kudaibergen.request.dto.ReviewTagDto;
 import kg.kudaibergen.request.dto.WidenResultDto;
+import kg.kudaibergen.request.entity.FalseHaveMark;
 import kg.kudaibergen.request.entity.PartHint;
 import kg.kudaibergen.request.entity.PartRequest;
 import kg.kudaibergen.request.entity.ReplyAnswer;
@@ -60,6 +62,7 @@ import kg.kudaibergen.user.entity.Lang;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -80,6 +83,10 @@ public class RequestService {
    /** «Колодки · Радиатор · Фара» — три чипа под полем (06). */
    static final int DEFAULT_HINTS = 3;
    static final int MAX_HINTS = 12;
+   /** «Сказали «есть», а не было» (15): три разных покупателя за 30 дней — 7 дней без запросов. */
+   static final int FALSE_HAVE_LIMIT = 3;
+   static final Duration FALSE_HAVE_WINDOW = Duration.ofDays(30);
+   static final Duration FALSE_HAVE_PAUSE = Duration.ofDays(7);
 
    private final PartRequestRepository requests;
    private final RequestRecipientRepository recipients;
@@ -98,6 +105,7 @@ public class RequestService {
    private final MediaService media;
    private final RequestStatsView statsView;
    private final PartHintRepository hints;
+   private final FalseHaveMarkRepository falseHaves;
    private final ApplicationEventPublisher events;
    private final AppProperties.Requests config;
    private final Clock clock;
@@ -108,7 +116,8 @@ public class RequestService {
                          RequestMapper mapper, GarageService garage, VehicleDirectory directory,
                          CategoryService categories, MarketMapService market, ShopRepository shops,
                          ShopMapper shopMapper, MediaService media, RequestStatsView statsView,
-                         PartHintRepository hints, ApplicationEventPublisher events, AppProperties properties, Clock clock) {
+                         PartHintRepository hints, FalseHaveMarkRepository falseHaves, ApplicationEventPublisher events,
+                         AppProperties properties, Clock clock) {
       this.requests = requests;
       this.recipients = recipients;
       this.replies = replies;
@@ -126,6 +135,7 @@ public class RequestService {
       this.media = media;
       this.statsView = statsView;
       this.hints = hints;
+      this.falseHaves = falseHaves;
       this.events = events;
       this.config = properties.requests();
       this.clock = clock;
@@ -154,11 +164,15 @@ public class RequestService {
       return new RecipientsEstimateDto(count, brandName);
    }
 
-   /** «Отправить» (06): запрос уходит всем подходящим боксам, им — пуш с кнопками «Есть / Нет». */
+   /**
+    * «Спросить весь рынок» (04): запрос уходит всем подходящим боксам, им — пуш с кнопками «Есть / Нет».
+    * Что нужно — фото, голосовое или текст; без текста подписью становится распознанное голосовое.
+    */
    @Transactional
    public RequestDetailDto create(Long buyerId, RequestInputs.CreateRequest input, Lang lang) {
       Car car = garage.getOwned(input.carId(), buyerId);
-      Targets targets = targets(input.target(), input.targetRowIds(), input.targetContainerIds());
+      Targets targets = targets(input.target() == null ? RequestTarget.MARKET : input.target(), input.targetRowIds(),
+            input.targetContainerIds());
       PartHint hint = input.hintId() == null ? null : hints.findById(input.hintId())
             .orElseThrow(() -> new NotFoundException("HINT_NOT_FOUND", "Подсказка не найдена"));
       Long categoryId = input.categoryId() != null ? input.categoryId() : hint == null ? null : hint.getCategoryId();
@@ -169,6 +183,9 @@ public class RequestService {
       if (!photoIds.isEmpty()) {
          media.requireUsable(photoIds, List.of(buyerId), Set.of(MediaPurpose.REQUEST));
       }
+      Media voice = input.voiceMediaId() == null ? null
+            : media.requireVoice(input.voiceMediaId(), List.of(buyerId), Set.of(MediaPurpose.REQUEST));
+      String text = requestText(input.text(), voice, !photoIds.isEmpty(), lang);
       Instant now = clock.instant();
       checkLimits(buyerId, now);
       List<Shop> found = finder.find(buyerId, car.getBrand().getId(), targets.target(), targets.rowIds(),
@@ -180,10 +197,35 @@ public class RequestService {
 
       RequestDuration duration = input.duration() == null ? RequestDuration.MIN_30 : input.duration();
       PartRequest request = requests.save(new PartRequest(buyerId, car.getId(), car.getBrand().getId(),
-            car.getModel().getId(), car.getYear(), input.text().trim(), categoryId, input.hintId(), targets.target(),
-            targets.rowIds(), targets.containerIds(), photoIds, duration, now));
+            car.getModel().getId(), car.getYear(), text, categoryId, input.hintId(), targets.target(),
+            targets.rowIds(), targets.containerIds(), photoIds, voice == null ? null : voice.getId(), duration, now));
       dispatch(request, found, Set.of(), now);
       return mapper.detail(request, 0, lang);
+   }
+
+   /**
+    * Подпись запроса: текст покупателя (от 3 символов), иначе распознанное голосовое, иначе «Голосовой запрос» или
+    * «Запчасть по фото». Совсем ничего — 400: деталь надо сфотать, сказать или написать.
+    */
+   static String requestText(String typed, Media voice, boolean hasPhotos, Lang lang) {
+      String text = typed == null ? "" : typed.trim().replaceAll("\\s+", " ");
+      if (!text.isEmpty()) {
+         if (text.length() < 3) {
+            throw new BadRequestException("TEXT_TOO_SHORT", "Напишите хотя бы 3 буквы — или скажите голосом");
+         }
+         return text;
+      }
+      if (voice != null && voice.getTranscript() != null && voice.getTranscript().strip().length() >= 3) {
+         String said = voice.getTranscript().strip().replaceAll("\\s+", " ");
+         return said.length() > 200 ? said.substring(0, 199).strip() + "…" : said;
+      }
+      if (voice != null) {
+         return lang == Lang.KG ? "Үн менен суроо" : "Голосовой запрос";
+      }
+      if (hasPhotos) {
+         return lang == Lang.KG ? "Сүрөт боюнча тетик" : "Запчасть по фото";
+      }
+      throw new BadRequestException("TEXT_REQUIRED", "Сфотайте деталь, скажите голосом или напишите, что нужно");
    }
 
    /** Почему запрос некому отправить — текст для показа. */
@@ -351,8 +393,12 @@ public class RequestService {
       }
       List<PartRequest> rows = requests.findMine(buyerId, status, RequestStatus.ACTIVE, rank, beforeId,
             PageRequest.of(0, size + 1));
+      Map<Long, Integer> minPrices = rows.isEmpty() ? Map.of()
+            : replies.minPrices(rows.stream().map(PartRequest::getId).toList(), ReplyAnswer.HAVE).stream()
+            .collect(Collectors.toMap(RequestReplyRepository.MinPrice::getRequestId,
+                  RequestReplyRepository.MinPrice::getPrice));
       return CursorPage.of(rows, size, request -> (request.isActive() ? 0 : 1) + ":" + request.getId(),
-            mapper::summary);
+            request -> mapper.summary(request, minPrices.get(request.getId())));
    }
 
    @Transactional(readOnly = true)
@@ -454,6 +500,39 @@ public class RequestService {
       events.publishEvent(new RequestEvents.Closed(requestId, shopId, input.stars()));
       events.publishEvent(new RequestEvents.StatsChanged(requestId));
       return mapper.detail(request, recipients.countByRequestIdAndSeenAtIsNotNull(requestId), lang);
+   }
+
+   /**
+    * «Сказали «есть», а не было» (08): отметка боксу, ответившему «Есть» на этот запрос, — одна на ответ.
+    * Три разных покупателя за 30 дней (после прошлой паузы) — бокс 7 дней не получает запросов.
+    * Запрос при этом не закрывается: покупатель ищет дальше.
+    */
+   @Transactional
+   public void markFalseHave(AuthPrincipal principal, Long requestId, RequestInputs.FalseHave input) {
+      PartRequest request = visible(principal, requestId);
+      Long shopId = input.shopId();
+      if (!replies.existsByRequestIdAndShopIdAndAnswer(requestId, shopId, ReplyAnswer.HAVE)) {
+         throw new BadRequestException("SHOP_NOT_REPLIED", "Этот бокс не отвечал «Есть» на запрос");
+      }
+      if (falseHaves.existsByRequestIdAndShopId(requestId, shopId)) {
+         throw new ConflictException("ALREADY_MARKED", "Вы уже отметили этого продавца");
+      }
+      Instant now = clock.instant();
+      try {
+         falseHaves.saveAndFlush(new FalseHaveMark(request.getId(), shopId, principal.userId(), now));
+      } catch (DataIntegrityViolationException parallel) {
+         throw new ConflictException("ALREADY_MARKED", "Вы уже отметили этого продавца");
+      }
+      Shop shop = shops.findById(shopId).orElseThrow();
+      Instant since = now.minus(FALSE_HAVE_WINDOW);
+      if (shop.getFalseHaveSince() != null && shop.getFalseHaveSince().isAfter(since)) {
+         since = shop.getFalseHaveSince();
+      }
+      if (falseHaves.countBuyersSince(shopId, since) >= FALSE_HAVE_LIMIT) {
+         shop.pauseRequests(now, FALSE_HAVE_PAUSE);
+         log.info("Бокс {} на паузе до {}: три отметки «сказали есть, а не было»", shopId,
+               shop.getRequestsPausedUntil());
+      }
    }
 
    private void recalculateRating(Long shopId) {

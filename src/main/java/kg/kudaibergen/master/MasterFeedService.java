@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -19,9 +20,12 @@ import kg.kudaibergen.master.dto.MasterFeedItemDto;
 import kg.kudaibergen.master.dto.ServiceInputs;
 import kg.kudaibergen.master.dto.ServiceOfferDto;
 import kg.kudaibergen.master.entity.Master;
+import kg.kudaibergen.master.entity.OfferAnswer;
 import kg.kudaibergen.master.entity.ServiceOffer;
 import kg.kudaibergen.master.entity.ServiceRecipient;
 import kg.kudaibergen.master.entity.ServiceRequest;
+import kg.kudaibergen.media.MediaPurpose;
+import kg.kudaibergen.media.MediaService;
 import kg.kudaibergen.user.UserRepository;
 import kg.kudaibergen.user.entity.Lang;
 import kg.kudaibergen.user.entity.User;
@@ -47,12 +51,13 @@ public class MasterFeedService {
    private final ChatService chatService;
    private final ChatRepository chats;
    private final UserRepository users;
+   private final MediaService media;
    private final ApplicationEventPublisher events;
    private final Clock clock;
 
    public MasterFeedService(ServiceRequestRepository requests, ServiceRecipientRepository recipients,
                             ServiceOfferRepository offers, MasterService masters, ServiceRequestMapper mapper,
-                            ChatService chatService, ChatRepository chats, UserRepository users,
+                            ChatService chatService, ChatRepository chats, UserRepository users, MediaService media,
                             ApplicationEventPublisher events, Clock clock) {
       this.requests = requests;
       this.recipients = recipients;
@@ -62,6 +67,7 @@ public class MasterFeedService {
       this.chatService = chatService;
       this.chats = chats;
       this.users = users;
+      this.media = media;
       this.events = events;
       this.clock = clock;
    }
@@ -159,8 +165,10 @@ public class MasterFeedService {
       if (input.availableAt() != null && input.availableAt().isBefore(now.minusSeconds(60))) {
          throw new BadRequestException("BAD_TIME", "Время — не в прошлом");
       }
+      Long voiceId = input.voiceMediaId() == null || input.answer() != OfferAnswer.CAN_HELP ? null
+            : media.requireVoice(input.voiceMediaId(), List.of(userId), Set.of(MediaPurpose.OFFER)).getId();
       ServiceOffer offer = new ServiceOffer(requestId, master.getId(), input.answer(), input.priceFrom(),
-            input.availableAt(), blankToNull(input.message()), now);
+            input.availableAt(), blankToNull(input.message()), voiceId, now);
       try {
          offers.saveAndFlush(offer);
       } catch (DataIntegrityViolationException parallel) {

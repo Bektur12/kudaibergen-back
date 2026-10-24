@@ -2,6 +2,7 @@ package kg.kudaibergen.shop.entity;
 
 import java.math.BigDecimal;
 import java.time.DayOfWeek;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalTime;
 import java.util.EnumSet;
@@ -67,6 +68,16 @@ public class Shop {
 
    @Column(name = "is_open", nullable = false)
    private boolean open = true;
+
+   /**
+    * «Сказали «есть», а не было» (15): до этого момента запросы не приходят. falseHaveSince — начало последней
+    * паузы: отметки до него уже «отработаны» и заново не считаются.
+    */
+   @Column(name = "requests_paused_until")
+   private Instant requestsPausedUntil;
+
+   @Column(name = "false_have_since")
+   private Instant falseHaveSince;
 
    @Column(length = 16)
    private String phone;
@@ -277,6 +288,25 @@ public class Shop {
 
    public void setOpen(boolean open) {
       this.open = open;
+   }
+
+   /** На паузе ли сейчас за «сказали есть, а не было». */
+   public boolean requestsPausedAt(Instant now) {
+      return requestsPausedUntil != null && requestsPausedUntil.isAfter(now);
+   }
+
+   /** Третья отметка «не было»: запросы не приходят pause, отметки считаются с нуля. */
+   public void pauseRequests(Instant now, Duration pause) {
+      requestsPausedUntil = now.plus(pause);
+      falseHaveSince = now;
+   }
+
+   public Instant getRequestsPausedUntil() {
+      return requestsPausedUntil;
+   }
+
+   public Instant getFalseHaveSince() {
+      return falseHaveSince;
    }
 
    public String getPhone() {

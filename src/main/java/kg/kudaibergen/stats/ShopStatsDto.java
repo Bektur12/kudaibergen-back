@@ -16,12 +16,16 @@ import org.springframework.lang.Nullable;
  *   лента с filter=UNANSWERED);</li>
  *   <li>avgReplyMinutes — среднее время от рассылки до ответа, null — ответов не было;</li>
  *   <li>topCategories — чаще всего спрашивали (до 4, только запросы с выбранной категорией);</li>
- *   <li>partViews — просмотры карточек запчастей бокса.</li>
+ *   <li>partViews — просмотры карточек запчастей бокса;</li>
+ *   <li>answeredPercent — «92% ответили» (15): ответили «Есть» или «Нет» из пришедших, null — запросов не было;</li>
+ *   <li>falseHave — «0 «не было»»: отметки «сказали «есть», а не было» за период;</li>
+ *   <li>requestsPausedUntil — бокс на паузе за три такие отметки: до этого момента запросы не приходят.</li>
  * </ul>
  */
 public record ShopStatsDto(StatsPeriod period, Instant from, Instant to, int requestsByBrands, int answeredHave,
                            int answeredNotHave, int wroteInChat, int buyersArrived, int sales, int unanswered,
-                           @Nullable Integer avgReplyMinutes, long partViews, List<TopCategory> topCategories) {
+                           @Nullable Integer avgReplyMinutes, long partViews, List<TopCategory> topCategories,
+                           @Nullable Integer answeredPercent, long falseHave, @Nullable Instant requestsPausedUntil) {
 
    public record TopCategory(Long categoryId, String name, int count) {
    }

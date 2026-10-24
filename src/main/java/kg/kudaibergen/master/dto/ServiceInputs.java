@@ -29,9 +29,11 @@ public final class ServiceInputs {
    }
 
    /**
-    * «Отправить» (36). Машина — carId из гаража или brandId + modelId? + year? (шаги 34–35), объём, топливо
-    * и страна — по желанию (страна по умолчанию — по марке). lat/lng — где клиент или куда ехать эвакуатору.
-    * duration по умолчанию — из справочника услуги (эвакуатор — 15 минут).
+    * «Найти мастера» (16) — всё на одном экране. Машина — carId из гаража или brandId + modelId? + year?, объём,
+    * топливо и страна — по желанию (страна по умолчанию — по марке). Что случилось — текст 10–500 символов,
+    * фото и видео (mediaIds) или голосовое (voiceMediaId, POST /media/voices purpose=SERVICE); хотя бы что-то одно.
+    * when по умолчанию — «Сейчас», where — «Поеду сам» (эвакуатор — «Заберите отсюда», выездной мастер — «Приезжайте»).
+    * lat/lng — где клиент («Рядом с рынком Кудайберген»). duration по умолчанию — из справочника услуги.
     */
    public record CreateServiceRequest(
          @NotBlank(message = "Выберите услугу") String service,
@@ -43,12 +45,12 @@ public final class ServiceInputs {
          BigDecimal engineVolume,
          FuelType fuel,
          CarOrigin origin,
-         @NotBlank(message = "Опишите, что случилось")
-         @Size(min = 10, max = 500, message = "От 10 до 500 символов") String description,
+         @Size(max = 500, message = "Не длиннее 500 символов") String description,
          @Size(max = MAX_PHOTOS, message = "Не больше 5 фото и видео") List<Long> mediaIds,
-         @NotNull(message = "Выберите, когда") ServiceWhen when,
+         Long voiceMediaId,
+         ServiceWhen when,
          Instant atTime,
-         @NotNull(message = "Выберите, где") ServiceWhere where,
+         ServiceWhere where,
          @NotNull(message = "Нужна точка на карте") @DecimalMin("-90") @DecimalMax("90") Double lat,
          @NotNull(message = "Нужна точка на карте") @DecimalMin("-180") @DecimalMax("180") Double lng,
          @Size(max = 160) String address,
@@ -67,11 +69,15 @@ public final class ServiceInputs {
          List<ReviewTag> tags) {
    }
 
-   /** Отклик мастера (39): «Могу помочь» — цена «от», когда могу, сообщение; «Не моё» — без деталей. */
+   /**
+    * Отклик мастера (18, 19): «Могу помочь» — цена «от», когда могу, сообщение, голосовое (POST /media/voices,
+    * purpose=OFFER); «Не моё» — без деталей.
+    */
    public record Offer(
          @NotNull(message = "Ответьте «Могу помочь» или «Не моё»") OfferAnswer answer,
          @Positive(message = "Цена — целое число сом больше нуля") Integer priceFrom,
          Instant availableAt,
-         @Size(max = 300, message = "Не длиннее 300 символов") String message) {
+         @Size(max = 300, message = "Не длиннее 300 символов") String message,
+         Long voiceMediaId) {
    }
 }

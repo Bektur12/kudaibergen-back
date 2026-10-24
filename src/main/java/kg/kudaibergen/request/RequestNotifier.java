@@ -1,5 +1,6 @@
 package kg.kudaibergen.request;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -7,6 +8,8 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import kg.kudaibergen.market.dto.LocationDto;
+import kg.kudaibergen.media.MediaService;
+import kg.kudaibergen.media.VoiceDto;
 import kg.kudaibergen.notification.push.PushMessage;
 import kg.kudaibergen.notification.push.QuietHours;
 import kg.kudaibergen.notification.push.UserPushes;
@@ -41,10 +44,11 @@ public class RequestNotifier {
    private final RequestMapper mapper;
    private final UserPushes pushes;
    private final QuietHours quietHours;
+   private final MediaService media;
 
    public RequestNotifier(PartRequestRepository requests, RequestReplyRepository replies, ShopRepository shops,
                           ShopMemberRepository members, ShopMapper shopMapper, RequestMapper mapper,
-                          UserPushes pushes, QuietHours quietHours) {
+                          UserPushes pushes, QuietHours quietHours, MediaService media) {
       this.requests = requests;
       this.replies = replies;
       this.shops = shops;
@@ -53,6 +57,7 @@ public class RequestNotifier {
       this.mapper = mapper;
       this.pushes = pushes;
       this.quietHours = quietHours;
+      this.media = media;
    }
 
    @Async("appTaskExecutor")
@@ -63,15 +68,27 @@ public class RequestNotifier {
       }
       PartRequest request = requests.findById(event.requestId()).orElseThrow();
       String carLabel = mapper.car(request).label();
+      VoiceDto voice = media.voice(request.getVoiceMediaId());
+      String photo = request.getPhotoIds().isEmpty() ? null : media.thumbUrl(request.getPhotoIds().get(0));
+      Map<String, String> data = new HashMap<>(Map.of("type", "NEW_REQUEST", "requestId", request.getId().toString()));
+      if (voice != null) {
+         data.put("voiceUrl", voice.url());
+         data.put("voiceDurationSec", String.valueOf(voice.durationSec()));
+      }
+      if (photo != null) {
+         data.put("photoUrl", photo);
+      }
       List<ShopMember> staff = members.findByShopIdIn(event.shopIds());
       Map<Long, Long> shopOfUser = staff.stream()
             .collect(Collectors.toMap(ShopMember::getUserId, ShopMember::getShopId));
       boolean quiet = quietHours.now();
-      pushes.send(shopOfUser.keySet(), (user, settings) -> new PushMessage(
-            RequestTexts.newRequestTitle(request.getText(), user.getLang()), carLabel,
-            Map.of("type", "NEW_REQUEST", "requestId", request.getId().toString(),
-                  "shopId", shopOfUser.get(user.getId()).toString()),
-            NEW_REQUEST_CATEGORY, !quiet && settings.isNewRequestSound()));
+      // пуш как на экране 12: машина заголовком, что нужно — текстом, фото и длина голосового — в data
+      pushes.send(shopOfUser.keySet(), (user, settings) -> {
+         Map<String, String> personal = new HashMap<>(data);
+         personal.put("shopId", shopOfUser.get(user.getId()).toString());
+         return new PushMessage(carLabel, request.getText(), personal, NEW_REQUEST_CATEGORY,
+               !quiet && settings.isNewRequestSound());
+      });
    }
 
    @Async("appTaskExecutor")
@@ -83,7 +100,7 @@ public class RequestNotifier {
       LocationDto location = shopMapper.location(shop.getContainerId());
       toBuyer(request, user -> new PushMessage(
             RequestTexts.haveTitle(shop.getName(), user.getLang()),
-            RequestTexts.haveBody(location.rowLabel(), location.number(), reply.getMessage()),
+            RequestTexts.haveBody(location.rowLabel(), location.number(), reply.getPrice()),
             Map.of("type", "REPLY_HAVE", "requestId", request.getId().toString(),
                   "replyId", reply.getId().toString(), "shopId", shop.getId().toString()),
             null, !quietHours.now()));

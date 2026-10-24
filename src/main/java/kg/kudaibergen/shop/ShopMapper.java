@@ -48,7 +48,7 @@ public class ShopMapper {
 
    public ShopCardDto card(Shop shop) {
       return new ShopCardDto(shop.getId(), shop.getName(), avatarUrl(shop), shop.getRating(), shop.getReviewsCount(),
-            location(shop.getContainerId()), hours.state(shop));
+            location(shop.getContainerId()), hours.state(shop), shop.isPhoneVisible() ? shop.getPhone() : null);
    }
 
    public ShopPublicDto publicProfile(Shop shop, boolean favorite, Lang lang) {

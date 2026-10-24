@@ -132,6 +132,10 @@ public class ServiceRequest {
    @Column(name = "media_id", nullable = false)
    private List<Long> photoIds = new ArrayList<>();
 
+   /** Голосовое клиента «что случилось» (16). */
+   @Column(name = "voice_media_id", updatable = false)
+   private Long voiceMediaId;
+
    /** Скрыто администрацией (модерация). Пишет только админка, JPA поле не меняет. */
    @Column(name = "hidden_by_admin", insertable = false, updatable = false)
    private boolean hiddenByAdmin;
@@ -144,7 +148,7 @@ public class ServiceRequest {
 
    public ServiceRequest(Long buyerId, String service, CarSnapshot car, String description, ServiceWhen when,
                          Instant atTime, ServiceWhere where, double lat, double lng, String address, int radiusKm,
-                         List<Long> photoIds, ServiceDuration duration, Instant now) {
+                         List<Long> photoIds, Long voiceMediaId, ServiceDuration duration, Instant now) {
       this.buyerId = buyerId;
       this.service = service;
       this.carId = car.carId();
@@ -163,10 +167,15 @@ public class ServiceRequest {
       this.address = address;
       this.radiusKm = (short) radiusKm;
       this.photoIds = new ArrayList<>(photoIds);
+      this.voiceMediaId = voiceMediaId;
       this.duration = duration;
       this.sentAt = now;
       this.expiresAt = duration.expiresAt(now);
       this.createdAt = now;
+   }
+
+   public Long getVoiceMediaId() {
+      return voiceMediaId;
    }
 
    /** Машина на момент заявки: из гаража или введённая на шагах 2–3. */

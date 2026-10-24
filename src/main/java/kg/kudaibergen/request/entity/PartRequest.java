@@ -78,6 +78,10 @@ public class PartRequest {
    @Column(name = "media_id", nullable = false)
    private List<Long> photoIds = new ArrayList<>();
 
+   /** Голосовое покупателя (04): «скажите своими словами». */
+   @Column(name = "voice_media_id", updatable = false)
+   private Long voiceMediaId;
+
    @Enumerated(EnumType.STRING)
    @Column(nullable = false, length = 7)
    private RequestStatus status = RequestStatus.ACTIVE;
@@ -123,7 +127,7 @@ public class PartRequest {
 
    public PartRequest(Long buyerId, Long carId, Long brandId, Long modelId, short year, String text, Long categoryId,
                       Long hintId, RequestTarget target, List<Long> targetRowIds, List<Long> targetContainerIds,
-                      List<Long> photoIds, RequestDuration duration, Instant now) {
+                      List<Long> photoIds, Long voiceMediaId, RequestDuration duration, Instant now) {
       this.buyerId = buyerId;
       this.carId = carId;
       this.brandId = brandId;
@@ -136,6 +140,7 @@ public class PartRequest {
       this.targetRowIds = new ArrayList<>(targetRowIds);
       this.targetContainerIds = new ArrayList<>(targetContainerIds);
       this.photoIds = new ArrayList<>(photoIds);
+      this.voiceMediaId = voiceMediaId;
       this.duration = duration;
       this.sentAt = now;
       this.expiresAt = duration.expiresAt(now);
@@ -250,6 +255,10 @@ public class PartRequest {
 
    public List<Long> getTargetContainerIds() {
       return List.copyOf(targetContainerIds);
+   }
+
+   public Long getVoiceMediaId() {
+      return voiceMediaId;
    }
 
    public List<Long> getPhotoIds() {

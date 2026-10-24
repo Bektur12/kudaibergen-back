@@ -32,4 +32,15 @@ public class OcrController {
    public OemRecognitionDto oem(@AuthenticationPrincipal AuthPrincipal principal, @RequestParam MultipartFile file) {
       return ocr.recognizeOem(principal.userId(), file);
    }
+
+   @PostMapping(value = "/tech-passport", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+   @Operation(summary = "Машина по фото техпаспорта (04)", description = """
+         Марка и модель из справочника, год, VIN, объём и топливо. Не прочитали модель — model = null, марку —
+         brand = null (показать выбор). Дальше — POST /me/cars с fromTechPassport: true. Фото не сохраняется.""")
+   @ApiResponse(responseCode = "503", description = "OCR_UNAVAILABLE — распознавание не настроено или недоступно")
+   @ApiResponse(responseCode = "429", description = "OCR_LIMIT")
+   public TechPassportDto techPassport(@AuthenticationPrincipal AuthPrincipal principal,
+                                       @RequestParam MultipartFile file) {
+      return ocr.recognizeTechPassport(principal.userId(), file);
+   }
 }

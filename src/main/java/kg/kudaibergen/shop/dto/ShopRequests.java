@@ -19,14 +19,15 @@ public final class ShopRequests {
    }
 
    /**
-    * Регистрация бокса одним запросом по «Сохранить» на экране 10: контейнер из 10а + профиль.
+    * «Начать получать запросы» (11): ряд и номер контейнера + марки. Название по умолчанию — «Ряд 14, конт. 12»
+    * (поменять — «Изменить» в «Мой бокс»), категории — по желанию, телефон — номер владельца (для «Позвонить»).
     * Часы по умолчанию 08:00–17:00 без выходных.
     */
    public record CreateShop(
          @NotNull(message = "Выберите контейнер") Long containerId,
-         @NotBlank(message = "Укажите название") String name,
+         String name,
          @NotEmpty(message = "Выберите хотя бы одну марку") Set<Long> brandIds,
-         @NotEmpty(message = "Выберите хотя бы одну категорию") Set<Long> categoryIds,
+         Set<Long> categoryIds,
          LocalTime openFrom,
          LocalTime openTo,
          Set<DayOfWeek> workDays) {

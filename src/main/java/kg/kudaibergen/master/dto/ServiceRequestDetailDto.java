@@ -8,15 +8,18 @@ import kg.kudaibergen.master.entity.ServiceWhen;
 import kg.kudaibergen.master.entity.ServiceWhere;
 import kg.kudaibergen.media.MediaItemDto;
 import kg.kudaibergen.media.PhotoDto;
+import kg.kudaibergen.media.VoiceDto;
 import kg.kudaibergen.request.entity.RequestStatus;
 import org.springframework.lang.Nullable;
 
 /**
  * Заявка клиента (37). canWiden — можно расширить радиус (+5 км, до 50), canExtend — продлить (до 3 раз).
- * urgent — «Срочно» (эвакуатор). photos — только фото (как раньше); media — все вложения по порядку, фото и видео.
+ * urgent — «Срочно» (эвакуатор). photos — только фото (как раньше); media — все вложения по порядку, фото и видео;
+ * voice — голосовое клиента (16).
  */
 public record ServiceRequestDetailDto(Long id, ServiceTypeDto service, ServiceCarDto car, String description,
-                                      List<PhotoDto> photos, List<MediaItemDto> media, ServiceWhen when,
+                                      List<PhotoDto> photos, List<MediaItemDto> media, @Nullable VoiceDto voice,
+                                      ServiceWhen when,
                                       @Nullable Instant atTime,
                                       ServiceWhere where, double lat, double lng, @Nullable String address,
                                       int radiusKm, RequestStatus status, ServiceRequestState state,

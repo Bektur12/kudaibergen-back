@@ -290,6 +290,17 @@ public class MarketMapService {
       return snapshot.router().route(from, container(containerId).door()).length() * snapshot.metersPerPx();
    }
 
+   /** Минуты пешком от главного входа: «Ряд 14 · конт. 12 · 2 мин» в ответах (05); пусто — места нет на схеме. */
+   public Optional<Integer> walkMinutesFromEntrance(Long containerId) {
+      MarketSnapshot snapshot = snapshot();
+      if (containerId == null || snapshot.entrances().isEmpty()) {
+         return Optional.empty();
+      }
+      Point entrance = snapshot.entrances().get(0).point();
+      return snapshot.container(containerId).map(view ->
+            walkMinutes(snapshot.router().route(entrance, view.door()).length() * snapshot.metersPerPx()));
+   }
+
    // ─────────────────────── внутреннее ───────────────────────
 
    private Map<Long, ContainerTenants.Tenant> tenantsOf(Collection<Long> containerIds) {

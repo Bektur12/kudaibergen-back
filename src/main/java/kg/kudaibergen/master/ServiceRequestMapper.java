@@ -100,6 +100,7 @@ public class ServiceRequestMapper {
       ServiceType type = type(request);
       return new ServiceRequestDetailDto(request.getId(), ServiceCatalog.dto(type, lang), car(request),
             request.getDescription(), photos(request.getPhotoIds()), media.items(request.getPhotoIds()),
+            media.voice(request.getVoiceMediaId()),
             request.getWhen(), request.getAtTime(), request.getWhere(), request.getLat(), request.getLng(), request.getAddress(), request.getRadiusKm(),
             request.getStatus(), state(request), request.getDuration(), request.getExpiresAt(),
             request.getExtendedTimes(), request.canExtend(), request.canWiden(), request.getRecipientsCount(),
@@ -109,7 +110,8 @@ public class ServiceRequestMapper {
 
    public ServiceOfferDto offer(ServiceOffer offer, MasterCardDto master, int distanceM, Long chatId) {
       return new ServiceOfferDto(offer.getId(), offer.getRequestId(), master, offer.getAnswer(), offer.getPriceFrom(),
-            offer.getAvailableAt(), offer.getMessage(), distanceM, chatId, offer.getCreatedAt());
+            offer.getAvailableAt(), offer.getMessage(), media.voice(offer.getVoiceMediaId()), distanceM, chatId,
+            offer.getCreatedAt());
    }
 
    public MasterFeedItemDto feedItem(ServiceRequest request, ServiceRecipient recipient, String buyerName,
@@ -117,6 +119,7 @@ public class ServiceRequestMapper {
       ServiceType type = type(request);
       return new MasterFeedItemDto(request.getId(), ServiceCatalog.dto(type, lang), car(request),
             request.getDescription(), photos(request.getPhotoIds()), media.items(request.getPhotoIds()),
+            media.voice(request.getVoiceMediaId()),
             request.getWhen(), request.getAtTime(), request.getWhere(), request.getAddress(), request.getLat(), request.getLng(), recipient.getDistanceM(),
             buyerName, request.getStatus(), recipient.getMasterId().equals(request.getClosedWithMasterId()),
             type.isUrgent(), request.getCreatedAt(), recipient.getNotifiedAt(), request.getExpiresAt(),

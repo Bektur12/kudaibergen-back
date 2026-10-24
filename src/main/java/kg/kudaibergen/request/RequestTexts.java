@@ -8,20 +8,28 @@ final class RequestTexts {
    private RequestTexts() {
    }
 
-   /** «Новый запрос: стойки передние» · «Toyota Camry 50 · 2012». */
-   static String newRequestTitle(String text, Lang lang) {
-      return (lang == Lang.KG ? "Жаңы суроо: " : "Новый запрос: ") + text;
-   }
-
    /** «Автодеталь Азамат: есть». */
    static String haveTitle(String shopName, Lang lang) {
       return shopName + (lang == Lang.KG ? ": бар" : ": есть");
    }
 
-   /** «Ряд 14 · Бокс 12 — «Есть KYB и оригинал»». */
-   static String haveBody(String rowLabel, int boxNumber, String message) {
-      String place = rowLabel + " · Бокс " + boxNumber;
-      return message == null || message.isBlank() ? place : place + " — «" + message + "»";
+   /** «Ряд 14 · конт. 12 — 3 200 сом». */
+   static String haveBody(String rowLabel, int boxNumber, Integer price) {
+      String place = rowLabel + " · конт. " + boxNumber;
+      return price == null ? place : place + " — " + price(price) + " сом";
+   }
+
+   /** 3200 → «3 200» (узкий неразрывный пробел, как в макете). */
+   static String price(int price) {
+      String digits = Integer.toString(price);
+      StringBuilder grouped = new StringBuilder();
+      for (int i = 0; i < digits.length(); i++) {
+         if (i > 0 && (digits.length() - i) % 3 == 0) {
+            grouped.append('\u202F');
+         }
+         grouped.append(digits.charAt(i));
+      }
+      return grouped.toString();
    }
 
    static String noReplyTitle(Lang lang) {

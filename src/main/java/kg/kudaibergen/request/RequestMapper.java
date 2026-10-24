@@ -14,6 +14,7 @@ import kg.kudaibergen.garage.VehicleDirectory;
 import kg.kudaibergen.garage.dto.BrandDto;
 import kg.kudaibergen.garage.entity.Brand;
 import kg.kudaibergen.garage.entity.CarModel;
+import kg.kudaibergen.market.MarketMapService;
 import kg.kudaibergen.media.MediaService;
 import kg.kudaibergen.media.PhotoDto;
 import kg.kudaibergen.request.dto.IncomingRequestDto;
@@ -36,13 +37,15 @@ public class RequestMapper {
    private final VehicleDirectory directory;
    private final CategoryService categories;
    private final MediaService media;
+   private final MarketMapService market;
    private final Duration replyEditWindow;
 
    public RequestMapper(VehicleDirectory directory, CategoryService categories, MediaService media,
-                        AppProperties properties) {
+                        MarketMapService market, AppProperties properties) {
       this.directory = directory;
       this.categories = categories;
       this.media = media;
+      this.market = market;
       this.replyEditWindow = properties.requests().replyEditWindow();
    }
 
@@ -69,30 +72,36 @@ public class RequestMapper {
       };
    }
 
-   public RequestSummaryDto summary(PartRequest request) {
+   public RequestSummaryDto summary(PartRequest request, Integer minPrice) {
       return new RequestSummaryDto(request.getId(), request.getText(), car(request).label(), request.getStatus(),
-            state(request), request.getHaveCount(), request.getCreatedAt(), request.getExpiresAt());
+            state(request), request.getHaveCount(), minPrice, request.getCreatedAt(), request.getExpiresAt());
    }
 
    public RequestDetailDto detail(PartRequest request, long seenCount, Lang lang) {
       return new RequestDetailDto(request.getId(), request.getText(), car(request), category(request, lang),
-            photos(request.getPhotoIds()), request.getTarget(), request.getTargetRowIds(),
+            photos(request.getPhotoIds()), media.voice(request.getVoiceMediaId()), request.getTarget(),
+            request.getTargetRowIds(),
             request.getTargetContainerIds(), request.getStatus(), state(request), request.getDuration(),
             request.getExpiresAt(), request.getExtendedTimes(), request.canExtend(), request.getRecipientsCount(),
             seenCount, request.getHaveCount(), request.getClosedWithShopId(), request.getCreatedAt(),
             request.getClosedAt());
    }
 
+   /** shop = null — «мой ответ» в ленте продавца: ни карточки, ни пути от входа не нужно. */
    public ReplyDto reply(RequestReply reply, ShopCardDto shop, Long chatId, PartCardDto part) {
+      Integer walkMinutes = shop == null ? null
+            : market.walkMinutesFromEntrance(shop.location().containerId()).orElse(null);
       return new ReplyDto(reply.getId(), reply.getRequestId(), shop, reply.getAnswer(), reply.getCondition(),
             reply.getMessage(), reply.getPrice(), photos(reply.getPhotoIds()), reply.getCreatedAt(),
-            reply.getUpdatedAt(), reply.getCreatedAt().plus(replyEditWindow), chatId, part);
+            reply.getUpdatedAt(), reply.getCreatedAt().plus(replyEditWindow), chatId, part,
+            media.voice(reply.getVoiceMediaId()), reply.getOriginal(), reply.getManufacturer(), reply.getTags(),
+            walkMinutes);
    }
 
    public IncomingRequestDto incoming(PartRequest request, RequestRecipient recipient, String buyerName,
                                       ReplyDto myReply, Lang lang) {
       return new IncomingRequestDto(request.getId(), request.getText(), car(request), category(request, lang),
-            photos(request.getPhotoIds()), buyerName, request.getStatus(),
+            photos(request.getPhotoIds()), media.voice(request.getVoiceMediaId()), buyerName, request.getStatus(),
             recipient.getShopId().equals(request.getClosedWithShopId()), request.getCreatedAt(),
             recipient.getNotifiedAt(), request.getExpiresAt(), recipient.getSeenAt() != null, myReply);
    }

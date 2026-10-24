@@ -84,10 +84,10 @@ class RequestsIT extends AbstractIntegrationTest {
       call(authed(post("/api/v1/requests/" + requestId + "/replies").contentType(MediaType.APPLICATION_JSON)
             .content("{\"answer\":\"NOT_HAVE\"}"), sellerMazda), 404);
 
-      // «Есть» без состояния нельзя; второй ответ того же бокса — 409
-      JsonNode noCondition = call(authed(jsonPost("/api/v1/requests/" + requestId + "/replies",
+      // «Есть» без цены нельзя (v23); второй ответ того же бокса — 409
+      JsonNode noPrice = call(authed(jsonPost("/api/v1/requests/" + requestId + "/replies",
             "{\"answer\":\"HAVE\"}"), sellerA), 400);
-      assertThat(noCondition.get("code").asText()).isEqualTo("CONDITION_REQUIRED");
+      assertThat(noPrice.get("code").asText()).isEqualTo("PRICE_REQUIRED");
       call(authed(post("/api/v1/my/shop/requests/" + requestId + "/seen"), sellerA), 204);
       JsonNode have = call(authed(jsonPost("/api/v1/requests/" + requestId + "/replies",
             "{\"answer\":\"HAVE\",\"condition\":\"NEW\",\"message\":\"Есть KYB и оригинал\",\"price\":4500}"),
@@ -214,7 +214,7 @@ class RequestsIT extends AbstractIntegrationTest {
             201);
       JsonNode edited = call(authed(patch("/api/v1/requests/" + requestId + "/replies/mine")
             .contentType(MediaType.APPLICATION_JSON).characterEncoding("UTF-8")
-            .content("{\"answer\":\"HAVE\",\"condition\":\"USED\"}"), rowSeller), 200);
+            .content("{\"answer\":\"HAVE\",\"condition\":\"USED\",\"price\":1800}"), rowSeller), 200);
       assertThat(edited.get("answer").asText()).isEqualTo("HAVE");
       assertThat(call(authed(get("/api/v1/requests/" + requestId), buyer), 200).get("haveCount").asInt())
             .isEqualTo(1);

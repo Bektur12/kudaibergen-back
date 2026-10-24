@@ -63,6 +63,10 @@ public class Car {
    @Column(length = 7)
    private CarOrigin origin;
 
+   /** Добавлена по фото техпаспорта — продавцы видят точную модель (10). */
+   @Column(name = "from_tech_passport", nullable = false)
+   private boolean fromTechPassport;
+
    @Column(name = "created_at", nullable = false, updatable = false)
    private Instant createdAt = Instant.now();
 
@@ -167,6 +171,14 @@ public class Car {
 
    public void setOrigin(CarOrigin origin) {
       this.origin = origin;
+   }
+
+   public boolean isFromTechPassport() {
+      return fromTechPassport;
+   }
+
+   public void setFromTechPassport(boolean fromTechPassport) {
+      this.fromTechPassport = fromTechPassport;
    }
 
    public Instant getCreatedAt() {

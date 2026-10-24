@@ -42,6 +42,8 @@ import kg.kudaibergen.master.entity.ServiceRecipient;
 import kg.kudaibergen.master.entity.ServiceRequest;
 import kg.kudaibergen.master.entity.ServiceType;
 import kg.kudaibergen.master.entity.ServiceWhen;
+import kg.kudaibergen.master.entity.ServiceWhere;
+import kg.kudaibergen.media.Media;
 import kg.kudaibergen.media.MediaPurpose;
 import kg.kudaibergen.media.MediaService;
 import kg.kudaibergen.request.entity.RequestStatus;
@@ -127,13 +129,18 @@ public class ServiceRequestService {
       ServiceType type = catalog.requireActive(input.service());
       ServiceRequest.CarSnapshot car = car(buyerId, input.carId(), input.brandId(), input.modelId(), input.year(),
             input.engineVolume(), input.fuel(), input.origin());
-      if ((input.when() == ServiceWhen.AT_TIME) != (input.atTime() != null)) {
+      ServiceWhen when = input.when() == null ? ServiceWhen.NOW : input.when();
+      if ((when == ServiceWhen.AT_TIME) != (input.atTime() != null)) {
          throw new BadRequestException("AT_TIME_REQUIRED", "Укажите время или выберите «Сейчас / Сегодня / Завтра»");
       }
       List<Long> photoIds = input.mediaIds() == null ? List.of() : input.mediaIds().stream().distinct().toList();
       if (!photoIds.isEmpty()) {
          media.requireUsable(photoIds, List.of(buyerId), Set.of(MediaPurpose.SERVICE, MediaPurpose.REQUEST), true);
       }
+      Media voice = input.voiceMediaId() == null ? null
+            : media.requireVoice(input.voiceMediaId(), List.of(buyerId), Set.of(MediaPurpose.SERVICE));
+      String description = description(input.description(), voice, !photoIds.isEmpty(), lang);
+      ServiceWhere where = input.where() != null ? input.where() : defaultWhere(type);
       Instant now = clock.instant();
       checkLimits(buyerId, now);
       int radius = radius(input.radiusKm(), type);
@@ -146,10 +153,44 @@ public class ServiceRequestService {
       ServiceDuration duration = input.duration() != null ? input.duration()
             : ServiceDuration.ofMinutes(type.getDurationMin());
       ServiceRequest request = requests.save(new ServiceRequest(buyerId, type.getCode(), car,
-            input.description().trim(), input.when(), input.atTime(), input.where(), input.lat(), input.lng(),
-            blankToNull(input.address()), radius, photoIds, duration, now));
+            description, when, input.atTime(), where, input.lat(), input.lng(),
+            blankToNull(input.address()), radius, photoIds, voice == null ? null : voice.getId(), duration, now));
       dispatch(request, found, Set.of(), now);
       return mapper.detail(request, 0, lang);
+   }
+
+   /**
+    * «Что случилось» (16): текст клиента (от 10 символов), иначе распознанное голосовое, иначе «Голосом» или
+    * «Фото проблемы». Совсем ничего — 400.
+    */
+   static String description(String typed, Media voice, boolean hasMedia, Lang lang) {
+      String text = typed == null ? "" : typed.trim().replaceAll("\\s+", " ");
+      if (!text.isEmpty()) {
+         if (text.length() < 10) {
+            throw new BadRequestException("DESCRIPTION_TOO_SHORT", "Опишите подробнее — от 10 символов, или скажите голосом");
+         }
+         return text;
+      }
+      String said = voice == null || voice.getTranscript() == null ? "" : voice.getTranscript().strip().replaceAll("\\s+", " ");
+      if (said.length() >= 10) {
+         return said.length() > 500 ? said.substring(0, 499).strip() + "…" : said;
+      }
+      if (voice != null) {
+         return lang == Lang.KG ? "Үн менен сүрөттөлгөн" : "Описание голосом";
+      }
+      if (hasMedia) {
+         return lang == Lang.KG ? "Көйгөй сүрөттө" : "Проблема на фото";
+      }
+      throw new BadRequestException("DESCRIPTION_REQUIRED", "Опишите, что случилось: голосом, фото или текстом");
+   }
+
+   /** Без шага «где» (16): эвакуатор забирает с точки, выездной мастер приезжает, в остальном клиент едет сам. */
+   static ServiceWhere defaultWhere(ServiceType type) {
+      return switch (type.getCode()) {
+         case "TOW_TRUCK" -> ServiceWhere.PICKUP_POINT;
+         case "MOBILE_MASTER" -> ServiceWhere.MASTER_COMES;
+         default -> ServiceWhere.I_COME;
+      };
    }
 
    /** «Расширить радиус» (+5 км, до 50): новым мастерам — пуш, срок заново, истёкшая снова активна. */

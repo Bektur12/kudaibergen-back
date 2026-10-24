@@ -42,8 +42,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Входящие запросы бокса (ТЗ 10): общая лента владельца и сотрудников, ответ «Есть» / «Нет» из списка
- * или из пуша. Первый ответ засчитывается за магазин, второй невозможен; изменить можно 10 минут.
+ * Входящие запросы бокса (ТЗ 10): общая лента владельца и сотрудников, ответ «Есть» / «Нет» из списка,
+ * голосом (14) или из пуша (12). Первый ответ засчитывается за магазин, второй невозможен; изменить можно 10 минут.
  * Ответить и изменить ответ можно только пока запрос активен (до expiresAt).
  */
 @Service
@@ -189,14 +189,15 @@ public class IncomingRequestService {
       if (replies.findByRequestIdAndShopId(requestId, shop.getId()).isPresent()) {
          throw new ConflictException("ALREADY_REPLIED", "Бокс уже ответил на этот запрос");
       }
-      requireCondition(input);
+      requirePrice(input);
       requirePart(shop, input);
       List<Long> photoIds = photos(userId, input);
+      RequestReply.Voice voice = voice(userId, input);
 
       Instant now = clock.instant();
       RequestReply reply = new RequestReply(requestId, shop.getId(), userId, now);
       reply.fill(input.answer(), input.condition(), trimToNull(input.message()), input.price(), input.partId(),
-            photoIds, now);
+            photoIds, voice, now);
       try {
          replies.saveAndFlush(reply);
       } catch (DataIntegrityViolationException parallel) {
@@ -227,12 +228,13 @@ public class IncomingRequestService {
          throw new ConflictException("REPLY_EDIT_EXPIRED", "Ответ можно изменить только в течение "
                + config.replyEditWindow().toMinutes() + " минут — напишите покупателю в чат");
       }
-      requireCondition(input);
+      requirePrice(input);
       requirePart(shop, input);
       List<Long> photoIds = photos(userId, input);
+      RequestReply.Voice voice = voice(userId, input);
       boolean wasHave = reply.isHave();
       reply.fill(input.answer(), input.condition(), trimToNull(input.message()), input.price(), input.partId(),
-            photoIds, now);
+            photoIds, voice, now);
       if (wasHave != reply.isHave()) {
          request.haveCountChanged(reply.isHave() ? 1 : -1);
          recipient(requestId, shop.getId()).answered(reply.getAnswer(), now);
@@ -298,10 +300,23 @@ public class IncomingRequestService {
       return recipients.findByRequestIdAndShopId(requestId, shopId).orElseThrow(RequestService::notFound);
    }
 
-   private static void requireCondition(RequestInputs.Reply input) {
-      if (input.answer() == ReplyAnswer.HAVE && input.condition() == null) {
-         throw new BadRequestException("CONDITION_REQUIRED", "Укажите состояние: новое, б/у или под заказ");
+   /** Цена — в каждом ответе «Есть» (v23); состояние по желанию: из пуша приходит только цена. */
+   private static void requirePrice(RequestInputs.Reply input) {
+      if (input.answer() == ReplyAnswer.HAVE && input.price() == null) {
+         throw new BadRequestException("PRICE_REQUIRED", "Укажите цену");
       }
+   }
+
+   /** Голосовое продавца (purpose=REPLY) и что из него поняли; к «Нет» не прикрепляется. */
+   private RequestReply.Voice voice(Long userId, RequestInputs.Reply input) {
+      if (input.answer() != ReplyAnswer.HAVE) {
+         return RequestReply.Voice.NONE;
+      }
+      Long voiceId = input.voiceMediaId() == null ? null
+            : media.requireVoice(input.voiceMediaId(), List.of(userId), Set.of(MediaPurpose.REPLY)).getId();
+      List<String> tags = input.tags() == null ? List.of() : input.tags().stream()
+            .filter(tag -> tag != null && !tag.isBlank()).map(String::strip).distinct().toList();
+      return new RequestReply.Voice(voiceId, input.original(), trimToNull(input.manufacturer()), tags);
    }
 
    private static String trimToNull(String text) {

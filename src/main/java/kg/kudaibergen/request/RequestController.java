@@ -149,6 +149,18 @@ public class RequestController {
       return requests.close(principal, id, request, Langs.fromHeader(language));
    }
 
+   @PostMapping("/requests/{id}/false-have")
+   @ResponseStatus(HttpStatus.NO_CONTENT)
+   @Operation(summary = "Сказали «есть», а не было (08)", description = """
+         Отметка продавцу, ответившему «Есть» на этот запрос, — одна на ответ. Если за 30 дней так отметят три разных
+         покупателя, бокс 7 дней не получает запросов. Запрос не закрывается.""")
+   @ApiResponse(responseCode = "400", description = "SHOP_NOT_REPLIED")
+   @ApiResponse(responseCode = "409", description = "ALREADY_MARKED")
+   public void falseHave(@AuthenticationPrincipal AuthPrincipal principal, @PathVariable Long id,
+                         @Valid @RequestBody RequestInputs.FalseHave request) {
+      requests.markFalseHave(principal, id, request);
+   }
+
    @PostMapping("/requests/{id}/widen")
    @Operation(summary = "Отправить всему рынку (20, 32)", description = """
          Тело {target: MARKET} или пустое. Добавляет боксы марки, которым запрос ещё не приходил (им — пуш);

@@ -147,7 +147,7 @@ class CatalogIT extends AbstractIntegrationTest {
       JsonNode suggested = call(authed(get("/api/v1/my/shop/requests/" + requestId + "/suggested-parts"), owner), 200);
       assertThat(suggested.findValuesAsText("id")).contains(String.valueOf(partId));
       JsonNode reply = call(authed(jsonPost("/api/v1/requests/" + requestId + "/replies",
-            "{\"answer\":\"HAVE\",\"condition\":\"USED\",\"partId\":" + partId + "}"), owner), 201);
+            "{\"answer\":\"HAVE\",\"condition\":\"USED\",\"price\":2500,\"partId\":" + partId + "}"), owner), 201);
       assertThat(reply.get("part").get("id").asLong()).isEqualTo(partId);
       JsonNode replies = call(authed(get("/api/v1/requests/" + requestId + "/replies"), buyer), 200);
       assertThat(replies.get(0).get("part").get("fits").asBoolean()).isTrue();

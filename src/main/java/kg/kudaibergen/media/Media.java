@@ -1,6 +1,7 @@
 package kg.kudaibergen.media;
 
 import java.time.Instant;
+import java.util.List;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -10,8 +11,13 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
-/** Загруженное фото в двух размерах: 1080 px (карточка) и 320 px (сетка, превью). */
+/**
+ * Загруженное фото в двух размерах: 1080 px (карточка) и 320 px (сетка, превью), видео или голосовое
+ * (файл, длина, волна и распознанный текст).
+ */
 @Entity
 @Table(name = "media")
 public class Media {
@@ -44,14 +50,24 @@ public class Media {
    @Column(updatable = false)
    private Integer height;
 
-   @Column(name = "video_key", length = 300, updatable = false)
-   private String videoKey;
+   /** Файл видео или голосового. */
+   @Column(name = "file_key", length = 300, updatable = false)
+   private String fileKey;
 
    @Column(name = "mime_type", length = 60, updatable = false)
    private String mimeType;
 
    @Column(name = "duration_sec", updatable = false)
    private Short durationSec;
+
+   /** Голосовое: до 100 пиков громкости 0..1. */
+   @JdbcTypeCode(SqlTypes.JSON)
+   @Column(updatable = false)
+   private List<Double> waveform;
+
+   /** Голосовое: что сказали (распознаёт сервер); null — не распознано. */
+   @Column(length = 1000, updatable = false)
+   private String transcript;
 
    @Column(name = "size_bytes", nullable = false, updatable = false)
    private long sizeBytes;
@@ -81,7 +97,7 @@ public class Media {
       media.ownerId = ownerId;
       media.purpose = purpose;
       media.kind = MediaKind.VIDEO;
-      media.videoKey = videoKey;
+      media.fileKey = videoKey;
       media.mimeType = mimeType;
       media.durationSec = (short) durationSec;
       media.sizeBytes = sizeBytes;
@@ -92,6 +108,30 @@ public class Media {
       return media;
    }
 
+   /** Голосовое к запросу, ответу или заявке; transcript — распознанный текст или null. */
+   public static Media audio(Long ownerId, MediaPurpose purpose, String fileKey, String mimeType, int durationSec,
+                             long sizeBytes, List<Double> waveform, String transcript) {
+      Media media = new Media();
+      media.ownerId = ownerId;
+      media.purpose = purpose;
+      media.kind = MediaKind.AUDIO;
+      media.fileKey = fileKey;
+      media.mimeType = mimeType;
+      media.durationSec = (short) durationSec;
+      media.sizeBytes = sizeBytes;
+      media.waveform = waveform;
+      media.transcript = transcript;
+      return media;
+   }
+
+   public boolean isPhoto() {
+      return kind == MediaKind.PHOTO;
+   }
+
+   public boolean isAudio() {
+      return kind == MediaKind.AUDIO;
+   }
+
    public boolean isVideo() {
       return kind == MediaKind.VIDEO;
    }
@@ -100,8 +140,16 @@ public class Media {
       return kind;
    }
 
-   public String getVideoKey() {
-      return videoKey;
+   public String getFileKey() {
+      return fileKey;
+   }
+
+   public List<Double> getWaveform() {
+      return waveform;
+   }
+
+   public String getTranscript() {
+      return transcript;
    }
 
    public String getMimeType() {

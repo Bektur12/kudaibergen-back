@@ -54,9 +54,9 @@ class MasterRulesTest {
 
    @Test
    void текстПушаОтклика() {
-      ServiceOffer offer = new ServiceOffer(1L, 2L, OfferAnswer.CAN_HELP, 1500, at(15, 0), "Подъеду с домкратом", at(12, 0));
+      ServiceOffer offer = new ServiceOffer(1L, 2L, OfferAnswer.CAN_HELP, 1500, at(15, 0), "Подъеду с домкратом", null, at(12, 0));
       assertThat(ServiceNotifier.offerBody(offer, Lang.RU)).isEqualTo("от 1 500 сом · 15:00 — «Подъеду с домкратом»");
-      ServiceOffer notMine = new ServiceOffer(1L, 2L, OfferAnswer.NOT_MINE, 1500, at(15, 0), "x", at(12, 0));
+      ServiceOffer notMine = new ServiceOffer(1L, 2L, OfferAnswer.NOT_MINE, 1500, at(15, 0), "x", null, at(12, 0));
       assertThat(notMine.getPriceFrom()).isNull();
       assertThat(ServiceNotifier.km(782)).isEqualTo("782 м");
       assertThat(ServiceNotifier.km(1240)).isEqualTo("1,2 км");

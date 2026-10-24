@@ -37,7 +37,7 @@ public class MediaCleanupJob {
    public void run() {
       int removed = cleanup();
       if (removed > 0) {
-         log.info("Удалено неприкреплённых фото и видео: {}", removed);
+         log.info("Удалено неприкреплённых фото, видео и голосовых: {}", removed);
       }
    }
 
@@ -49,8 +49,8 @@ public class MediaCleanupJob {
          int removedInBatch = 0;
          for (Media item : orphans) {
             try {
-               // у видео без обложки ключей фото нет
-               for (String key : new String[]{item.getKey1080(), item.getKey320(), item.getVideoKey()}) {
+               // у видео без обложки и у голосовых ключей фото нет
+               for (String key : new String[]{item.getKey1080(), item.getKey320(), item.getFileKey()}) {
                   if (key != null) {
                      storage.delete(key);
                   }

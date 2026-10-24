@@ -28,7 +28,7 @@ class RequestRulesTest {
 
    private static PartRequest request(RequestDuration duration, Instant now) {
       return new PartRequest(1L, 2L, 3L, 4L, (short) 2012, "Стойки передние", null, null, RequestTarget.MARKET,
-            List.of(), List.of(), List.of(), duration, now);
+            List.of(), List.of(), List.of(), null, duration, now);
    }
 
    @Test
@@ -84,7 +84,7 @@ class RequestRulesTest {
    @Test
    void расширениеНаРынокОтсчитываетСрокЗаново() {
       PartRequest request = new PartRequest(1L, 2L, 3L, 4L, (short) 2012, "Фара", null, null, RequestTarget.ROWS,
-            List.of(10L, 11L), List.of(), List.of(), RequestDuration.HOUR_1, at(10, 0));
+            List.of(10L, 11L), List.of(), List.of(), null, RequestDuration.HOUR_1, at(10, 0));
       request.expire(at(11, 0));
       request.widenToMarket(at(13, 0));
       assertThat(request.getTarget()).isEqualTo(RequestTarget.MARKET);
@@ -136,5 +136,15 @@ class RequestRulesTest {
       assertThat(RequestTexts.answers(11)).isEqualTo("ответов");
       assertThat(RequestTexts.answers(21)).isEqualTo("ответ");
       assertThat(RequestTexts.answers(24)).isEqualTo("ответа");
+   }
+
+   @org.junit.jupiter.api.Test
+   void подписьЗапросаБезТекста() {
+      org.assertj.core.api.Assertions.assertThat(RequestService.requestText("  Стойки   передние ", null, false,
+            kg.kudaibergen.user.entity.Lang.RU)).isEqualTo("Стойки передние");
+      org.assertj.core.api.Assertions.assertThat(RequestService.requestText(null, null, true,
+            kg.kudaibergen.user.entity.Lang.RU)).isEqualTo("Запчасть по фото");
+      org.assertj.core.api.Assertions.assertThatThrownBy(() -> RequestService.requestText("", null, false,
+            kg.kudaibergen.user.entity.Lang.RU)).hasMessageContaining("Сфотайте");
    }
 }

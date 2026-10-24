@@ -4,7 +4,6 @@ import java.util.List;
 
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
@@ -20,27 +19,34 @@ public final class RequestInputs {
    public static final int MAX_ROWS = 10;
    public static final int MAX_CONTAINERS = 30;
    public static final int MAX_PHOTOS = 3;
+   public static final int MAX_TAGS = 5;
 
    private RequestInputs() {
    }
 
    /**
-    * «Отправить» на экране 06. Машина — из гаража (новую клиент сначала добавляет через POST /me/cars).
-    * targetRowIds — для «Рядам» (1–10), targetContainerIds — для «Контейнерам» (1–30).
-    * duration — «Сколько ждать ответы», по умолчанию 30 минут. mediaIds — фото детали (POST /media/photos,
-    * purpose=REQUEST), до 3. hintId — чип подсказки «+ Колодки»; categoryId тогда берётся из подсказки.
+    * «Спросить весь рынок» (04). Машина — из гаража (новую клиент сначала добавляет через POST /me/cars).
+    * Что нужно — фото (mediaIds, POST /media/photos purpose=REQUEST, до 3), голосовое (voiceMediaId,
+    * POST /media/voices purpose=REQUEST) или текст 3–200 символов; хотя бы что-то одно. Без текста запрос
+    * подписывается тем, что распознали в голосовом.
+    * target по умолчанию — «Всему рынку»; targetRowIds — для «Рядам» (1–10), targetContainerIds — для
+    * «Контейнерам» (1–30). duration по умолчанию — 30 минут. hintId — чип подсказки; categoryId тогда из подсказки.
     */
    public record CreateRequest(
          @NotNull(message = "Выберите машину") Long carId,
-         @NotBlank(message = "Напишите, что нужно")
-         @Size(min = 3, max = 200, message = "От 3 до 200 символов") String text,
+         @Size(max = 200, message = "Не длиннее 200 символов") String text,
          Long categoryId,
          Long hintId,
-         @NotNull(message = "Выберите, кому отправить") RequestTarget target,
+         RequestTarget target,
          List<Long> targetRowIds,
          List<Long> targetContainerIds,
          RequestDuration duration,
-         @Size(max = MAX_PHOTOS, message = "Не больше 3 фото") List<Long> mediaIds) {
+         @Size(max = MAX_PHOTOS, message = "Не больше 3 фото") List<Long> mediaIds,
+         Long voiceMediaId) {
+   }
+
+   /** «Сказали «есть», а не было» (08): какой бокс сказал «Есть». */
+   public record FalseHave(@NotNull(message = "Выберите продавца") Long shopId) {
    }
 
    /** «Продлить» (32): на 30, 60 или 180 минут, до 3 раз. */
@@ -62,9 +68,10 @@ public final class RequestInputs {
    }
 
    /**
-    * Ответ бокса (12, кнопки пуша 14). Для «Есть» обязательно состояние, остальное — по желанию.
-    * partId — «Приложить товар из каталога»: своя опубликованная запчасть.
-    * mediaIds — фото к «Есть» (POST /media/photos, purpose=REPLY), до 3.
+    * Ответ бокса (13, 14, кнопки пуша 12). Для «Есть» обязательна цена, остальное — по желанию.
+    * voiceMediaId — голосовое продавца (POST /media/voices, purpose=REPLY); original, manufacturer и tags —
+    * из его разбора (reply в ответе загрузки), «Новая / Б/у» и «Оригинал / Копия» продавец может поправить.
+    * partId — своя опубликованная запчасть; mediaIds — фото к «Есть» (purpose=REPLY), до 3.
     */
    public record Reply(
          @NotNull(message = "Ответьте «Есть» или «Нет»") ReplyAnswer answer,
@@ -72,6 +79,10 @@ public final class RequestInputs {
          @Size(max = 300, message = "Не длиннее 300 символов") String message,
          @Positive(message = "Цена — целое число сом больше нуля") Integer price,
          Long partId,
-         @Size(max = MAX_PHOTOS, message = "Не больше 3 фото") List<Long> mediaIds) {
+         @Size(max = MAX_PHOTOS, message = "Не больше 3 фото") List<Long> mediaIds,
+         Long voiceMediaId,
+         Boolean original,
+         @Size(max = 40, message = "Производитель — до 40 символов") String manufacturer,
+         @Size(max = MAX_TAGS, message = "Не больше 5 чипов") List<@Size(max = 30) String> tags) {
    }
 }

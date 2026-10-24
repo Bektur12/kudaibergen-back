@@ -1,5 +1,6 @@
 package kg.kudaibergen.shop;
 
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -84,6 +85,18 @@ public class MapHighlightService {
             nearestShopId,
             nearest.map(MarketMapService.Nearest::meters).orElse(null),
             nearest.map(n -> MarketMapService.walkMinutes(n.meters())).orElse(null),
-            from.source().name());
+            from.source().name(), rowCounts(snapshot, placed.values()));
+   }
+
+   private static List<MapHighlightDto.RowCount> rowCounts(MarketSnapshot snapshot,
+                                                         Collection<MarketSnapshot.ContainerView> placed) {
+      Map<Long, Long> byRow = placed.stream()
+            .collect(Collectors.groupingBy(view -> view.row().row().getId(), Collectors.counting()));
+      return snapshot.rows().stream()
+            .filter(row -> byRow.containsKey(row.row().getId()))
+            .map(row -> new MapHighlightDto.RowCount(row.row().getId(), row.row().getCode(), row.row().getLabel(),
+                  byRow.get(row.row().getId()).intValue()))
+            .sorted(Comparator.comparingInt(MapHighlightDto.RowCount::containers).reversed())
+            .toList();
    }
 }

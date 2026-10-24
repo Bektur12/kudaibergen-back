@@ -66,6 +66,7 @@ public class GarageService {
       car.setEngineVolume(request.engineVolume());
       car.setFuel(request.fuel());
       car.setOrigin(request.origin() != null ? request.origin() : CarOrigins.of(brand.getSlug()));
+      car.setFromTechPassport(Boolean.TRUE.equals(request.fromTechPassport()));
       boolean makePrimary = count == 0 || Boolean.TRUE.equals(request.isPrimary());
       if (makePrimary) {
          cars.clearPrimary(userId);

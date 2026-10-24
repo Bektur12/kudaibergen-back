@@ -115,6 +115,8 @@ ADMIN_BOOTSTRAP_PHONE=+996555000099 ADMIN_BOOTSTRAP_NAME="Имя Фамилия"
 | `DB_URL`, `DB_USER`, `DB_PASSWORD` | подключение к Postgres | localhost:5432/kudaibergen |
 | `JWT_SECRET` | ключ подписи HS256 (≥32 байта) | dev-значение, **в проде обязателен** |
 | `SMS_PROVIDER` | `log` или `nikita` | `log` |
+| `VOICE_PROVIDER` | распознавание голосовых ответов: `none` или `openai` (Whisper / совместимый) | `none` |
+| `VOICE_OPENAI_API_KEY`, `VOICE_OPENAI_URL`, `VOICE_OPENAI_MODEL` | сервис распознавания | —, `https://api.openai.com`, `whisper-1` |
 | `SMS_FIXED_CODE` | фиксированный код для всех входов (тест, напр. `1111`) | пусто (в проде пусто) |
 | `SMS_EXPOSE_CODE` | отдавать код в ответе API | `true` (в проде `false`) |
 | `SMS_URL`, `SMS_LOGIN`, `SMS_PASSWORD`, `SMS_SENDER` | шлюз nikita.kg | — |

@@ -8,7 +8,9 @@ import java.util.Map;
 import kg.kudaibergen.catalog.PartRepository;
 import kg.kudaibergen.category.Category;
 import kg.kudaibergen.category.CategoryService;
+import kg.kudaibergen.request.FalseHaveMarkRepository;
 import kg.kudaibergen.shop.ShopAccess;
+import kg.kudaibergen.shop.entity.Shop;
 import kg.kudaibergen.user.entity.Lang;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,20 +25,23 @@ public class ShopStatsService {
    private final PartRepository parts;
    private final ShopAccess access;
    private final CategoryService categories;
+   private final FalseHaveMarkRepository falseHaves;
    private final Clock clock;
 
    public ShopStatsService(ShopStatsRepository stats, PartRepository parts, ShopAccess access,
-                           CategoryService categories, Clock clock) {
+                           CategoryService categories, FalseHaveMarkRepository falseHaves, Clock clock) {
       this.stats = stats;
       this.parts = parts;
       this.access = access;
       this.categories = categories;
+      this.falseHaves = falseHaves;
       this.clock = clock;
    }
 
    @Transactional(readOnly = true)
    public ShopStatsDto forMember(Long userId, StatsPeriod period, Lang lang) {
-      Long shopId = access.requireMember(userId).shop().getId();
+      Shop shop = access.requireMember(userId).shop();
+      Long shopId = shop.getId();
       Instant to = clock.instant();
       Instant from = to.minus(period.length());
 
@@ -50,7 +55,14 @@ public class ShopStatsService {
       return new ShopStatsDto(period, from, to, requests.received(), requests.have(), requests.notHave(),
             stats.wroteInChat(shopId, from), stats.buyersArrived(shopId, from), stats.sales(shopId, from),
             requests.missed(), avgMinutes(requests.avgReplySeconds()), parts.viewsSince(shopId, period.days()),
-            top);
+            top, answeredPercent(requests.received(), requests.have() + requests.notHave()),
+            falseHaves.countByShopIdAndCreatedAtAfter(shopId, from),
+            shop.requestsPausedAt(to) ? shop.getRequestsPausedUntil() : null);
+   }
+
+   /** «92% ответили»: округление вниз, чтобы 99,6% не стали 100%. */
+   static Integer answeredPercent(int received, int answered) {
+      return received == 0 ? null : Math.min(100, answered * 100 / received);
    }
 
    /** «Отвечаете в среднем за 4 мин»: не меньше минуты, если ответы были. */
