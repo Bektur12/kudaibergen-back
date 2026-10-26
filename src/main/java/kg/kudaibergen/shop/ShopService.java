@@ -170,13 +170,6 @@ public class ShopService {
       return mine(access.requireMember(userId), lang);
    }
 
-   /** «Бокс закрыт»: запросы не приходят, у покупателей «Закрыто». Может и сотрудник. */
-   @Transactional
-   public MyShopDto setOpen(Long userId, boolean open, Lang lang) {
-      access.requireMember(userId).shop().setOpen(open);
-      return mine(access.requireMember(userId), lang);
-   }
-
    // ─────────────────────── сотрудники ───────────────────────
 
    @Transactional(readOnly = true)

@@ -32,9 +32,6 @@ class RequestsIT extends AbstractIntegrationTest {
       String sellerB = activeShop("+996700500502", "18", 1, "subaru", "Forester Parts");
       String sellerMazda = activeShop("+996700500503", "16", 2, "mazda", "Мазда Бишкек");
       String pending = shop("+996700500504", "18", 2, "subaru", "Ещё на проверке");
-      String closedBox = activeShop("+996700500505", "18", 3, "subaru", "Закрыто сегодня");
-      call(authed(patch("/api/v1/my/shop/open").contentType(MediaType.APPLICATION_JSON)
-            .content("{\"isOpen\":false}"), closedBox), 200);
 
       String buyer = accessToken("+996700500510", "BUYER");
       long carId = forester(buyer);
@@ -80,7 +77,6 @@ class RequestsIT extends AbstractIntegrationTest {
       assertThat(feedA.get("items").get(0).get("myReply").isNull()).isTrue();
       assertThat(call(authed(get("/api/v1/my/shop/requests"), sellerMazda), 200).get("items")).isEmpty();
       assertThat(call(authed(get("/api/v1/my/shop/requests"), pending), 200).get("items")).isEmpty();
-      assertThat(call(authed(get("/api/v1/my/shop/requests"), closedBox), 200).get("items")).isEmpty();
       call(authed(post("/api/v1/requests/" + requestId + "/replies").contentType(MediaType.APPLICATION_JSON)
             .content("{\"answer\":\"NOT_HAVE\"}"), sellerMazda), 404);
 

@@ -49,10 +49,6 @@ public final class ShopRequests {
    public record SetCategories(@NotEmpty(message = "Выберите хотя бы одну категорию") Set<Long> categoryIds) {
    }
 
-   /** Тумблер «Бокс закрыт» (экран 21). */
-   public record SetOpen(@NotNull Boolean isOpen) {
-   }
-
    public record AddMember(
          @NotBlank @Pattern(regexp = PhoneFormat.E164_KG, message = PhoneFormat.MESSAGE) String phone) {
    }

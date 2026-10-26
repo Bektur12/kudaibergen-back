@@ -98,15 +98,6 @@ public class MyShopController {
       return shops.setCategories(principal.userId(), request.categoryIds(), Langs.fromHeader(language));
    }
 
-   @PatchMapping("/my/shop/open")
-   @Operation(summary = "Тумблер «Бокс закрыт» (21)", description = "Может и сотрудник. Закрыт — запросы не приходят")
-   public MyShopDto open(@AuthenticationPrincipal AuthPrincipal principal,
-                         @Valid @RequestBody ShopRequests.SetOpen request,
-                         @Parameter(hidden = true) @RequestHeader(value = HttpHeaders.ACCEPT_LANGUAGE,
-                               required = false) String language) {
-      return shops.setOpen(principal.userId(), request.isOpen(), Langs.fromHeader(language));
-   }
-
    // ─────────────────────── аватар и фото места ───────────────────────
 
    @PutMapping("/my/shop/avatar")

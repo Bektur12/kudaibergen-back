@@ -96,10 +96,7 @@ class ShopsIT extends AbstractIntegrationTest {
       assertThat(staffLogin.get("user").get("role").asText()).isEqualTo("SELLER");
       assertThat(call(authed(get("/api/v1/my/shop"), staff), 200).get("myRole").asText()).isEqualTo("STAFF");
 
-      // сотрудник может закрыть бокс, но не менять марки и не приглашать
-      JsonNode closed = call(authed(patch("/api/v1/my/shop/open").contentType(MediaType.APPLICATION_JSON)
-            .content("{\"isOpen\":false}"), staff), 200);
-      assertThat(closed.get("open").get("closedManually").asBoolean()).isTrue();
+      // сотрудник не может менять марки и приглашать
       JsonNode forbidden = call(authed(jsonPut("/api/v1/my/shop/brands",
             "{\"brandIds\":[" + brandId("kia") + "]}"), staff), 403);
       assertThat(forbidden.get("code").asText()).isEqualTo("OWNER_ONLY");

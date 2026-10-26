@@ -51,17 +51,16 @@ public interface ShopRepository extends JpaRepository<Shop, Long> {
                      Pageable page);
 
    /**
-    * Кому может уйти запрос по марке: действующий магазин, тумблер «Бокс закрыт» выключен.
-    * Часы работы и ряд/бокс досматривает модуль requests.
+    * Кому может уйти запрос по марке: действующий магазин. Часы работы и ряд/бокс досматривает модуль requests.
     */
-   @Query("select s from Shop s where s.status = :status and s.open = true and :brandId member of s.brandIds")
+   @Query("select s from Shop s where s.status = :status and :brandId member of s.brandIds")
    List<Shop> findReceiving(@Param("status") ShopStatus status, @Param("brandId") Long brandId);
 
    /**
     * Кому может уйти запрос «Контейнерам» (31): покупатель выбрал боксы сам, поэтому без фильтра по марке.
     * Часы работы досматривает модуль requests.
     */
-   @Query("select s from Shop s where s.status = :status and s.open = true and s.containerId in :containerIds")
+   @Query("select s from Shop s where s.status = :status and s.containerId in :containerIds")
    List<Shop> findReceivingIn(@Param("status") ShopStatus status,
                               @Param("containerIds") Collection<Long> containerIds);
 

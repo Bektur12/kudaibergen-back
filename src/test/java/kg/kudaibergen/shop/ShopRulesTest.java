@@ -59,13 +59,7 @@ class ShopRulesTest {
    }
 
    @Test
-   void тумблерБоксЗакрытИВыходные() {
-      Shop manual = activeShop();
-      manual.setOpen(false);
-      OpenStateDto closed = at(12, 0).state(manual);
-      assertThat(closed.openNow()).isFalse();
-      assertThat(closed.closedManually()).isTrue();
-
+   void выходные() {
       Shop weekdaysOnly = activeShop();
       weekdaysOnly.setSchedule(null, null, EnumSet.range(DayOfWeek.MONDAY, DayOfWeek.FRIDAY));
       // суббота, 3 октября

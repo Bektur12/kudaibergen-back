@@ -36,14 +36,15 @@ public class ShopHours {
    }
 
    public boolean openNow(Shop shop) {
-      return shop.isActive() && shop.isOpen() && withinSchedule(shop, ZonedDateTime.now(clock));
+      return shop.isActive() && withinSchedule(shop, ZonedDateTime.now(clock));
    }
 
    public OpenStateDto state(Shop shop) {
       ZonedDateTime now = ZonedDateTime.now(clock);
-      boolean open = shop.isActive() && shop.isOpen() && withinSchedule(shop, now);
+      boolean open = shop.isActive() && withinSchedule(shop, now);
       Set<DayOfWeek> days = shop.workDaySet();
-      return new OpenStateDto(open, !shop.isOpen(), shop.getOpenFrom(), shop.getOpenTo(), days,
+      // Тумблера «Бокс закрыт» больше нет — closedManually всегда false (поле оставлено для клиентов).
+      return new OpenStateDto(open, false, shop.getOpenFrom(), shop.getOpenTo(), days,
             open ? null : nextOpening(shop, now));
    }
 

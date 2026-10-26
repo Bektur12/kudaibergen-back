@@ -218,7 +218,7 @@ enum QuickReply {                                                   // быст�
 - **Отклонён** (`status = REJECTED`, причина в `blockReason`): администрация не подтвердила место. Магазин скрыт и контейнер больше не держит. Показать причину и «Выбрать другой контейнер» → `POST /my/shop/relocation {containerId}` (можно и тот же): магазин снова уходит на проверку (или сразу действует, пока проверка выключена). У мастера то же: `master.status = REJECTED`, причина — в профиле.
 - **«Это мой контейнер»**: `POST /market/containers/{id}/claim {text?}` → 201 — спор уходит администрации, ответ придёт пушем `DISPUTE_RESOLVED`. 409 `CONTAINER_FREE` — контейнер свободен, можно регистрироваться; 400 `OWN_CONTAINER` — там уже ваш магазин.
 - `GET /my/shop`; `PATCH /my/shop {name?, openFrom?, openTo?, workDays?, phone?, phoneVisible?}`; `PUT /my/shop/brands {brandIds}` [23] («Сохранить · 4 марки»); `PUT /my/shop/categories {categoryIds}`.
-- Тумблер «Бокс закрыт» [11, 21]: `PATCH /my/shop/open {isOpen}` — закрытым запросы не рассылаются.
+- Тумблера «Бокс закрыт» нет (v23): запросы приходят каждому действующему боксу.
 - Аватар: `PUT /my/shop/avatar {mediaId}`, `DELETE /my/shop/avatar`. Фото места (до 8, первое — обложка): `GET/POST /my/shop/photos`, `PUT /my/shop/photos/order`, `POST /my/shop/photos/{mediaId}/cover`, `DELETE /my/shop/photos/{mediaId}`.
 - Сотрудники [21]: `GET/POST /my/shop/members`, `DELETE /my/shop/members/{userId}`. Переезд: `POST/DELETE /my/shop/relocation`.
 - Отзывы: `GET /my/shop/reviews`, `POST /my/shop/reviews/{id}/reply` (один раз). Шаблоны ответов: `/my/shop/reply-templates`.
