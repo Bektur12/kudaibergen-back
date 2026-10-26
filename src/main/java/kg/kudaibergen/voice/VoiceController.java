@@ -22,9 +22,25 @@ import org.springframework.web.multipart.MultipartFile;
 public class VoiceController {
 
    private final VoiceService voices;
+   private final PartVideoService partVideos;
 
-   public VoiceController(VoiceService voices) {
+   public VoiceController(VoiceService voices, PartVideoService partVideos) {
       this.voices = voices;
+      this.partVideos = partVideos;
+   }
+
+   @PostMapping(value = "/videos/part", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+   @ResponseStatus(HttpStatus.CREATED)
+   @Operation(summary = "Видео товара («Выложить видео»)", description = """
+         Видео до 30 секунд и 100 МБ (MP4 / MOV), poster — необязательная обложка. Сервер распознаёт, что продавец
+         сказал («Стойки KYB на Камри пятьдесят, новые, пара — три двести»), и возвращает поля формы в draft:
+         название, цену, состояние и машины. video.id передаётся в videoMediaId товара.""")
+   @ApiResponse(responseCode = "400", description = "VIDEO_TOO_LONG, DURATION_REQUIRED, BAD_MEDIA_TYPE, FILE_TOO_LARGE")
+   public PartVideoUploadDto uploadPartVideo(@AuthenticationPrincipal AuthPrincipal principal,
+                                             @RequestParam MultipartFile file,
+                                             @RequestParam(required = false) MultipartFile poster,
+                                             @RequestParam(required = false) Integer durationSec) {
+      return partVideos.upload(principal.userId(), file, durationSec, poster);
    }
 
    @PostMapping(value = "/voices", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)

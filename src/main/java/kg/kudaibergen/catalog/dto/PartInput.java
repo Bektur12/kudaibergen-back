@@ -14,9 +14,10 @@ import kg.kudaibergen.catalog.entity.PartSide;
 import kg.kudaibergen.request.entity.PartCondition;
 
 /**
- * Форма «Новая запчасть» (26). В черновике всё необязательно; публикация требует название, категорию,
- * состояние, цену, 1–6 фото и 1–20 машин. В PATCH null — «не менять», для списков [] — очистить.
- * mediaIds — по порядку, первое — главное фото.
+ * Форма «Новая запчасть» (26) и «Выложить видео». В черновике всё необязательно; публикация требует название,
+ * состояние, цену, 1–20 машин и 1–6 фото или видео; категорию — если нет видео. В PATCH null — «не менять»,
+ * для списков [] — очистить. mediaIds — по порядку, первое — главное фото. videoMediaId — id из
+ * POST /media/videos/part, removeVideo = true — убрать видео. shipsToRegions — «Отправлю в регионы».
  */
 public record PartInput(
       @Size(max = 120, message = "Название — до 120 символов") String title,
@@ -29,7 +30,10 @@ public record PartInput(
       PartSide side,
       PartPosition position,
       @Size(max = 6, message = "Не больше 6 фото") List<Long> mediaIds,
-      @Size(max = 20, message = "Не больше 20 машин") List<@Valid FitmentInput> fitments) {
+      @Size(max = 20, message = "Не больше 20 машин") List<@Valid FitmentInput> fitments,
+      Long videoMediaId,
+      Boolean removeVideo,
+      Boolean shipsToRegions) {
 
    /** «+ Машина»: марка → модель (или «Все модели») → годы от–до. */
    public record FitmentInput(

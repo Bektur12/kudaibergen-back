@@ -77,9 +77,9 @@ class MediaVideoTest {
    }
 
    @Test
-   void видеоТолькоДляЗаявкиНаУслугуИНеВместоФото() throws IOException {
+   void видеоТолькоДляЗаявкиИТовараИНеВместоФото() throws IOException {
       MockMultipartFile video = new MockMultipartFile("file", "a.mp4", "video/mp4", mp4(0, 1000, 5_000, true));
-      assertThatThrownBy(() -> service.uploadVideo(1L, MediaPurpose.PART, video, null, null))
+      assertThatThrownBy(() -> service.uploadVideo(1L, MediaPurpose.REPLY, video, null, null))
             .isInstanceOf(BadRequestException.class).extracting("code").isEqualTo("VIDEO_NOT_ALLOWED");
       assertThatThrownBy(() -> service.uploadVideo(1L, MediaPurpose.SERVICE,
             new MockMultipartFile("file", "a.jpg", "image/jpeg", new byte[]{1}), 5, null))

@@ -10,6 +10,7 @@ import kg.kudaibergen.catalog.dto.PartCardDto;
 import kg.kudaibergen.catalog.dto.PartDetailDto;
 import kg.kudaibergen.catalog.dto.PartSearchResultDto;
 import kg.kudaibergen.catalog.dto.PartSort;
+import kg.kudaibergen.catalog.dto.VideoFeedItemDto;
 import kg.kudaibergen.common.i18n.Langs;
 import kg.kudaibergen.common.security.AuthPrincipal;
 import kg.kudaibergen.request.entity.PartCondition;
@@ -33,9 +34,25 @@ import org.springframework.web.bind.annotation.RestController;
 public class CatalogController {
 
    private final CatalogService catalog;
+   private final VideoFeedService videos;
 
-   public CatalogController(CatalogService catalog) {
+   public CatalogController(CatalogService catalog, VideoFeedService videos) {
       this.catalog = catalog;
+      this.videos = videos;
+   }
+
+   @GetMapping("/catalog/videos")
+   @Operation(summary = "Лента видео «Рынок» и «Видео с рынка» на главной", description = """
+         Опубликованные товары с видео, в наличии. Машина (carId или brandId + modelId + year) — подходящие ей
+         сверху (сначала именно к модели), дальше свежие. По умолчанию 10 на страницу; главная берёт первую.""")
+   public VideoFeedItemDto.VideoFeedPageDto videos(@AuthenticationPrincipal AuthPrincipal principal,
+                                       @RequestParam(required = false) Long carId,
+                                       @RequestParam(required = false) Long brandId,
+                                       @RequestParam(required = false) Long modelId,
+                                       @RequestParam(required = false) Integer year,
+                                       @RequestParam(required = false) String cursor,
+                                       @RequestParam(required = false) Integer limit) {
+      return videos.feed(userId(principal), carId, brandId, modelId, year, cursor, limit);
    }
 
    @GetMapping("/parts/search")

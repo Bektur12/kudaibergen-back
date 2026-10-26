@@ -223,7 +223,7 @@ final class SpokenNumbers {
       return phrases;
    }
 
-   private static boolean startsNumber(String token) {
+   static boolean startsNumber(String token) {
       return isDigits(token) || SMALL.containsKey(token) || HUNDREDS.containsKey(token)
             || ONE_AND_HALF.contains(token) || token.equals(KG_HUNDRED)
             || THOUSAND.contains(token);

@@ -22,6 +22,7 @@ final class ChatTexts {
          case VOICE -> kg ? "🎤 Үн билдирүү" : "🎤 Голосовое сообщение";
          case VIDEO -> withCaption("🎥 Видео", message.getText());
          case PART -> (kg ? "🔧 Тетик: " : "🔧 Запчасть: ") + message.getText();
+         case DELIVERY -> "🚚 " + message.getText();
          case QUICK -> QuickReply.ARRIVED.name().equals(message.getCode())
                ? QuickReply.ARRIVED.label(lang) : message.getText();
          default -> message.getText();

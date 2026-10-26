@@ -117,6 +117,9 @@ ADMIN_BOOTSTRAP_PHONE=+996555000099 ADMIN_BOOTSTRAP_NAME="Имя Фамилия"
 | `SMS_PROVIDER` | `log` или `nikita` | `log` |
 | `VOICE_PROVIDER` | распознавание голосовых ответов: `none` или `openai` (Whisper / совместимый) | `none` |
 | `VOICE_OPENAI_API_KEY`, `VOICE_OPENAI_URL`, `VOICE_OPENAI_MODEL` | сервис распознавания | —, `https://api.openai.com`, `whisper-1` |
+| `DELIVERY_COURIER_WHATSAPP`, `DELIVERY_COURIER_PHONE` | WhatsApp Ылдам Экспресс для заявки из админки (wa.me, без +) и телефон кнопки «Курьер Ылдам» | `996552599599`, `+996552599599` |
+| `DELIVERY_STANDARD_PRICE`, `DELIVERY_REMOTE_PRICE`, `DELIVERY_BISHKEK_PRICE` | тарифы до 5 кг: области (1 день), Баткен и отдалённые районы (2 дня), Бишкек (сегодня; пусто — «цену назовёт курьер») | `350`, `400`, пусто |
+| `DELIVERY_CUTOFF` | до этого времени (Бишкек) курьер заберёт посылку сегодня | `17:30` |
 | `SMS_FIXED_CODE` | фиксированный код для всех входов (тест, напр. `1111`) | пусто (в проде пусто) |
 | `SMS_EXPOSE_CODE` | отдавать код в ответе API | `true` (в проде `false`) |
 | `SMS_URL`, `SMS_LOGIN`, `SMS_PASSWORD`, `SMS_SENDER` | шлюз nikita.kg | — |

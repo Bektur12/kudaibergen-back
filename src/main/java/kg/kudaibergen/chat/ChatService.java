@@ -258,6 +258,18 @@ public class ChatService {
       add(chat, Message.part(chat.getId(), buyerId, part.getTitle(), card, clock.instant()), true);
    }
 
+   /**
+    * Заказ с доставкой: в чате покупателя с боксом (один на пару, создаётся, если его нет) — карточка заказа от
+    * покупателя. Пуш продавцу шлёт модуль доставки, здесь — без пуша. Вызывается в транзакции заказа, возвращает
+    * id чата.
+    */
+   @Transactional(propagation = Propagation.MANDATORY)
+   public Long openForDelivery(Long buyerId, Long shopId, String text, Map<String, Object> card) {
+      Chat chat = chats.findByBuyerIdAndShopId(buyerId, shopId).orElseGet(() -> createChat(buyerId, shopId, null));
+      add(chat, Message.delivery(chat.getId(), buyerId, text, card, clock.instant()), false);
+      return chat.getId();
+   }
+
    /** Новый чат начинается с плашки «Оплата в боксе при осмотре». Гонку двух созданий ловит UNIQUE. */
    private Chat createChat(Long buyerId, Long shopId, Long requestId) {
       Instant now = clock.instant();

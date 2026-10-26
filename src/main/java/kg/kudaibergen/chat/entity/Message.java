@@ -129,6 +129,17 @@ public class Message {
       return message;
    }
 
+   /**
+    * Карточка заказа с доставкой от покупателя: «Заказ с доставкой KDB-000123 · в Ош · 350 с».
+    * payload — deliveryOrderId, number, region, price, partId.
+    */
+   public static Message delivery(Long chatId, Long senderId, String text, Map<String, Object> payload, Instant now) {
+      Message message = new Message(chatId, ChatSide.BUYER, senderId, MessageType.DELIVERY, null, now);
+      message.text = text;
+      message.payload = payload;
+      return message;
+   }
+
    public static Message system(Long chatId, SystemEvent event, Map<String, Object> payload, Instant now) {
       Message message = new Message(chatId, ChatSide.SYSTEM, null, MessageType.SYSTEM, null, now);
       message.code = event.name();

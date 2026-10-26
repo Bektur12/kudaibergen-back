@@ -79,6 +79,11 @@ public class ShopMapper {
       return List.copyOf(media.photos(shop.getPhotoIds().stream().limit(limit).toList()).values());
    }
 
+   /** «Ряд 14 · конт. 12» — под видео, в заказе с доставкой и в заявке курьеру; null — места нет. */
+   public static String place(LocationDto location) {
+      return location == null ? null : location.rowLabel() + " · конт. " + location.number();
+   }
+
    public LocationDto location(Long containerId) {
       return market.location(containerId);
    }

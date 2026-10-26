@@ -40,7 +40,10 @@ public class SecurityConfig {
          "/api/v1/masters/**",
          "/api/v1/service-types",
          "/api/v1/dictionaries/version",
-         "/api/v1/reviews/tags"
+         "/api/v1/reviews/tags",
+         // лента видео и тарифы доставки — гостю тоже
+         "/api/v1/catalog/videos",
+         "/api/v1/delivery/tariffs"
    };
 
    /** Вход в админку: пароль → SMS-код → токен; refresh и выход — по cookie, без access-токена. */

@@ -81,6 +81,14 @@ public class Part {
    @Column(name = "media_id", nullable = false)
    private List<Long> photoIds = new ArrayList<>();
 
+   /** Видео товара (лента «Рынок», «Видео с рынка» на главной); с ним фото и категория не обязательны. */
+   @Column(name = "video_media_id")
+   private Long videoMediaId;
+
+   /** «Отправлю в регионы»: курьер Ылдам Экспресс заберёт из контейнера, у покупателя — «Доставка». */
+   @Column(name = "ships_to_regions", nullable = false)
+   private boolean shipsToRegions;
+
    @ElementCollection
    @CollectionTable(name = "part_fitments", joinColumns = @JoinColumn(name = "part_id"))
    private List<Fitment> fitments = new ArrayList<>();
@@ -251,6 +259,26 @@ public class Part {
 
    public List<Long> getPhotoIds() {
       return photoIds;
+   }
+
+   public Long getVideoMediaId() {
+      return videoMediaId;
+   }
+
+   public void setVideoMediaId(Long videoMediaId) {
+      this.videoMediaId = videoMediaId;
+   }
+
+   public boolean hasVideo() {
+      return videoMediaId != null;
+   }
+
+   public boolean isShipsToRegions() {
+      return shipsToRegions;
+   }
+
+   public void setShipsToRegions(boolean shipsToRegions) {
+      this.shipsToRegions = shipsToRegions;
    }
 
    public List<Fitment> getFitments() {

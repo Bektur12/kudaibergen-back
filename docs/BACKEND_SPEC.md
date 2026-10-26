@@ -433,3 +433,48 @@ multipart: `file` (аудио до 60 с и 15 МБ), `durationSec` (у M4A се
 - `ServiceRequestDetailDto.voice`, `MasterFeedItemDto.voice` — голосовое клиента; `ServiceOfferDto.voice` — мастера.
 - Отклик `POST /my/master/requests/{id}/offer {answer, priceFrom?, availableAt?, voiceMediaId?}`; голосовое мастера
   приходит клиенту в чат. «Выезжаю к клиенту в радиусе 5 км» — `PATCH /my/master {mobile, radiusKm}`.
+
+## 14. Видео с рынка и доставка Ылдам Экспресс
+
+### 14.1 Видео товара
+- «Выложить видео» (продавец): `POST /media/videos/part` (multipart `file`, `poster?`, `durationSec?`; до 30 с,
+  100 МБ) → `{video, transcript?, draft: {title?, price?, condition?, models[{modelId, brandId, label}]}}`. Звук видео
+  распознаётся как голосовые («Стойки KYB на Камри пятьдесят, новые, пара — три двести» → «Стойки KYB, пара»,
+  Camry 50, NEW, 3 200); не распознано — draft пустой, поля продавец заполняет сам.
+- Товар: `POST /parts?publish=true {title, condition, price, fitments, videoMediaId, shipsToRegions}` — с видео фото
+  и категория не обязательны. `removeVideo: true` — убрать видео. `PartCardDto` и `PartDetailDto` — ещё
+  `video {id, url, posterUrl?, durationSec}` и `shipsToRegions`.
+- Лента «Рынок» и «Видео с рынка» на главной: `GET /catalog/videos?carId|brandId+modelId+year&cursor&limit=10`
+  (гостю тоже) → `{items: VideoFeedItemDto[], nextCursor}`; подходящие машине сверху, дальше свежие. Элемент:
+  `partId, publicId, title, price, condition, video, fits?, fitsLabel` («Подходят на Camry 50 и 55 · 2011–2017»),
+  `shipsToRegions` («Доставка по КР»), `isFavorite`, `shop {id, name, avatarUrl?, place: «Ряд 14 · конт. 12», phone?,
+  replyMinutes?}` («отвечает за 3 мин» — среднее за 30 дней).
+
+### 14.2 Доставка
+- Тарифы `GET /delivery/tariffs` (гостю тоже): плитки `regions[{code, name, inName, days, price?, districts[]}]` —
+  Бишкек (сегодня, цена из `DELIVERY_BISHKEK_PRICE`, пусто — «назовёт курьер»), области — 1 день 350 с, Баткен —
+  2 дня 400 с; у Оша чипы «Чон-Алай», «Алай (Гульчо)», у Джалал-Абада — «Аксы (Кербен)», «Ала-Бука» (2 дня, 400 с).
+  `cutoff: "17:30"`, `remoteNote`, `surchargeNote` (больше 5 кг и 35 × 35 × 35 см — +50 с за каждые 5 кг, считает
+  курьер), `courierName`, `courierPhone`.
+- Заказ `POST /delivery-orders {partId, region, district?, address, recipientName, recipientPhone}` → 201
+  `DeliveryOrderDto`. Товар в продаже, в наличии и с `shipsToRegions` (400 `DELIVERY_NOT_AVAILABLE`), не свой бокс
+  (`SELF_ORDER`), район своей области (`BAD_DISTRICT`), телефон +996 (`BAD_PHONE`). Номер `KDB-000123`. В чате
+  покупателя с боксом — карточка `DELIVERY` (`payload {deliveryOrderId, number, region, price, partId}`), продавцу — пуш.
+- `GET /delivery-orders?side=BUYER|SHOP&active=true` — мои заказы; `GET /delivery-orders/{id}` — «Где посылка» /
+  «Заказ с доставкой» (`buyer` — только продавцу). `pickupToday` — курьер заберёт сегодня (упаковано до 17:30).
+- Статусы: `NEW` → `PACKED` (продавец `POST /delivery-orders/{id}/packed {weightKg, fragile}`) → `COURIER_ORDERED`
+  (админка) → `PICKED_UP` (продавец `POST …/picked-up`, можно и из `PACKED`) → `DELIVERED` (покупатель
+  `POST …/received` из `COURIER_ORDERED` / `PICKED_UP` или админка); `CANCELLED` — админка. Неверный статус —
+  409 `BAD_STATUS`.
+- Пуши `DELIVERY_ORDER {deliveryOrderId, number, event, side}`: продавцу — CREATED («Новый заказ с доставкой»),
+  DELIVERED; покупателю — COURIER_ORDERED («Заказали курьера Ылдам»), PICKED_UP («Курьер забрал посылку»).
+
+### 14.3 Админка — «Заказать курьера»
+- `GET /admin/delivery-orders?status&q&cursor&limit` (REQUESTS_VIEW) → `{items, nextCursor, counts: {all, NEW, PACKED,
+  COURIER_ORDERED, PICKED_UP, DELIVERED, CANCELLED}}`; q — номер, товар, цифры телефона. `GET /admin/delivery-orders/{id}`.
+- `AdminDeliveryOrderDto`: заказ, `part`, `seller {shopId, name, shopName, address, place, phone}`,
+  `buyer {userId, name, phone}`, `cutoffAt` (сегодня 17:30), `template` — «Данные для оформления заказа» Ылдам,
+  `whatsappUrl` — wa.me с текстом (`DELIVERY_COURIER_WHATSAPP`), `pickupToday`.
+- `POST /admin/delivery-orders/{id}/courier-ordered | delivered | cancel` (REQUESTS_MANAGE, без тела) →
+  `AdminDeliveryOrderDto`, 409 `BAD_STATUS`. Живые события — `admin:requests`
+  `{type: DELIVERY_CHANGED, payload: {id, number, event, sellerName, at}}`.

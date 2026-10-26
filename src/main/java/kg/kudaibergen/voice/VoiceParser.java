@@ -6,6 +6,7 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -31,6 +32,26 @@ public final class VoiceParser {
    /** Отклик мастера из голоса: цена «от», когда (Сейчас / Сегодня / Завтра) и точное время, если сказали. */
    public record OfferDraft(Integer priceFrom, ServiceWhen when, Instant availableAt) {
    }
+
+   /** Товар из видео («Выложить видео»): название, цена, состояние и машины; не понятое — null / пусто. */
+   public record PartDraft(String title, Integer price, PartCondition condition, List<ModelOption> models) {
+   }
+
+   /**
+    * Модель справочника, которую можно назвать вслух: name — «Camry», generation — «50» (может не быть),
+    * aliases — «камри», «xv50». label — как в чипе («Camry 50»).
+    */
+   public record ModelOption(Long modelId, Long brandId, String label, String name, String generation,
+                             List<String> aliases) {
+   }
+
+   static final int MAX_TITLE = 120;
+   /** Слова в начале фразы, которые в название не идут: «Вот, это стойки…». */
+   private static final Set<String> TITLE_FILLERS = Set.of("вот", "это", "есть", "у", "меня", "продаю", "продам",
+         "значит", "так", "короче", "ну", "бар", "мында");
+   /** Перед машиной: «стойки на камри», «для королы». */
+   private static final Set<String> CAR_PREPOSITIONS = Set.of("на", "для", "под", "к", "от");
+   private static final Pattern PAIR = pattern("^(пар(а|у|ой)|комплект\\p{L}*|жуп\\p{L}*)$");
 
    static final int MIN_PRICE = 50;
    static final int MAX_PRICE = 10_000_000;
@@ -157,6 +178,163 @@ public final class VoiceParser {
          }
       });
       return tags;
+   }
+
+   // ─────────────────────── товар из видео ───────────────────────
+
+   /**
+    * «Стойки KYB на Камри пятьдесят, новые, пара — три двести» → «Стойки KYB, пара», Camry 50, новые, 3 200 сом.
+    * Машина — по названию или алиасу модели, поколение — число сразу после («камри пятьдесят» → Camry 50);
+    * без числа — только если такая модель одна. Название — слова до машины, состояния, цены или первой запятой.
+    */
+   public static PartDraft part(String transcript, List<ModelOption> catalog) {
+      if (transcript == null || transcript.isBlank()) {
+         return new PartDraft(null, null, null, List.of());
+      }
+      String text = normalize(transcript);
+      List<String> tokens = SpokenNumbers.tokens(text);
+      boolean[] used = new boolean[tokens.size()];
+      List<ModelOption> models = models(tokens, used, catalog);
+      Integer price = price(tokens, used, false);
+      return new PartDraft(title(transcript, catalog), price, condition(text), models);
+   }
+
+   private static List<ModelOption> models(List<String> tokens, boolean[] used, List<ModelOption> catalog) {
+      // ключ (слова названия или алиаса) → модели с этим ключом
+      Map<List<String>, List<ModelOption>> byKey = new LinkedHashMap<>();
+      for (ModelOption option : catalog) {
+         List<String> keys = new ArrayList<>();
+         keys.add(option.name());
+         if (option.generation() != null) {
+            keys.add(option.name() + " " + option.generation());
+         }
+         keys.addAll(option.aliases());
+         for (String key : keys) {
+            List<String> words = SpokenNumbers.tokens(key);
+            if (!words.isEmpty()) {
+               List<ModelOption> list = byKey.computeIfAbsent(words, k -> new ArrayList<>());
+               if (!list.contains(option)) {
+                  list.add(option);
+               }
+            }
+         }
+      }
+      Map<Integer, SpokenNumbers.Phrase> numberAt = new LinkedHashMap<>();
+      SpokenNumbers.find(tokens, new boolean[tokens.size()]).forEach(phrase -> numberAt.put(phrase.start(), phrase));
+      List<ModelOption> found = new ArrayList<>();
+      for (int i = 0; i < tokens.size(); i++) {
+         if (used[i]) {
+            continue;
+         }
+         // самый длинный ключ, начинающийся здесь: «land cruiser 200» раньше «land cruiser»
+         List<String> bestKey = null;
+         for (List<String> key : byKey.keySet()) {
+            if (i + key.size() <= tokens.size() && tokens.subList(i, i + key.size()).equals(key)
+                  && (bestKey == null || key.size() > bestKey.size())) {
+               bestKey = key;
+            }
+         }
+         if (bestKey == null) {
+            continue;
+         }
+         List<ModelOption> candidates = byKey.get(bestKey);
+         int end = i + bestKey.size();
+         ModelOption match = null;
+         SpokenNumbers.Phrase number = numberAt.get(end);
+         if (candidates.size() > 1 && number != null && number.value() == Math.rint(number.value())) {
+            String generation = String.valueOf((long) number.value());
+            match = candidates.stream().filter(option -> generation.equals(option.generation())).findFirst()
+                  .orElseGet(() -> candidates.stream().filter(option -> option.aliases().stream()
+                        .anyMatch(alias -> SpokenNumbers.tokens(alias).contains(generation))).findFirst().orElse(null));
+            if (match != null) {
+               end = number.end();
+            }
+         } else if (candidates.size() == 1) {
+            match = candidates.get(0);
+         }
+         if (match == null) {
+            continue;
+         }
+         for (int k = i; k < end; k++) {
+            used[k] = true;
+         }
+         if (!found.contains(match)) {
+            found.add(match);
+         }
+         i = end - 1;
+      }
+      return found;
+   }
+
+   /** Слова до машины, состояния, цены, «пара» или первого знака препинания; производитель — как в чипе. */
+   static String title(String transcript, List<ModelOption> catalog) {
+      Set<String> carWords = new HashSet<>();
+      for (ModelOption option : catalog) {
+         List<String> nameWords = SpokenNumbers.tokens(option.name());
+         if (!nameWords.isEmpty()) {
+            carWords.add(nameWords.get(0));
+         }
+         option.aliases().forEach(alias -> {
+            List<String> words = SpokenNumbers.tokens(alias);
+            if (!words.isEmpty()) {
+               carWords.add(words.get(0));
+            }
+         });
+      }
+      String[] words = transcript.strip().split("\\s+");
+      List<String> title = new ArrayList<>();
+      boolean pair = false;
+      for (int i = 0; i < words.length; i++) {
+         String word = words[i];
+         String norm = word.toLowerCase(Locale.ROOT).replace('ё', 'е').replaceAll("[^\\p{L}\\p{N}/]", "");
+         if (norm.isEmpty()) {
+            if (!title.isEmpty()) {
+               break;
+            }
+            continue;
+         }
+         if (title.isEmpty() && TITLE_FILLERS.contains(norm)) {
+            continue;
+         }
+         String next = i + 1 < words.length
+               ? words[i + 1].toLowerCase(Locale.ROOT).replace('ё', 'е').replaceAll("[^\\p{L}\\p{N}]", "") : "";
+         if (carWords.contains(norm) || CAR_PREPOSITIONS.contains(norm) && carWords.contains(next)
+               || NEW.matcher(norm).find() || USED.matcher(norm).find() || ORIGINAL.matcher(norm).find()
+               || COPY.matcher(norm).find() || SpokenNumbers.startsNumber(norm) || CURRENCY.contains(norm)) {
+            break;
+         }
+         if (PAIR.matcher(norm).find()) {
+            pair = true;
+            break;
+         }
+         title.add(manufacturerSpelling(word.replaceAll("[^\\p{L}\\p{N}/\\-]+$", "")
+               .replaceAll("^[^\\p{L}\\p{N}]+", "")));
+         if (word.matches(".*[,.;:!?—–]$")) {
+            break;
+         }
+      }
+      String normalized = normalize(transcript);
+      if (!pair) {
+         pair = tags(normalized).contains("Пара");
+      }
+      if (title.isEmpty()) {
+         return null;
+      }
+      String result = String.join(" ", title);
+      result = Character.toUpperCase(result.charAt(0)) + result.substring(1);
+      if (pair && !result.toLowerCase(Locale.ROOT).contains("пар")) {
+         result += ", пара";
+      }
+      if (result.length() < 3) {
+         return null;
+      }
+      return result.length() > MAX_TITLE ? result.substring(0, MAX_TITLE).strip() : result;
+   }
+
+   /** «kyb», «каяба» → «KYB». */
+   private static String manufacturerSpelling(String word) {
+      String canonical = MANUFACTURERS.get(word.toLowerCase(Locale.ROOT));
+      return canonical == null ? word : canonical;
    }
 
    // ─────────────────────── отклик мастера ───────────────────────

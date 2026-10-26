@@ -10,7 +10,7 @@ import org.springframework.data.repository.query.Param;
 public interface MediaRepository extends JpaRepository<Media, Long> {
 
    /**
-    * Фото, которые так и не прикрепили (или открепили) и которые старше порога: ни товар, ни фото места,
+    * Фото, которые так и не прикрепили (или открепили) и которые старше порога: ни товар (фото и видео), ни фото места,
     * ни аватар магазина или пользователя, ни запрос или ответ «Есть» (фото и голосовые), ни заявка или отклик мастера, ни карточка товара в чате
     * на них не ссылаются.
     */
@@ -18,6 +18,7 @@ public interface MediaRepository extends JpaRepository<Media, Long> {
          select m.* from media m
          where m.created_at < :before
            and not exists (select 1 from part_photos pp where pp.media_id = m.id)
+           and not exists (select 1 from parts pv where pv.video_media_id = m.id)
            and not exists (select 1 from shop_photos sp where sp.media_id = m.id)
            and not exists (select 1 from shops s where s.avatar_media_id = m.id)
            and not exists (select 1 from users u where u.avatar_media_id = m.id)

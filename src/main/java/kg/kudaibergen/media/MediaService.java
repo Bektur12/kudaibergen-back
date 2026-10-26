@@ -33,8 +33,8 @@ public class MediaService {
    private static final String JPEG = "image/jpeg";
    /** Видео во вложениях заявки — до 30 секунд (спецификация 12.4); полсекунды — запас на округление камеры. */
    public static final int MAX_VIDEO_SECONDS = 30;
-   /** Видео разрешено только во вложениях заявки на услугу. */
-   static final Set<MediaPurpose> VIDEO_PURPOSES = Set.of(MediaPurpose.SERVICE);
+   /** Видео — во вложениях заявки на услугу и у товара (лента «Видео с рынка»). */
+   static final Set<MediaPurpose> VIDEO_PURPOSES = Set.of(MediaPurpose.SERVICE, MediaPurpose.PART);
    /** Голосовое — к запросу (04), ответу «Есть» (14), заявке (16) и отклику мастера (19). */
    public static final Set<MediaPurpose> VOICE_PURPOSES = Set.of(MediaPurpose.REQUEST, MediaPurpose.REPLY,
          MediaPurpose.SERVICE, MediaPurpose.OFFER);
@@ -88,7 +88,7 @@ public class MediaService {
    public MediaItemDto uploadVideo(Long ownerId, MediaPurpose purpose, MultipartFile file, Integer durationSec,
                                    MultipartFile poster) {
       if (!VIDEO_PURPOSES.contains(purpose)) {
-         throw new BadRequestException("VIDEO_NOT_ALLOWED", "Видео можно прикрепить только к заявке на услугу");
+         throw new BadRequestException("VIDEO_NOT_ALLOWED", "Видео можно прикрепить только к заявке на услугу или товару");
       }
       if (file == null || file.isEmpty()) {
          throw new BadRequestException("FILE_REQUIRED", "Файл не передан");
@@ -319,6 +319,24 @@ public class MediaService {
          }
       });
       return byId;
+   }
+
+   /** Видео товаров по id; неизвестные id, фото и голосовые пропускаются. */
+   @Transactional(readOnly = true)
+   public Map<Long, VideoDto> videos(Collection<Long> ids) {
+      Map<Long, VideoDto> byId = new LinkedHashMap<>();
+      List<Long> wanted = ids.stream().filter(Objects::nonNull).distinct().toList();
+      if (wanted.isEmpty()) {
+         return byId;
+      }
+      media.findAllById(wanted).stream().filter(Media::isVideo).forEach(item -> byId.put(item.getId(), video(item)));
+      return byId;
+   }
+
+   public VideoDto video(Media item) {
+      return new VideoDto(item.getId(), storage.urlFor(item.getFileKey()),
+            item.getKey1080() == null ? null : storage.urlFor(item.getKey1080()),
+            item.getDurationSec() == null ? 0 : item.getDurationSec());
    }
 
    /** Превью 320 px — для аватаров; null — фото нет. */

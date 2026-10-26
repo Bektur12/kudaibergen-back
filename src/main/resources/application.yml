@@ -151,6 +151,20 @@ app:
       prompt: "Есть, нет, оригинал, копия, новые, б/у, контрактные, пара, KYB, Denso. Три двести сом. Могу сегодня в три, от полутора тысяч."
       timeout: 20s
     per-user-hourly: 120
+  delivery:
+    # Ылдам Экспресс: курьер забирает посылку из контейнера и везёт покупателю (видео с рынка → «Доставка»)
+    courier-name: Ылдам Экспресс
+    # по Бишкеку — сегодня; пусто — «цену назовёт курьер»
+    bishkek-price: ${DELIVERY_BISHKEK_PRICE:}
+    # до 5 кг: области — 1 день, Баткенская обл. и отдалённые районы — 2 дня. Больше 5 кг и 35 × 35 × 35 см —
+    # +50 с за каждые 5 кг, считает курьер
+    standard-price: ${DELIVERY_STANDARD_PRICE:350}
+    remote-price: ${DELIVERY_REMOTE_PRICE:400}
+    # «Упаковал» до этого времени (Бишкек) — курьер заберёт сегодня, позже — завтра
+    cutoff: ${DELIVERY_CUTOFF:17:30}
+    # WhatsApp Ылдам для заявки из админки (wa.me, без +) и телефон для кнопки «Курьер Ылдам»
+    courier-whatsapp: ${DELIVERY_COURIER_WHATSAPP:996552599599}
+    courier-phone: ${DELIVERY_COURIER_PHONE:+996552599599}
   fcm:
     enabled: ${FCM_ENABLED:false}
     credentials-path: ${FCM_CREDENTIALS:}

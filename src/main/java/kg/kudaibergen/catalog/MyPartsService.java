@@ -294,6 +294,29 @@ public class MyPartsService {
       if (input.fitments() != null) {
          part.replaceFitments(fitments(input.fitments()));
       }
+      if (Boolean.TRUE.equals(input.removeVideo())) {
+         part.setVideoMediaId(null);
+      } else if (input.videoMediaId() != null) {
+         part.setVideoMediaId(video(part, input.videoMediaId()));
+      }
+      if (input.shipsToRegions() != null) {
+         part.setShipsToRegions(input.shipsToRegions());
+      }
+   }
+
+   /** Видео товара: загружено как PART кем-то из людей этого бокса (или уже стоит на товаре). */
+   private Long video(Part part, Long mediaId) {
+      if (mediaId.equals(part.getVideoMediaId())) {
+         return mediaId;
+      }
+      Set<Long> staff = new HashSet<>(members.findByShopIdOrderByCreatedAtAsc(part.getShopId()).stream()
+            .map(ShopMember::getUserId).toList());
+      boolean allowed = media.findAll(List.of(mediaId)).stream().anyMatch(item -> item.isVideo()
+            && item.getPurpose() == MediaPurpose.PART && staff.contains(item.getOwnerId()));
+      if (!allowed) {
+         throw new BadRequestException("BAD_VIDEO", "Видео не найдено — снимите его заново");
+      }
+      return mediaId;
    }
 
    /**
@@ -315,6 +338,9 @@ public class MyPartsService {
                || item.getPurpose() == MediaPurpose.PART && staff.contains(item.getOwnerId())) {
             allowed.add(item.getId());
          }
+      }
+      if (found.stream().anyMatch(item -> !item.isPhoto())) {
+         throw new BadRequestException("BAD_PHOTO", "В фото товара — только фото, видео — отдельно");
       }
       if (!allowed.containsAll(ids)) {
          throw new BadRequestException("BAD_PHOTO", "Фото не найдено — загрузите его заново");
@@ -364,7 +390,7 @@ public class MyPartsService {
       }
    }
 
-   /** Без обязательных полей, фото и машин товар не публикуется (ТЗ 9.3). */
+   /** Без обязательных полей, фото (или видео) и машин товар не публикуется (ТЗ 9.3). */
    private void requireComplete(Part part) {
       List<String> missing = missing(part);
       if (!missing.isEmpty()) {
@@ -373,13 +399,16 @@ public class MyPartsService {
       }
    }
 
-   /** Незаполненные обязательные поля — имена полей формы. */
+   /**
+    * Незаполненные обязательные поля — имена полей формы. С видео («Выложить видео») фото и категория
+    * не нужны: товар виден в ленте и в поиске по тексту и машине.
+    */
    static List<String> missing(Part part) {
       List<String> missing = new ArrayList<>();
       if (part.getTitle() == null || part.getTitle().length() < 3) {
          missing.add("title");
       }
-      if (part.getCategoryId() == null) {
+      if (part.getCategoryId() == null && !part.hasVideo()) {
          missing.add("categoryId");
       }
       if (part.getCondition() == null) {
@@ -388,7 +417,7 @@ public class MyPartsService {
       if (part.getPrice() == null) {
          missing.add("price");
       }
-      if (part.getPhotoIds().isEmpty()) {
+      if (part.getPhotoIds().isEmpty() && !part.hasVideo()) {
          missing.add("mediaIds");
       }
       if (part.getFitments().isEmpty()) {

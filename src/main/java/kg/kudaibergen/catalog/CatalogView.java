@@ -26,6 +26,7 @@ import kg.kudaibergen.garage.dto.BrandDto;
 import kg.kudaibergen.garage.entity.Brand;
 import kg.kudaibergen.media.MediaService;
 import kg.kudaibergen.media.PhotoDto;
+import kg.kudaibergen.media.VideoDto;
 import kg.kudaibergen.shop.ShopMapper;
 import kg.kudaibergen.shop.ShopRepository;
 import kg.kudaibergen.shop.dto.ShopBriefDto;
@@ -66,13 +67,15 @@ public class CatalogView {
             .filter(part -> !part.getPhotoIds().isEmpty()).map(part -> part.getPhotoIds().get(0)).toList());
       Map<Long, ShopCardDto> shopCards = shopCards(ordered.stream().map(Part::getShopId).toList());
       Set<Long> favorite = favorites.favoriteAmong(viewerId, ids);
+      Map<Long, VideoDto> videos = media.videos(ordered.stream().map(Part::getVideoMediaId).toList());
       return ordered.stream()
             .map(part -> new PartCardDto(part.getId(), part.getTitle(), part.getPrice(), PartCardDto.KGS,
                   part.getCondition(), StockStatus.of(part.inStock()),
                   part.getPhotoIds().isEmpty() ? null : photos.get(part.getPhotoIds().get(0)),
                   car == null ? null : Fits.anyFits(part.getFitments(), car),
                   car != null && Fits.anyExact(part.getFitments(), car), favorite.contains(part.getId()),
-                  ShopBriefDto.of(shopCards.get(part.getShopId()))))
+                  ShopBriefDto.of(shopCards.get(part.getShopId())),
+                  part.hasVideo() ? videos.get(part.getVideoMediaId()) : null, part.isShipsToRegions()))
             .toList();
    }
 
@@ -86,7 +89,9 @@ public class CatalogView {
             List.copyOf(media.photos(part.getPhotoIds()).values()), fitments(part.getFitments(), lang), fit,
             !favorites.favoriteAmong(viewerId, List.of(part.getId())).isEmpty(), shopMapper.card(shop),
             shopMapper.photos(shop, 3),
-            part.getPublishedAt(), part.getUpdatedAt());
+            part.getPublishedAt(), part.getUpdatedAt(),
+            part.hasVideo() ? media.videos(List.of(part.getVideoMediaId())).get(part.getVideoMediaId()) : null,
+            part.isShipsToRegions());
    }
 
    public List<MyPartItemDto> myItems(List<Part> page, Lang lang) {

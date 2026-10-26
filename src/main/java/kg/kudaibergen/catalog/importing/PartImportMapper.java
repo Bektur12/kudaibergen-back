@@ -90,7 +90,7 @@ public class PartImportMapper {
       PartInput base = draft.input;
       parts.add(new ImportedPart(draft.row, new PartInput(base.title(), base.categoryId(), base.condition(),
             base.price(), base.quantity(), base.manufacturer(), base.oemNumber(), null, null, List.of(),
-            List.copyOf(draft.fitments))));
+            List.copyOf(draft.fitments), null, null, null)));
    }
 
    private PartInput base(SheetRow row) {
@@ -114,7 +114,7 @@ public class PartImportMapper {
       }
       String manufacturer = limited(row.get(Column.MANUFACTURER), 60, "Производитель");
       String oem = limited(row.get(Column.OEM), 40, "Номер детали");
-      return new PartInput(title, categoryId, condition, price, quantity, manufacturer, oem, null, null, null, null);
+      return new PartInput(title, categoryId, condition, price, quantity, manufacturer, oem, null, null, null, null, null, null, null);
    }
 
    private PartInput.FitmentInput fitment(SheetRow row) {

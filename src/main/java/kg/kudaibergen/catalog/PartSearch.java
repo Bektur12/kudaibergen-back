@@ -55,11 +55,17 @@ public class PartSearch {
 
    /**
     * Фильтры выдачи. shopOrder — id магазинов от ближнего к дальнему (только для NEAREST).
-    * inStock по умолчанию true, openOnly — «только открытые боксы».
+    * inStock по умолчанию true, openOnly — «только открытые боксы», withVideo — только товары с видео (лента).
     */
    public record Query(String text, CarFilter car, Long categoryId, PartCondition condition, Integer priceMin,
                        Integer priceMax, boolean inStock, boolean openOnly, Long shopId, PartSort sort,
-                       List<Long> shopOrder) {
+                       List<Long> shopOrder, boolean withVideo) {
+
+      public Query(String text, CarFilter car, Long categoryId, PartCondition condition, Integer priceMin,
+                   Integer priceMax, boolean inStock, boolean openOnly, Long shopId, PartSort sort,
+                   List<Long> shopOrder) {
+         this(text, car, categoryId, condition, priceMin, priceMax, inStock, openOnly, shopId, sort, shopOrder, false);
+      }
    }
 
    /** Найденная запчасть: exact — подходит именно к модели машины. */
@@ -146,6 +152,9 @@ public class PartSearch {
       }
       if (query.openOnly()) {
          where.add("(" + OPEN_NOW_SQL + ")");
+      }
+      if (query.withVideo()) {
+         where.add("p.video_media_id is not null");
       }
       if (query.car() != null) {
          if (onlyFitting) {
