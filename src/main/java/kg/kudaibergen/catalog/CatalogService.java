@@ -87,8 +87,8 @@ public class CatalogService {
       boolean more = hits.size() > size;
       List<Long> ids = (more ? hits.subList(0, size) : hits).stream().map(PartSearch.Hit::partId).toList();
       List<PartCardDto> cards = view.cards(ids, car, viewerId);
-      return new PartSearchResultDto(cards, search.count(query), appliedCar(car),
-            more ? CursorPage.encode(String.valueOf(offset + size)) : null);
+      return new PartSearchResultDto(cards, search.countAll(query), car == null ? null : search.count(query),
+            appliedCar(car), more ? CursorPage.encode(String.valueOf(offset + size)) : null);
    }
 
    /** «для Camry 50»: модель, а если выбрана только марка — марка. */

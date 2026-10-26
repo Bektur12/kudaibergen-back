@@ -66,14 +66,19 @@ public class PartSearch {
    public record Hit(Long partId, boolean exact) {
    }
 
+   /**
+    * Выдача (27): с машиной — сначала подходящие именно к модели, потом подходящие к марке («все модели»), дальше
+    * остальные запчасти; внутри — sort.
+    */
    public List<Hit> find(Query query, int offset, int limit) {
-      Sql sql = build(query);
+      Sql sql = build(query, false);
       if (sql == null) {
          return List.of();
       }
       String exact = query.car() != null && query.car().modelId() != null ? fitmentExists(query.car(), true) : "false";
-      StringBuilder select = new StringBuilder("select p.id, ").append(exact).append(" as exact from parts p ")
-            .append("join shops s on s.id = p.shop_id ");
+      String fits = query.car() != null ? fitmentExists(query.car(), false) : "false";
+      StringBuilder select = new StringBuilder("select p.id, ").append(exact).append(" as exact, ").append(fits)
+            .append(" as fits from parts p join shops s on s.id = p.shop_id ");
       if (query.sort() == PartSort.NEAREST && !query.shopOrder().isEmpty()) {
          select.append("left join (values ").append(nearestValues(query.shopOrder()))
                .append(") d(shop_id, rank) on d.shop_id = p.shop_id ");
@@ -82,13 +87,26 @@ public class PartSearch {
       if (!"false".equals(exact)) {
          select.append("exact desc, ");
       }
+      if (!"false".equals(fits)) {
+         select.append("fits desc, ");
+      }
       select.append(orderBy(query)).append(" limit :limit offset :offset");
       sql.params.addValue("limit", limit).addValue("offset", offset);
       return jdbc.query(select.toString(), sql.params, (rs, n) -> new Hit(rs.getLong(1), rs.getBoolean(2)));
    }
 
+   /** Сколько подходит машине («24 запчасти для Camry 50», «Показать 86»); без машины — сколько всего. */
    public long count(Query query) {
-      Sql sql = build(query);
+      return count(query, true);
+   }
+
+   /** Сколько всего, подходящих и остальных. */
+   public long countAll(Query query) {
+      return count(query, false);
+   }
+
+   private long count(Query query, boolean onlyFitting) {
+      Sql sql = build(query, onlyFitting);
       if (sql == null) {
          return 0;
       }
@@ -97,8 +115,8 @@ public class PartSearch {
       return total == null ? 0 : total;
    }
 
-   /** null — запрос заведомо пустой (текст из одних знаков препинания). */
-   private Sql build(Query query) {
+   /** null — запрос заведомо пустой (текст из одних знаков препинания). onlyFitting — только подходящие машине. */
+   private Sql build(Query query, boolean onlyFitting) {
       MapSqlParameterSource params = new MapSqlParameterSource();
       List<String> where = new ArrayList<>();
       where.add("p.status = 'ACTIVE'");
@@ -130,7 +148,9 @@ public class PartSearch {
          where.add("(" + OPEN_NOW_SQL + ")");
       }
       if (query.car() != null) {
-         where.add(fitmentExists(query.car(), false));
+         if (onlyFitting) {
+            where.add(fitmentExists(query.car(), false));
+         }
          params.addValue("carBrandId", query.car().brandId());
          if (query.car().modelId() != null) {
             params.addValue("carModelId", query.car().modelId());

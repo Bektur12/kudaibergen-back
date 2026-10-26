@@ -71,8 +71,12 @@ class CatalogIT extends AbstractIntegrationTest {
       assertThat(card.get("shop").get("row").asText()).isEqualTo("16");
       assertThat(card.get("stockStatus").asText()).isEqualTo("IN_STOCK");
       assertThat(card.get("currency").asText()).isEqualTo("KGS");
-      assertThat(call(get("/api/v1/parts/search").param("brandId", String.valueOf(brandId("toyota")))
-            .param("modelId", String.valueOf(camry("70"))).param("year", "2019"), 200).get("total").asInt()).isZero();
+      // к другой машине не подходит: в выдаче она есть, но после подходящих и без «подходит»
+      JsonNode other = call(get("/api/v1/parts/search").param("brandId", String.valueOf(brandId("toyota")))
+            .param("modelId", String.valueOf(camry("70"))).param("year", "2019"), 200);
+      assertThat(other.get("fitsTotal").asInt()).isZero();
+      assertThat(other.get("total").asInt()).isEqualTo(1);
+      assertThat(other.get("items").get(0).get("fits").asBoolean()).isFalse();
 
       // текст: опечатка, синоним, номер детали; гость без машины
       assertThat(call(get("/api/v1/parts/search").param("q", "стойка"), 200).get("total").asInt()).isEqualTo(1);
