@@ -24,8 +24,9 @@ import org.springframework.transaction.event.TransactionalEventListener;
 /**
  * После коммита: пуши по заказу с доставкой и событие живой ленты админки.
  * <pre>
- * DELIVERY_ORDER {deliveryOrderId, number, event, side: SHOP | BUYER} — продавцу «Новый заказ с доставкой»,
- *                покупателю «Заказали курьера Ылдам», «Курьер забрал посылку», продавцу «Покупатель получил»
+ * DELIVERY_ORDER {deliveryOrderId, number, event, side: SHOP} — продавцу «Новый заказ с доставкой»;
+ * DELIVERY_COURIER_ORDERED, DELIVERY_PICKED_UP {…, side: BUYER} — покупателю «Заказали курьера Ылдам»,
+ * «Курьер забрал посылку»; DELIVERY_DELIVERED {…, side: SHOP} — продавцу «Покупатель получил»
  * admin:requests {type: DELIVERY_CHANGED, payload: {id, number, event, sellerName, at}}
  * </pre>
  */
@@ -72,13 +73,13 @@ public class DeliveryNotifier {
       }
       switch (event.event()) {
          case "CREATED" -> toShop(order, "Новый заказ с доставкой",
-               order.getPartTitle() + " · в " + order.getRegion().inName() + " · " + order.getRecipientName(),
+               order.getPartTitle() + " · в " + order.getRegion().title() + " · " + order.getRecipientName(),
                event.event());
          case "COURIER_ORDERED" -> toBuyer(order, "Заказали курьера Ылдам",
                "Курьер заберёт посылку " + (view.pickupToday(order) ? "сегодня" : "завтра") + " · "
                      + order.getNumber(), event.event());
          case "PICKED_UP" -> toBuyer(order, "Курьер забрал посылку",
-               (order.getRegion() == DeliveryRegion.BISHKEK ? "Едет к вам" : "Едет в " + order.getRegion().inName())
+               (order.getRegion() == DeliveryRegion.BISHKEK ? "Едет к вам" : "Едет в " + order.getRegion().title())
                      + " · " + order.getNumber(), event.event());
          case "DELIVERED" -> toShop(order, "Покупатель получил посылку",
                order.getPartTitle() + " · " + order.getNumber(), event.event());
@@ -100,7 +101,9 @@ public class DeliveryNotifier {
    }
 
    private static Map<String, String> data(DeliveryOrder order, String event, String side) {
-      return Map.of("type", "DELIVERY_ORDER", "deliveryOrderId", order.getId().toString(),
+      // DELIVERY_ORDER — новый заказ, дальше DELIVERY_COURIER_ORDERED, DELIVERY_PICKED_UP, DELIVERY_DELIVERED
+      String type = "CREATED".equals(event) ? "DELIVERY_ORDER" : "DELIVERY_" + event;
+      return Map.of("type", type, "deliveryOrderId", order.getId().toString(),
             "number", order.getNumber(), "event", event, "side", side);
    }
 }

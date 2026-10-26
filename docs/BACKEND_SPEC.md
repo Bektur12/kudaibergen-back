@@ -459,15 +459,17 @@ multipart: `file` (аудио до 60 с и 15 МБ), `durationSec` (у M4A се
 - Заказ `POST /delivery-orders {partId, region, district?, address, recipientName, recipientPhone}` → 201
   `DeliveryOrderDto`. Товар в продаже, в наличии и с `shipsToRegions` (400 `DELIVERY_NOT_AVAILABLE`), не свой бокс
   (`SELF_ORDER`), район своей области (`BAD_DISTRICT`), телефон +996 (`BAD_PHONE`). Номер `KDB-000123`. В чате
-  покупателя с боксом — карточка `DELIVERY` (`payload {deliveryOrderId, number, region, price, partId}`), продавцу — пуш.
-- `GET /delivery-orders?side=BUYER|SHOP&active=true` — мои заказы; `GET /delivery-orders/{id}` — «Где посылка» /
+  покупателя с боксом — карточка `DELIVERY` (`payload {deliveryOrderId, number, region, price, partId}`, `text` —
+  «KDB-000123 · в Ош · 350 с»), продавцу — пуш.
+- `GET /delivery-orders?side=BUYER|SHOP&active=true` — мои заказы, массив до 50, новые сверху; `GET /delivery-orders/{id}` — «Где посылка» /
   «Заказ с доставкой» (`buyer` — только продавцу). `pickupToday` — курьер заберёт сегодня (упаковано до 17:30).
 - Статусы: `NEW` → `PACKED` (продавец `POST /delivery-orders/{id}/packed {weightKg, fragile}`) → `COURIER_ORDERED`
   (админка) → `PICKED_UP` (продавец `POST …/picked-up`, можно и из `PACKED`) → `DELIVERED` (покупатель
   `POST …/received` из `COURIER_ORDERED` / `PICKED_UP` или админка); `CANCELLED` — админка. Неверный статус —
   409 `BAD_STATUS`.
-- Пуши `DELIVERY_ORDER {deliveryOrderId, number, event, side}`: продавцу — CREATED («Новый заказ с доставкой»),
-  DELIVERED; покупателю — COURIER_ORDERED («Заказали курьера Ылдам»), PICKED_UP («Курьер забрал посылку»).
+- Пуши `{type, deliveryOrderId, number, event, side}`: продавцу — `DELIVERY_ORDER` («Новый заказ с доставкой»),
+  `DELIVERY_DELIVERED`; покупателю — `DELIVERY_COURIER_ORDERED` («Заказали курьера Ылдам»), `DELIVERY_PICKED_UP`
+  («Курьер забрал посылку»).
 
 ### 14.3 Админка — «Заказать курьера»
 - `GET /admin/delivery-orders?status&q&cursor&limit` (REQUESTS_VIEW) → `{items, nextCursor, counts: {all, NEW, PACKED,

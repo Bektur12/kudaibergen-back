@@ -1,12 +1,13 @@
 package kg.kudaibergen.delivery;
 
+import java.util.List;
+
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import kg.kudaibergen.common.security.AuthPrincipal;
-import kg.kudaibergen.common.web.CursorPage;
 import kg.kudaibergen.delivery.dto.DeliveryInputs;
 import kg.kudaibergen.delivery.dto.DeliveryOrderDto;
 import kg.kudaibergen.delivery.dto.DeliveryTariffsDto;
@@ -55,13 +56,11 @@ public class DeliveryController {
    @GetMapping("/delivery-orders")
    @Operation(summary = "Мои заказы с доставкой", description = """
          side = BUYER — мои как покупателя («Посылка KDB-… · В пути» на главной), SHOP — заказы моего бокса
-         (сверху «Запросов» продавца). active = true — без полученных и отменённых.""")
-   public CursorPage<DeliveryOrderDto> list(@AuthenticationPrincipal AuthPrincipal principal,
-                                            @RequestParam(defaultValue = "BUYER") DeliveryService.DeliverySide side,
-                                            @RequestParam(defaultValue = "true") boolean active,
-                                            @RequestParam(required = false) String cursor,
-                                            @RequestParam(required = false) Integer limit) {
-      return delivery.list(principal.userId(), side, active, cursor, limit);
+         (сверху «Запросов» продавца). active = true — без полученных и отменённых. До 50, новые сверху.""")
+   public List<DeliveryOrderDto> list(@AuthenticationPrincipal AuthPrincipal principal,
+                                      @RequestParam(defaultValue = "BUYER") DeliveryService.DeliverySide side,
+                                      @RequestParam(defaultValue = "true") boolean active) {
+      return delivery.list(principal.userId(), side, active);
    }
 
    @GetMapping("/delivery-orders/{id}")

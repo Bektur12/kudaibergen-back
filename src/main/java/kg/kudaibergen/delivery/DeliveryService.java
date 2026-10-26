@@ -13,7 +13,6 @@ import kg.kudaibergen.catalog.entity.Part;
 import kg.kudaibergen.chat.ChatService;
 import kg.kudaibergen.common.error.BadRequestException;
 import kg.kudaibergen.common.error.NotFoundException;
-import kg.kudaibergen.common.web.CursorPage;
 import kg.kudaibergen.delivery.dto.DeliveryInputs;
 import kg.kudaibergen.delivery.dto.DeliveryOrderDto;
 import kg.kudaibergen.delivery.dto.DeliveryTariffsDto;
@@ -38,6 +37,7 @@ public class DeliveryService {
    /** Какие заказы показать в списке. */
    public enum DeliverySide { BUYER, SHOP }
 
+   static final int LIST_LIMIT = 50;
    private static final Set<DeliveryStatus> ACTIVE = EnumSet.of(DeliveryStatus.NEW, DeliveryStatus.PACKED,
          DeliveryStatus.COURIER_ORDERED, DeliveryStatus.PICKED_UP);
 
@@ -93,8 +93,9 @@ public class DeliveryService {
       card.put("region", order.getRegion().name());
       card.put("price", order.getPrice());
       card.put("partId", part.getId());
-      String text = "Заказ с доставкой " + order.getNumber() + " · " + part.getTitle() + " · в "
-            + order.getRegion().inName() + (order.getPrice() == null ? "" : " · " + order.getPrice() + " с");
+      // подзаголовок карточки «Заказ с доставкой»: «KDB-000123 · в Ош · 350 с»
+      String text = order.getNumber() + " · в " + order.getRegion().title()
+            + (order.getPrice() == null ? "" : " · " + order.getPrice() + " с");
       order.attachChat(chats.openForDelivery(buyerId, shop.getId(), text, card));
       events.publishEvent(new DeliveryEvents.DeliveryChanged(order.getId(), "CREATED"));
       return view.dto(order, false);
@@ -107,19 +108,15 @@ public class DeliveryService {
       return view.dto(order, side(userId, order) == DeliverySide.SHOP);
    }
 
+   /** Последние заказы (до 50), новые сверху: на главной покупателя и сверху «Запросов» продавца. */
    @Transactional(readOnly = true)
-   public CursorPage<DeliveryOrderDto> list(Long userId, DeliverySide side, boolean activeOnly, String cursor, Integer limit) {
-      int size = CursorPage.limit(limit);
-      long beforeId = cursor == null || cursor.isBlank() ? Long.MAX_VALUE : CursorPage.afterId(cursor);
+   public List<DeliveryOrderDto> list(Long userId, DeliverySide side, boolean activeOnly) {
       Set<DeliveryStatus> statuses = activeOnly ? ACTIVE : EnumSet.allOf(DeliveryStatus.class);
-      PageRequest page = PageRequest.of(0, size + 1);
+      PageRequest page = PageRequest.of(0, LIST_LIMIT);
       List<DeliveryOrder> rows = side == DeliverySide.SHOP
-            ? orders.findOfShop(shopAccess.requireMember(userId).shop().getId(), statuses, beforeId, page)
-            : orders.findOfBuyer(userId, statuses, beforeId, page);
-      boolean more = rows.size() > size;
-      List<DeliveryOrder> items = more ? rows.subList(0, size) : rows;
-      return new CursorPage<>(items.stream().map(order -> view.dto(order, side == DeliverySide.SHOP)).toList(),
-            more ? CursorPage.encode(String.valueOf(items.get(items.size() - 1).getId())) : null);
+            ? orders.findOfShop(shopAccess.requireMember(userId).shop().getId(), statuses, Long.MAX_VALUE, page)
+            : orders.findOfBuyer(userId, statuses, Long.MAX_VALUE, page);
+      return rows.stream().map(order -> view.dto(order, side == DeliverySide.SHOP)).toList();
    }
 
    /** «Получил» — покупатель, когда курьер привёз. */
