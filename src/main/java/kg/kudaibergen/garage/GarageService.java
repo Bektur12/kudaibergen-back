@@ -127,7 +127,8 @@ public class GarageService {
       }
    }
 
-   private static short checkedYear(CarModel model, int year) {
+   /** Год входит в годы выпуска модели, иначе 400 YEAR_OUT_OF_RANGE. */
+   public static short checkedYear(CarModel model, int year) {
       if (!model.covers(year)) {
          ApiException error = new BadRequestException("YEAR_OUT_OF_RANGE",
                model.label() + " выпускалась " + range(model) + ", выберите год из этого диапазона");

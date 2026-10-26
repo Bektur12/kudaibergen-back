@@ -30,6 +30,7 @@ import kg.kudaibergen.common.web.CursorPage;
 import kg.kudaibergen.garage.GarageService;
 import kg.kudaibergen.garage.VehicleDirectory;
 import kg.kudaibergen.garage.entity.Car;
+import kg.kudaibergen.garage.entity.CarModel;
 import kg.kudaibergen.market.MarketMapService;
 import kg.kudaibergen.market.MarketSnapshot;
 import kg.kudaibergen.media.Media;
@@ -170,7 +171,7 @@ public class RequestService {
     */
    @Transactional
    public RequestDetailDto create(Long buyerId, RequestInputs.CreateRequest input, Lang lang) {
-      Car car = garage.getOwned(input.carId(), buyerId);
+      RequestCar car = car(buyerId, input);
       Targets targets = targets(input.target() == null ? RequestTarget.MARKET : input.target(), input.targetRowIds(),
             input.targetContainerIds());
       PartHint hint = input.hintId() == null ? null : hints.findById(input.hintId())
@@ -188,7 +189,7 @@ public class RequestService {
       String text = requestText(input.text(), voice, !photoIds.isEmpty(), lang);
       Instant now = clock.instant();
       checkLimits(buyerId, now);
-      List<Shop> found = finder.find(buyerId, car.getBrand().getId(), targets.target(), targets.rowIds(),
+      List<Shop> found = finder.find(buyerId, car.brandId(), targets.target(), targets.rowIds(),
             targets.containerIds());
       if (found.isEmpty()) {
          // запрос, который никто не увидит, только занимает лимит и ждёт впустую — клиент предлагает другой выбор
@@ -196,11 +197,27 @@ public class RequestService {
       }
 
       RequestDuration duration = input.duration() == null ? RequestDuration.MIN_30 : input.duration();
-      PartRequest request = requests.save(new PartRequest(buyerId, car.getId(), car.getBrand().getId(),
-            car.getModel().getId(), car.getYear(), text, categoryId, input.hintId(), targets.target(),
+      PartRequest request = requests.save(new PartRequest(buyerId, car.carId(), car.brandId(),
+            car.modelId(), car.year(), text, categoryId, input.hintId(), targets.target(),
             targets.rowIds(), targets.containerIds(), photoIds, voice == null ? null : voice.getId(), duration, now));
       dispatch(request, found, Set.of(), now);
       return mapper.detail(request, 0, lang);
+   }
+
+   /** Машина запроса: из гаража или просто модель и год (машина клиента у мастера СТО). */
+   record RequestCar(Long carId, Long brandId, Long modelId, short year) {
+   }
+
+   private RequestCar car(Long buyerId, RequestInputs.CreateRequest input) {
+      if (input.carId() != null) {
+         Car car = garage.getOwned(input.carId(), buyerId);
+         return new RequestCar(car.getId(), car.getBrand().getId(), car.getModel().getId(), car.getYear());
+      }
+      if (input.modelId() == null || input.year() == null) {
+         throw new BadRequestException("CAR_REQUIRED", "Выберите машину: из гаража или марку, модель и год");
+      }
+      CarModel model = directory.model(input.modelId());
+      return new RequestCar(null, model.getBrandId(), model.getId(), GarageService.checkedYear(model, input.year()));
    }
 
    /**

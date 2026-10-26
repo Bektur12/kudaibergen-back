@@ -393,7 +393,9 @@ multipart: `file` (аудио до 60 с и 15 МБ), `durationSec` (у M4A се
 Не понятое — `null`: поле без пометки «из голоса».
 
 ### 13.2 Запрос (04, 05, 08)
-- `POST /requests`: `text` необязателен; нужно хоть что-то: фото (`mediaIds`), голосовое (`voiceMediaId`) или текст
+- `POST /requests`: машина — `carId` из гаража **или** `modelId` + `year` без гаража (мастер СТО ищет запчасть для
+  машины клиента; в гараж не сохраняется; 400 `CAR_REQUIRED`, `YEAR_OUT_OF_RANGE`). Счётчик — `GET /requests/estimate?brandId=`.
+  `text` необязателен; нужно хоть что-то: фото (`mediaIds`), голосовое (`voiceMediaId`) или текст
   от 3 символов (400 `TEXT_REQUIRED` / `TEXT_TOO_SHORT`). Без текста подпись — распознанное голосовое, иначе
   «Голосовой запрос» / «Запчасть по фото». `target` по умолчанию `MARKET`.
 - `RequestDetailDto.voice`, `IncomingRequestDto.voice` — голосовое покупателя. `RequestSummaryDto.minPrice` — «3 есть · от 2 900 с».

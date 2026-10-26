@@ -25,7 +25,8 @@ public final class RequestInputs {
    }
 
    /**
-    * «Спросить весь рынок» (04). Машина — из гаража (новую клиент сначала добавляет через POST /me/cars).
+    * «Спросить весь рынок» (04). Машина — carId из гаража или modelId + year без гаража: мастер СТО ищет запчасть
+    * для машины клиента, её в гараж не сохраняем.
     * Что нужно — фото (mediaIds, POST /media/photos purpose=REQUEST, до 3), голосовое (voiceMediaId,
     * POST /media/voices purpose=REQUEST) или текст 3–200 символов; хотя бы что-то одно. Без текста запрос
     * подписывается тем, что распознали в голосовом.
@@ -33,7 +34,9 @@ public final class RequestInputs {
     * «Контейнерам» (1–30). duration по умолчанию — 30 минут. hintId — чип подсказки; categoryId тогда из подсказки.
     */
    public record CreateRequest(
-         @NotNull(message = "Выберите машину") Long carId,
+         Long carId,
+         Long modelId,
+         @Min(value = 1950, message = "Год не раньше 1950") @Max(value = 2100, message = "Некорректный год") Integer year,
          @Size(max = 200, message = "Не длиннее 200 символов") String text,
          Long categoryId,
          Long hintId,
