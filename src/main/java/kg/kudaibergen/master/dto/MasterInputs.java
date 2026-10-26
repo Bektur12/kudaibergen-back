@@ -62,9 +62,6 @@ public final class MasterInputs {
          @Pattern(regexp = "|" + PhoneFormat.E164_KG, message = PhoneFormat.MESSAGE) String phone) {
    }
 
-   /** «● Принимаю» (39): выключено — заявки не приходят. */
-   public record SetAccepting(@NotNull Boolean accepting) {
-   }
 
    /** Фото работ и места: до 8, первое — обложка (purpose=MASTER). */
    public record Photos(@NotNull @Size(max = 8, message = "Не больше 8 фото") List<Long> mediaIds) {

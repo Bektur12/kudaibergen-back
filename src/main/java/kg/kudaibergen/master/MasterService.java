@@ -149,13 +149,6 @@ public class MasterService {
    }
 
    @Transactional
-   public MyMasterDto setAccepting(Long userId, boolean accepting, Lang lang) {
-      Master master = requireMine(userId);
-      master.setAccepting(accepting);
-      return mapper.mine(master, lang);
-   }
-
-   @Transactional
    public MyMasterDto setAvatar(Long userId, Long mediaId, Lang lang) {
       Master master = requireMine(userId);
       if (mediaId != null) {

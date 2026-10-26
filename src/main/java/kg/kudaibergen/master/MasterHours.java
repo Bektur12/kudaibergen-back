@@ -12,7 +12,8 @@ import org.springframework.stereotype.Component;
 
 /**
  * Принимает ли мастер прямо сейчас (39): действует, «Принимаю» включено, рабочий день и часы.
- * Только такие получают заявки. app.shops.ignore-working-hours действует и здесь — для проверки ночью.
+ * app.shops.ignore-working-hours действует и здесь — для проверки ночью. Заявки получают и вне часов работы;
+ * переключателя «Принимаю» больше нет — заявки приходят каждому действующему мастеру.
  */
 @Component
 public class MasterHours {
@@ -26,13 +27,18 @@ public class MasterHours {
    }
 
    public boolean openNow(Master master) {
-      return master.isActive() && master.isAccepting() && withinSchedule(master, ZonedDateTime.now(clock));
+      return master.isActive() && withinSchedule(master, ZonedDateTime.now(clock));
+   }
+
+   /** Получает ли заявки: мастер действует — в любое время, часы работы не учитываются. */
+   public boolean receivesRequests(Master master) {
+      return master.isActive();
    }
 
    public OpenStateDto state(Master master) {
       ZonedDateTime now = ZonedDateTime.now(clock);
       boolean open = openNow(master);
-      return new OpenStateDto(open, !master.isAccepting(), master.getOpenFrom(), master.getOpenTo(),
+      return new OpenStateDto(open, false, master.getOpenFrom(), master.getOpenTo(),
             WeekDays.fromMask(master.getWorkDays()), open ? null : nextOpening(master, now));
    }
 

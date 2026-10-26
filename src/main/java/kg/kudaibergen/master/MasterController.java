@@ -82,15 +82,6 @@ public class MasterController {
       return masters.update(principal.userId(), request, Langs.fromHeader(language));
    }
 
-   @PatchMapping("/my/master/accepting")
-   @Operation(summary = "«● Принимаю» (39)", description = "Выключено — заявки не приходят")
-   public MyMasterDto accepting(@AuthenticationPrincipal AuthPrincipal principal,
-                                @Valid @RequestBody MasterInputs.SetAccepting request,
-                                @Parameter(hidden = true) @RequestHeader(value = HttpHeaders.ACCEPT_LANGUAGE,
-                                      required = false) String language) {
-      return masters.setAccepting(principal.userId(), request.accepting(), Langs.fromHeader(language));
-   }
-
    @PutMapping("/my/master/avatar")
    @Operation(summary = "Аватар мастера", description = "mediaId из POST /media/photos (purpose=MASTER или AVATAR)")
    public MyMasterDto avatar(@AuthenticationPrincipal AuthPrincipal principal,

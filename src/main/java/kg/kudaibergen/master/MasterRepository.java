@@ -20,6 +20,6 @@ public interface MasterRepository extends JpaRepository<Master, Long> {
     * Кому может уйти заявка: действующий мастер, «Принимаю» включено, услуга в его списке.
     * Марку, страну, расстояние и часы досматривает ServiceRecipientFinder (мастеров — сотни).
     */
-   @Query("select m from Master m where m.status = :status and m.accepting = true and :service member of m.services")
+   @Query("select m from Master m where m.status = :status and :service member of m.services")
    List<Master> findReceiving(@Param("status") ShopStatus status, @Param("service") String service);
 }

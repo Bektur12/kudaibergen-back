@@ -343,7 +343,7 @@ enum QuickReply {                                                   // быст�
   "radiusKm": 5, "mobile": false, "openFrom": "09:00", "openTo": "19:00", "workDays": ["TUESDAY", "…"], "phone": "+996…" }
 ```
   `origins` пусто — любые машины; `allBrands` — все марки; радиус 1–30 км (по умолчанию 5). Проверка мастера — как у магазинов: сейчас выключена, профиль сразу `ACTIVE`.
-- `GET /my/master` (нет — 404 `NO_MASTER` → вести на [38]), `PATCH /my/master` (null — не менять), `PATCH /my/master/accepting {accepting}` — «● Принимаю», `PUT/DELETE /my/master/avatar {mediaId}`, `PUT /my/master/photos {mediaIds}` (до 8, первое — обложка, `purpose=MASTER`).
+- `GET /my/master` (нет — 404 `NO_MASTER` → вести на [38]), `PATCH /my/master` (null — не менять), `PUT/DELETE /my/master/avatar {mediaId}`, `PUT /my/master/photos {mediaIds}` (до 8, первое — обложка, `purpose=MASTER`).
 - Для клиента: `GET /masters/{id}` → `{id, publicId, name, avatarUrl?, rating, reviewsCount, services[], allBrands, brands[], origins[], address, lat, lng, radiusKm, mobile, open {openNow, …}, phone?, photos[]}`; `GET /masters/public/{publicId}` — ссылка «Поделиться»; `GET /masters/{id}/reviews`.
 - Один человек может быть и продавцом, и мастером. Вкладки мастера: Заявки · Чаты (`GET /chats?as=MASTER`) · Статистика · Профиль.
 
@@ -356,7 +356,7 @@ enum QuickReply {                                                   // быст�
   "lat": 42.851, "lng": 74.63, "address": "ул. Ахунбаева 98", "radiusKm": 5, "duration": null }
 ```
   Машина — `carId` из гаража или `brandId` + `modelId?` + `year?` + `engineVolume?` + `fuel?` + `origin?` (страна по умолчанию — по марке). Описание 10–500 символов, до 5 фото и видео вместе (`purpose=SERVICE`; видео до 30 с — `POST /media/videos`). `atTime` — только при `when = AT_TIME`. `lat/lng` обязательны всегда: от этой точки считается расстояние до мастеров. Некому отправить — 409 `NO_RECIPIENTS`.
-- **Кому уходит:** мастер `ACTIVE`, «Принимаю» включено, сейчас его рабочее время, услуга в его списке, марка — в его марках (или «Все марки»), страна — в его списке (или список пуст, или «не знаю»), расстояние от мастера до точки клиента ≤ меньшего из радиусов заявки и мастера.
+- **Кому уходит:** мастер `ACTIVE` (переключателя «Принимаю» нет, часы работы не важны), услуга в его списке, марка — в его марках (или «Все марки»), страна — в его списке (или список пуст, или «не знаю»), расстояние от мастера до точки клиента ≤ меньшего из радиусов заявки и мастера.
 - Вложения заявки: `photos[]` — только фото (как раньше), `media[]` — всё по порядку, фото и видео: `MediaItemDto {id, kind: PHOTO|VIDEO, url, thumbUrl?, width?, height?, durationSec?}`. У видео без обложки `thumbUrl = null` — показывать первый кадр.
 - `GET /service-requests/my?cursor=` [05б] → `{id, service, description, carLabel, status, state, canHelpCount, createdAt, expiresAt}`. `state`: `WAITING` / `HAS_OFFERS` — активна, `NO_OFFERS` — время вышло без откликов (предложить «Расширить радиус»), `EXPIRED` — время вышло, отклики есть, `CLOSED`.
 - `GET /service-requests/{id}` → `{…, service, car {brand, modelLabel?, year?, engineVolume?, fuel?, origin, label}, photos[], media[], when, atTime?, where, lat, lng, address?, radiusKm, status, state, duration, expiresAt, extendedTimes, canExtend, canWiden, recipientsCount, seenCount, canHelpCount, closedWithMasterId?, urgent}`.

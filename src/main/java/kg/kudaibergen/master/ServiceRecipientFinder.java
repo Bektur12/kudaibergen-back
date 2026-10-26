@@ -11,7 +11,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Кому уходит заявка (12.4): мастер действует, «Принимаю» включено, сейчас его рабочее время, услуга в его
+ * Кому уходит заявка (12.4): мастер действует (часы работы не важны), услуга в его
  * списке, марка — в его марках (или «Все марки»), страна машины — в его списке (или список пуст, или «не знаю»),
  * расстояние от мастера до клиента не больше меньшего из радиусов заявки и мастера. Свой профиль клиенту не шлём.
  */
@@ -36,7 +36,7 @@ public class ServiceRecipientFinder {
       return masters.findReceiving(ShopStatus.ACTIVE, service).stream()
             .filter(master -> !Objects.equals(master.getOwnerId(), buyerId))
             .filter(master -> master.worksWith(brandId, origin))
-            .filter(hours::openNow)
+            .filter(hours::receivesRequests)
             .map(master -> new Match(master, Distances.meters(lat, lng, master.getLat(), master.getLng())))
             .filter(match -> match.distanceM() <= Math.min(radiusKm, match.master().getRadiusKm()) * 1000)
             .sorted(Comparator.comparingInt(Match::distanceM))
