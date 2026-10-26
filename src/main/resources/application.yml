@@ -117,7 +117,6 @@ app:
     # проверка места продавца (QR, SMS арендатора, админ). false — магазин действует сразу после регистрации
     verification-required: ${SHOP_VERIFICATION_REQUIRED:false}
     # только для разработки: боксы «открыты» в любое время, запросы доходят и ночью. В проде — false
-    ignore-working-hours: ${SHOP_IGNORE_WORKING_HOURS:false}
   admin:
     # домены веб-админки для CORS, через запятую; в проде — точный адрес, например https://admin.kudaibergen.kg
     origins: ${ADMIN_ORIGINS:http://localhost:*,http://127.0.0.1:*}

@@ -71,7 +71,6 @@ python3 scripts/demo_seed.py --yes     # нужны psycopg2 и Pillow
 статусах, спор за контейнер, предупреждение, блокировки и жалоба на мастера; магазины «на проверке» видны только
 при `SHOP_VERIFICATION_REQUIRED=true` (иначе при старте подтверждаются сами). Только для локальной базы.
 
-Проверить запросы ночью: `SHOP_IGNORE_WORKING_HOURS=true` — боксы считаются открытыми в любое время.
 
 ### Админка: первый суперадмин
 
@@ -125,7 +124,6 @@ ADMIN_BOOTSTRAP_PHONE=+996555000099 ADMIN_BOOTSTRAP_NAME="Имя Фамилия"
 | `SMS_URL`, `SMS_LOGIN`, `SMS_PASSWORD`, `SMS_SENDER` | шлюз nikita.kg | — |
 | `CENTRIFUGO_API_URL`, `CENTRIFUGO_API_KEY` | Server API Centrifugo (чат) | localhost:8000/api, dev-ключ |
 | `CENTRIFUGO_TOKEN_SECRET` | HMAC токенов клиента Centrifugo, тот же в самом Centrifugo | dev-значение, **в проде обязателен** |
-| `SHOP_IGNORE_WORKING_HOURS` | только для разработки: боксы открыты в любое время, запросы доходят и ночью | `false` |
 | `SHOP_VERIFICATION_REQUIRED` | проверять место продавца (QR, SMS арендатора, админ) до того, как магазин начнёт работать | `false` — магазин действует сразу |
 | `ADMIN_ORIGINS` | домены веб-админки для CORS, через запятую | `http://localhost:*,http://127.0.0.1:*` |
 | `ADMIN_BOOTSTRAP_PHONE`, `ADMIN_BOOTSTRAP_NAME` | первый суперадмин (создаётся при старте, если его нет) | пусто |

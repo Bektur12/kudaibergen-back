@@ -1,13 +1,9 @@
 package kg.kudaibergen.shop;
 
-import java.time.Clock;
 import java.time.DayOfWeek;
-import java.time.LocalTime;
-import java.time.ZonedDateTime;
 import java.util.EnumSet;
 import java.util.Set;
 
-import kg.kudaibergen.common.config.ClockConfig;
 import kg.kudaibergen.common.error.BadRequestException;
 import kg.kudaibergen.shop.dto.OpenStateDto;
 import kg.kudaibergen.shop.entity.Shop;
@@ -20,15 +16,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class ShopRulesTest {
 
-   /** Вторник, 29.09.2026, Бишкек. */
-   private static ShopHours at(int hour, int minute) {
-      return at(2026, 9, 29, hour, minute);
-   }
-
-   private static ShopHours at(int year, int month, int day, int hour, int minute) {
-      ZonedDateTime now = ZonedDateTime.of(year, month, day, hour, minute, 0, 0, ClockConfig.MARKET_ZONE);
-      return new ShopHours(Clock.fixed(now.toInstant(), ClockConfig.MARKET_ZONE));
-   }
+   private final ShopHours hours = new ShopHours();
 
    private static Shop activeShop() {
       Shop shop = new Shop(1L, "Автодеталь Азамат", 10L);
@@ -37,42 +25,18 @@ class ShopRulesTest {
    }
 
    @Test
-   void открытВРабочиеЧасыДо17() {
-      OpenStateDto state = at(12, 0).state(activeShop());
+   void действующийОткрытВсегдаБезЧасовРаботы() {
+      OpenStateDto state = hours.state(activeShop());
       assertThat(state.openNow()).isTrue();
-      assertThat(state.openTo()).isEqualTo(LocalTime.of(17, 0));
+      assertThat(state.closedManually()).isFalse();
       assertThat(state.opensAt()).isNull();
-   }
-
-   @Test
-   void вечеромЗакрытИОткроетсяЗавтраВ8() {
-      OpenStateDto state = at(17, 0).state(activeShop());
-      assertThat(state.openNow()).isFalse();
-      assertThat(state.opensAt().toLocalDateTime()).isEqualTo(java.time.LocalDateTime.of(2026, 9, 30, 8, 0));
-   }
-
-   @Test
-   void утромДоОткрытияОткроетсяСегодня() {
-      OpenStateDto state = at(7, 30).state(activeShop());
-      assertThat(state.openNow()).isFalse();
-      assertThat(state.opensAt().toLocalDateTime()).isEqualTo(java.time.LocalDateTime.of(2026, 9, 29, 8, 0));
-   }
-
-   @Test
-   void выходные() {
-      Shop weekdaysOnly = activeShop();
-      weekdaysOnly.setSchedule(null, null, EnumSet.range(DayOfWeek.MONDAY, DayOfWeek.FRIDAY));
-      // суббота, 3 октября
-      OpenStateDto saturday = at(2026, 10, 3, 12, 0).state(weekdaysOnly);
-      assertThat(saturday.openNow()).isFalse();
-      assertThat(saturday.opensAt().getDayOfWeek()).isEqualTo(DayOfWeek.MONDAY);
    }
 
    @Test
    void непроверенныйМагазинНикогдаНеОткрыт() {
       Shop pending = new Shop(1L, "Korea Plus", 11L);
       assertThat(pending.getStatus()).isEqualTo(ShopStatus.PENDING_VERIFICATION);
-      assertThat(at(12, 0).openNow(pending)).isFalse();
+      assertThat(hours.openNow(pending)).isFalse();
    }
 
    @Test

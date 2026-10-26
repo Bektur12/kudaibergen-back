@@ -38,12 +38,6 @@ public class PartSearch {
    private static final double TYPO_SIMILARITY = 0.45;
    private static final int MIN_OEM_LENGTH = 4;
 
-   /** Бокс открыт сейчас: рабочий день и часы по Бишкеку (та же логика, что ShopHours). */
-   static final String OPEN_NOW_SQL = """
-         (now() at time zone 'Asia/Bishkek')::time >= s.open_from
-         and (now() at time zone 'Asia/Bishkek')::time < s.open_to
-         and (s.work_days & (1 << (extract(isodow from now() at time zone 'Asia/Bishkek')::int - 1))) > 0""";
-
    private final NamedParameterJdbcTemplate jdbc;
    private final SynonymRepository synonyms;
 
@@ -150,7 +144,8 @@ public class PartSearch {
          where.add("p.quantity > 0");
       }
       if (query.openOnly()) {
-         where.add("(" + OPEN_NOW_SQL + ")");
+         // часов работы нет — открыт каждый действующий магазин
+         where.add("s.status = 'ACTIVE'");
       }
       if (query.withVideo()) {
          where.add("p.video_media_id is not null");
