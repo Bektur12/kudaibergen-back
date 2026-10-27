@@ -38,7 +38,8 @@ public class MasterMapper {
 
    public MasterCardDto card(Master master, String avatarUrl) {
       return new MasterCardDto(master.getId(), master.getName(), avatarUrl, master.getRating(),
-            master.getReviewsCount(), master.getAddress(), master.isMobile(), hours.openNow(master), master.getPhone());
+            master.getReviewsCount(), master.getAddress(), master.isMobile(), hours.openNow(master), master.getPhone(),
+            master.getLat(), master.getLng());
    }
 
    /** Карточки пачкой: аватары одним запросом. */
