@@ -93,9 +93,8 @@ public class DeliveryService {
       card.put("region", order.getRegion().name());
       card.put("price", order.getPrice());
       card.put("partId", part.getId());
-      // подзаголовок карточки «Заказ с доставкой»: «KDB-000123 · в Ош · 350 с»
-      String text = order.getNumber() + " · в " + order.getRegion().title()
-            + (order.getPrice() == null ? "" : " · " + order.getPrice() + " с");
+      // подзаголовок карточки «Заказ с доставкой»: «KDB-000123 · в Ош» — цену доставки называет Ылдам
+      String text = order.getNumber() + " · в " + order.getRegion().title();
       order.attachChat(chats.openForDelivery(buyerId, shop.getId(), text, card));
       events.publishEvent(new DeliveryEvents.DeliveryChanged(order.getId(), "CREATED"));
       return view.dto(order, false);
