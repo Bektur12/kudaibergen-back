@@ -73,6 +73,35 @@ SHOPS = [
     ("Салон и аксессуары", "Д", 8, ["toyota", "lexus", "honda"], ["interior", "other"], ("09:00", "17:00"), "Гульнара", 0.2),
 ]
 
+# Магазины и центры вне рынка (свой адрес и точка на карте): (название, адрес, lat, lng, марки, категории, владелец)
+STORES = [
+    ("Восток Моторс", "пр. Мира 305, Бишкек", 42.8239, 74.5905, ["toyota", "lexus"],
+     ["suspension", "brakes", "engine", "service", "lights", "cooling"], "Арсен"),
+    ("Сеул Авто Центр", "ул. Ибраимова 115, Бишкек", 42.8667, 74.6194, ["hyundai", "kia"],
+     ["suspension", "brakes", "engine", "service", "body"], "Тимур"),
+    ("Евро Парт", "ул. Льва Толстого 36, Бишкек", 42.8655, 74.5698, ["mercedes-benz", "bmw", "volkswagen", "audi"],
+     ["engine", "suspension", "electrics", "cooling"], "Эдуард"),
+]
+
+# Тюнинг и красота авто — у них товары с видео («Видео с рынка»): (название, ряд или None, бокс / адрес, lat, lng, владелец)
+VIDEO_SHOPS = [
+    ("Detailing Lab", None, "ул. Ахунбаева 98, Бишкек", 42.8441, 74.6123, "Ислам"),
+    ("Auto Style KG", "Д", 15, None, None, "Нурис"),
+    ("Тюнинг Ателье 312", None, "ул. Фрунзе 520, Бишкек", 42.8812, 74.6271, "Бекжан"),
+]
+# (магазин из VIDEO_SHOPS, тема фото из scripts/demo_videos, название, цена, подписи в ролике, «Отправлю в регионы»)
+VIDEO_POSTS = [
+    (0, "polish", "Полировка кузова и керамика 9H", 12000, "Керамика 9H|Блеск как из салона|Защита на 3 года", False),
+    (0, "tint", "Тонировка стёкол, плёнка с гарантией", 4500, "Тонировка за 2 часа|Без пузырей|Гарантия 5 лет", False),
+    (0, "wrap", "Оклейка плёнкой: мат, глянец, хамелеон", 45000, "Новый цвет за 2 дня|Мат · глянец · хамелеон|Защита заводской краски", False),
+    (1, "wheels", "Литые диски R18, комплект", 38000, "Литые диски R18|Комплект из 4|Подберём под вашу машину", True),
+    (1, "lighting", "LED-фары и подсветка", 9500, "LED-фары|Ярче в 3 раза|Установка за час", True),
+    (1, "interior", "Перетяжка салона кожей", 65000, "Салон как новый|Натуральная кожа|Строчка на выбор", False),
+    (2, "audio", "Аудиосистема под ключ", 28000, "Звук как на концерте|Сабвуфер и усилитель|Установка в день обращения", True),
+    (2, "bodykit", "Обвес и спойлер", 22000, "Спорт-обвес|Спойлер в цвет кузова|Покраска и установка", True),
+]
+VIDEO_BRANDS = ["toyota", "lexus", "honda", "hyundai", "kia", "mercedes-benz", "bmw", "nissan"]
+
 # Модели, которые чаще встречаются на рынке (по slug марки → подстроки названия модели)
 POPULAR_MODELS = {
     "toyota": ["Camry 50", "Camry 40", "Camry 70", "Corolla E150", "Prius 30", "RAV4 XA30", "Land Cruiser Prado 150",
@@ -429,6 +458,67 @@ def save_media(cur, upload_dir, owner_id, purpose, img):
     return cur.fetchone()[0]
 
 
+
+VIDEO_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "demo_videos")
+VIDEO_MAKER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "make_demo_video.swift")
+LOGO_COLORS = [(29, 70, 191), (22, 128, 61), (190, 39, 45), (32, 31, 29), (115, 52, 180), (214, 104, 22), (13, 116, 144)]
+
+
+def shop_logo(name):
+    """Логотип магазина: цветной круг-градиент с инициалами (как у настоящих бирок на рынке)."""
+    color = LOGO_COLORS[sum(map(ord, name)) % len(LOGO_COLORS)]
+    img = Image.new("RGB", (1080, 1080), color)
+    d = ImageDraw.Draw(img)
+    for y in range(1080):
+        k = y / 1080
+        d.line([(0, y), (1080, y)], fill=tuple(int(c * (1.15 - .45 * k)) if c * 1.15 < 255 else 255 for c in color))
+    d.ellipse([90, 90, 990, 990], outline=(255, 255, 255), width=18)
+    words = [w for w in name.replace("&", " ").replace("—", " ").split() if w[0].isalnum()]
+    letters = "".join(w[0] for w in words[:2]).upper() or name[:2].upper()
+    f = font(FONT_BOLD, 420 if len(letters) == 1 else 340)
+    box = d.textbbox((0, 0), letters, font=f)
+    d.text(((1080 - (box[2] - box[0])) / 2 - box[0], (1080 - (box[3] - box[1])) / 2 - box[1]), letters, font=f, fill=(255, 255, 255))
+    return img
+
+
+def shop_banner(name, photo_path):
+    """Баннер профиля: фото по профилю магазина, затемнённое, с названием внизу."""
+    base = Image.open(photo_path).convert("RGB").resize((1080, 1080)) if photo_path else shop_logo(name)
+    base = base.filter(ImageFilter.GaussianBlur(1))
+    shade = Image.new("RGB", base.size, (0, 0, 0))
+    mask = Image.linear_gradient("L").resize(base.size).point(lambda v: int(v * .75))
+    base = Image.composite(shade, base, mask)
+    d = ImageDraw.Draw(base)
+    d.text((60, 900), name, font=font(FONT_BOLD, 84), fill=(255, 255, 255))
+    return base
+
+
+def save_video(cur, upload_dir, owner_id, topic, captions):
+    """Ролик 12 с из фото темы (make_demo_video.swift) → media VIDEO с обложкой; нет фото — None."""
+    folder = os.path.join(VIDEO_DIR, topic)
+    photos = sorted(os.path.join(folder, f) for f in os.listdir(folder) if f.endswith(".jpg")) if os.path.isdir(folder) else []
+    if not photos:
+        return None
+    key = f"part/video/{uuid.uuid4()}"
+    video_path = os.path.join(upload_dir, key + ".mp4")
+    poster_tmp = os.path.join(upload_dir, key + "-poster.jpg")
+    os.makedirs(os.path.dirname(video_path), exist_ok=True)
+    import subprocess
+    subprocess.run(["swift", VIDEO_MAKER, video_path, poster_tmp, captions, *photos[:4]], check=True,
+                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    poster = Image.open(poster_tmp).convert("RGB")
+    os.remove(poster_tmp)
+    keys = {}
+    for px, size in ((1080, (720, 1280)), (320, (180, 320))):
+        path = os.path.join(upload_dir, f"{key}-{px}.jpg")
+        (poster if px == 1080 else poster.resize(size, Image.LANCZOS)).save(path, "JPEG", quality=85)
+        keys[px] = f"{key}-{px}.jpg"
+    cur.execute("""insert into media (owner_id, purpose, kind, file_key, mime_type, duration_sec, key_1080, key_320, width, height,
+                                      size_bytes, created_at)
+                   values (%s, 'PART', 'VIDEO', %s, 'video/mp4', 12, %s, %s, 720, 1280, %s, %s) returning id""",
+                (owner_id, key + ".mp4", keys[1080], keys[320], os.path.getsize(video_path), NOW - timedelta(days=5)))
+    return cur.fetchone()[0]
+
 # ─────────────────────────── заливка ───────────────────────────
 
 def main():
@@ -452,7 +542,7 @@ def main():
     # на автора). Поэтому служебные таблицы — TRUNCATE (на них никто не ссылается), а пользователи и медиа — DELETE:
     # каскады и SET NULL внешних ключей уберут их данные и оставят справочники
     cur.execute("""truncate idempotency_keys, device_tokens, refresh_tokens, complaints, container_disputes, sanctions,
-                            broadcasts, tenant_imports, admin_audit_log, map_drafts cascade""")
+                            broadcasts, tenant_imports, admin_audit_log, map_drafts, delivery_orders cascade""")
     cur.execute("delete from users")
     cur.execute("delete from media")
     for sub in os.listdir(upload_dir) if os.path.isdir(upload_dir) else []:
@@ -547,6 +637,30 @@ def main():
         staff = add_user(phone("700", 190000 + shop["id"] % 1000), staff_name, "SELLER", NOW - timedelta(days=30))
         cur.execute("insert into shop_members (shop_id, user_id, role, created_at) values (%s, %s, 'STAFF', now())", (shop["id"], staff))
 
+    # магазины и центры вне рынка — свой адрес и точка, без контейнера
+    for n, (name, address, lat, lng, brands, cats, owner_name) in enumerate(STORES, start=1):
+        created = NOW - timedelta(days=RNG.randint(30, 120))
+        owner = add_user(phone("700", 150000 + n), owner_name, "SELLER", created)
+        cur.execute("""insert into shops (owner_id, name, container_id, address, lat, lng, status, verified_at, open_from, open_to,
+                                          work_days, is_open, phone, phone_visible, rating, reviews_count, created_at, updated_at, public_id)
+                       values (%s, %s, null, %s, %s, %s, 'ACTIVE', %s, '09:00', '19:00', 127, true, %s, true, 0, 0, %s, %s, %s)
+                       returning id""",
+                    (owner, name, address, lat, lng, created, phone("700", 150000 + n), created, created, public_id()))
+        sid = cur.fetchone()[0]
+        cur.execute("insert into shop_members (shop_id, user_id, role, created_at) values (%s, %s, 'OWNER', %s)", (sid, owner, created))
+        execute_values(cur, "insert into shop_brands (shop_id, brand_id) values %s", [(sid, brand_id[b]) for b in brands])
+        execute_values(cur, "insert into shop_categories (shop_id, category_id) values %s", [(sid, category_id[c]) for c in cats])
+        shops.append(dict(id=sid, name=name, owner=owner, brands=brands, cats=cats, used=0.0, row=None, container=None,
+                          row_code=None, number=None, parts=[]))
+
+    # логотипы и один баннер у каждого магазина
+    for shop in shops:
+        cur.execute("update shops set avatar_media_id = %s where id = %s",
+                    (save_media(cur, upload_dir, shop["owner"], "AVATAR", shop_logo(shop["name"])), shop["id"]))
+        sample = next((real_photos(item[0]) for cat in shop["cats"] for item in CATALOG[cat] if real_photos(item[0])), [])
+        banner = save_media(cur, upload_dir, shop["owner"], "SHOP", shop_banner(shop["name"], sample[0] if sample else None))
+        cur.execute("insert into shop_photos (shop_id, sort, media_id) values (%s, 0, %s)", (shop["id"], banner))
+
     # ── запчасти ──
     all_parts = []
     for shop in shops:
@@ -622,6 +736,55 @@ def main():
                         media=photos[0], in_stock=quantity > 0)
             shop["parts"].append(part)
             all_parts.append(part)
+
+    # «Отправлю в регионы» — у части обычных запчастей
+    for part in all_parts:
+        if RNG.random() < .35:
+            cur.execute("update parts set ships_to_regions = true where id = %s", (part["id"],))
+
+    # ── тюнинг и красота авто: товары с видео ──
+    video_shops = []
+    for n, (name, row, place, lat, lng, owner_name) in enumerate(VIDEO_SHOPS, start=1):
+        created = NOW - timedelta(days=RNG.randint(20, 90))
+        owner = add_user(phone("700", 160000 + n), owner_name, "SELLER", created)
+        container = container_for(row, place) if row else None
+        cur.execute("""insert into shops (owner_id, name, container_id, address, lat, lng, status, verified_at, open_from, open_to,
+                                          work_days, is_open, phone, phone_visible, rating, reviews_count, created_at, updated_at, public_id)
+                       values (%s, %s, %s, %s, %s, %s, 'ACTIVE', %s, '09:00', '20:00', 127, true, %s, true, 0, 0, %s, %s, %s)
+                       returning id""",
+                    (owner, name, container[0] if container else None, None if row else place, lat, lng, created,
+                     phone("700", 160000 + n), created, created, public_id()))
+        sid = cur.fetchone()[0]
+        cur.execute("insert into shop_members (shop_id, user_id, role, created_at) values (%s, %s, 'OWNER', %s)", (sid, owner, created))
+        execute_values(cur, "insert into shop_brands (shop_id, brand_id) values %s", [(sid, brand_id[b]) for b in VIDEO_BRANDS])
+        execute_values(cur, "insert into shop_categories (shop_id, category_id) values %s",
+                       [(sid, category_id[c]) for c in ("interior", "other")])
+        cur.execute("update shops set avatar_media_id = %s where id = %s",
+                    (save_media(cur, upload_dir, owner, "AVATAR", shop_logo(name)), sid))
+        video_shops.append(dict(id=sid, owner=owner, name=name))
+    for shop_n, topic, title, price, captions, ships in VIDEO_POSTS:
+        shop = video_shops[shop_n]
+        video = save_video(cur, upload_dir, shop["owner"], topic, captions)
+        if video is None:
+            print(f"  нет фото для видео «{topic}» — запустите scripts/fetch_demo_videos.py")
+            continue
+        published = NOW - timedelta(days=RNG.randint(0, 10), hours=RNG.randint(0, 20))
+        cur.execute("""insert into parts (shop_id, status, title, category_id, condition, price, quantity, views_count, published_at,
+                                          created_at, updated_at, public_id, video_media_id, ships_to_regions)
+                       values (%s, 'ACTIVE', %s, %s, 'NEW', %s, 10, %s, %s, %s, %s, %s, %s, %s) returning id""",
+                    (shop["id"], title, category_id["other"], price, RNG.randint(40, 400), published, published, published,
+                     public_id(), video, ships))
+        pid = cur.fetchone()[0]
+        execute_values(cur, "insert into part_fitments (part_id, brand_id, model_id, year_from, year_to) values %s",
+                       [(pid, brand_id[b], None, None, None) for b in VIDEO_BRANDS])
+    # баннер у тюнинга — обложка его первого видео
+    for shop in video_shops:
+        cur.execute("""select m.key_1080 from parts p join media m on m.id = p.video_media_id where p.shop_id = %s
+                       order by p.id limit 1""", (shop["id"],))
+        row = cur.fetchone()
+        path = os.path.join(upload_dir, row[0]) if row else None
+        banner = save_media(cur, upload_dir, shop["owner"], "SHOP", shop_banner(shop["name"], path))
+        cur.execute("insert into shop_photos (shop_id, sort, media_id) values (%s, 0, %s)", (shop["id"], banner))
 
     # ── запросы, ответы, чаты, отзывы ──
     shop_by_id = {s["id"]: s for s in shops}
@@ -1006,10 +1169,11 @@ def main():
     print("Продавцы (вход по коду из debugCode):")
     cur.execute("""select u.phone, s.name, r.code, c.number, s.rating, s.reviews_count,
                           (select count(*) from parts p where p.shop_id = s.id)
-                   from shops s join users u on u.id = s.owner_id join containers c on c.id = s.container_id
-                   join market_rows r on r.id = c.row_id order by s.id""")
-    for ph, name, row, num, rating, cnt, parts in cur.fetchall():
-        print(f"  {ph}  {name:<24} ряд {row:<3} бокс {num:<3} ★ {rating} ({cnt})  запчастей {parts}")
+                   , s.address from shops s join users u on u.id = s.owner_id left join containers c on c.id = s.container_id
+                   left join market_rows r on r.id = c.row_id order by s.id""")
+    for ph, name, row, num, rating, cnt, parts, address in cur.fetchall():
+        where = f"ряд {row:<3} бокс {num:<3}" if row else f"{address}"
+        print(f"  {ph}  {name:<24} {where} ★ {rating} ({cnt})  запчастей {parts}")
     conn.close()
 
 

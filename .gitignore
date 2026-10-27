@@ -41,3 +41,5 @@ build/
 /uploads/
 # демо-фото с Wikimedia Commons (scripts/fetch_demo_photos.py)
 scripts/demo_photos/
+# демо-видео: фото с Wikimedia Commons и собранные ролики (scripts/fetch_demo_videos.py)
+scripts/demo_videos/
