@@ -21,16 +21,17 @@ public class ComplaintService {
    static final int DAILY_LIMIT = 20;
 
    /** Типы, на которые можно пожаловаться из приложения, и где искать объект. */
-   static final Map<ComplaintType, String> TARGETS = Map.of(
-         ComplaintType.SHOP, "select count(*) from shops where id = :id",
-         ComplaintType.PART, "select count(*) from parts where id = :id",
-         ComplaintType.SHOP_PHOTO, "select count(*) from shop_photos where media_id = :id",
-         ComplaintType.REVIEW, "select count(*) from reviews where id = :id",
-         ComplaintType.MASTER_REVIEW, "select count(*) from master_reviews where id = :id",
-         ComplaintType.CHAT, "select count(*) from chats where id = :id",
-         ComplaintType.CHAT_MESSAGE, "select count(*) from messages where id = :id",
-         ComplaintType.MASTER, "select count(*) from masters where id = :id",
-         ComplaintType.SERVICE_OFFER, "select count(*) from service_offers where id = :id");
+   static final Map<ComplaintType, String> TARGETS = Map.ofEntries(
+         Map.entry(ComplaintType.SHOP, "select count(*) from shops where id = :id"),
+         Map.entry(ComplaintType.PART, "select count(*) from parts where id = :id"),
+         Map.entry(ComplaintType.SHOP_PHOTO, "select count(*) from shop_photos where media_id = :id"),
+         Map.entry(ComplaintType.REVIEW, "select count(*) from reviews where id = :id"),
+         Map.entry(ComplaintType.MASTER_REVIEW, "select count(*) from master_reviews where id = :id"),
+         Map.entry(ComplaintType.CHAT, "select count(*) from chats where id = :id"),
+         Map.entry(ComplaintType.CHAT_MESSAGE, "select count(*) from messages where id = :id"),
+         Map.entry(ComplaintType.MASTER, "select count(*) from masters where id = :id"),
+         Map.entry(ComplaintType.SERVICE_OFFER, "select count(*) from service_offers where id = :id"),
+         Map.entry(ComplaintType.PART_COMMENT, "select count(*) from part_comments where id = :id and deleted_at is null"));
 
    private final ComplaintRepository complaints;
    private final NamedParameterJdbcTemplate jdbc;

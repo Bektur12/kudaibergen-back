@@ -9,12 +9,12 @@ import org.springframework.lang.Nullable;
 /**
  * Видео в ленте «Рынок» и в «Видео с рынка» на главной. fits — подходит выбранной машине (null — машина не
  * выбрана), fitsLabel — «Подходят на Camry 50 и 55 · 2011–2017», shipsToRegions — чип «Доставка по КР» и кнопка
- * «Доставка».
+ * «Доставка». commentsCount — счётчик у кнопки «Комм.».
  */
 public record VideoFeedItemDto(Long partId, String publicId, String title, int price, String currency,
                                PartCondition condition, VideoDto video, @Nullable Boolean fits,
                                @Nullable String fitsLabel, boolean shipsToRegions, boolean isFavorite,
-                               VideoShopDto shop) {
+                               int commentsCount, VideoShopDto shop) {
 
    /**
     * Продавец под видео: «Автодеталь Азамат», place — «Ряд 14 · конт. 12», phone — для «Позвонить» (null — скрыт),

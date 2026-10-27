@@ -39,6 +39,8 @@ public class ContentModeration {
                "update messages set hidden_by_admin = true, hidden_reason = :reason where id = :id", params);
          case SERVICE_OFFER -> jdbc.update(
                "update service_offers set hidden_by_admin = true, hidden_reason = :reason where id = :id", params);
+         case PART_COMMENT -> jdbc.update(
+               "update part_comments set hidden_by_admin = true, hidden_reason = :reason where id = :id", params);
          case SHOP_PHOTO -> removeShopPhoto(params);
          default -> throw new BadRequestException("NOTHING_TO_REMOVE",
                "Это нельзя скрыть — предупредите или заблокируйте");

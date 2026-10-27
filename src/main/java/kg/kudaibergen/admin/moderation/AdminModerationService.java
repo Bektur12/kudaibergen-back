@@ -269,6 +269,13 @@ public class AdminModerationService {
                      List.of(), integer(rs, "price_from"), null, List.of(), rs.getString("answer"),
                      rs.getBoolean("hidden_by_admin"), rs.getString("hidden_reason"), instant(rs, "created_at")),
                masterParty(rs.getLong("master_id"))));
+         case PART_COMMENT -> one("""
+               select c.id, c.text, c.user_id, c.hidden_by_admin, c.hidden_reason, c.created_at, p.title
+               from part_comments c join parts p on p.id = c.part_id where c.id = :id""", p, (rs, n) -> new Resolved(
+               new ComplaintSubjectDto(ComplaintType.PART_COMMENT, id, "Комментарий к видео", rs.getString("text"),
+                     List.of(), null, null, List.of(), "к товару: " + nvl(rs.getString("title"), "—"),
+                     rs.getBoolean("hidden_by_admin"), rs.getString("hidden_reason"), instant(rs, "created_at")),
+               userParty((Long) rs.getObject("user_id"))));
          case CONTAINER_CLAIM -> new Resolved(null, null);
       };
    }
@@ -340,7 +347,8 @@ public class AdminModerationService {
                select count(*) from complaints where created_at > now() - interval '90 days' and (
                   (type = 'REVIEW' and target_id in (select id from reviews where buyer_id = :id))
                   or (type = 'MASTER_REVIEW' and target_id in (select id from master_reviews where buyer_id = :id))
-                  or (type = 'CHAT_MESSAGE' and target_id in (select id from messages where sender_id = :id)))""";
+                  or (type = 'CHAT_MESSAGE' and target_id in (select id from messages where sender_id = :id))
+                  or (type = 'PART_COMMENT' and target_id in (select id from part_comments where user_id = :id)))""";
       };
       Map<String, Object> id = Map.of("id", party.id());
       Long complaints90d = jdbc.queryForObject(complaintsSql, id, Long.class);

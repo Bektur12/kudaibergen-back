@@ -21,5 +21,7 @@ public enum ComplaintType {
    /** На мастера / СТО. */
    MASTER,
    /** На отклик мастера на заявку. */
-   SERVICE_OFFER
+   SERVICE_OFFER,
+   /** На комментарий под видео товара (targetId — id комментария). */
+   PART_COMMENT
 }

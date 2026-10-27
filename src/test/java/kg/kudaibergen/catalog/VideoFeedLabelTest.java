@@ -17,7 +17,7 @@ class VideoFeedLabelTest {
 
    private final VehicleDirectory directory = mock(VehicleDirectory.class);
    private final VideoFeedService feed = new VideoFeedService(null, null, null, null, null, null, null, directory,
-         null, null);
+         null, null, null);
 
    @Test
    void generationsOfOneModelJoined() {

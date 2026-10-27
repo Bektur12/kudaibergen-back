@@ -27,6 +27,7 @@ public final class ComplaintLabels {
             case CHAT_MESSAGE -> "Сообщение";
             case MASTER -> "Мастер";
             case SERVICE_OFFER -> "Отклик мастера";
+            case PART_COMMENT -> "Комментарий к видео";
          };
       } catch (IllegalArgumentException e) {
          return code;

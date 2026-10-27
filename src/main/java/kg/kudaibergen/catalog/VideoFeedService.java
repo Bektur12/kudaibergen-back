@@ -13,6 +13,7 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import kg.kudaibergen.catalog.comment.PartCommentRepository;
 import kg.kudaibergen.catalog.dto.CarFilter;
 import kg.kudaibergen.catalog.dto.PartCardDto;
 import kg.kudaibergen.catalog.dto.PartSort;
@@ -54,10 +55,12 @@ public class VideoFeedService {
    private final VehicleDirectory directory;
    private final NamedParameterJdbcTemplate jdbc;
    private final Clock clock;
+   private final PartCommentRepository comments;
 
    public VideoFeedService(PartRepository parts, PartSearch search, CarFilters carFilters, MediaService media,
                            ShopRepository shops, ShopMapper shopMapper, FavoritePartRepository favorites,
-                           VehicleDirectory directory, NamedParameterJdbcTemplate jdbc, Clock clock) {
+                           VehicleDirectory directory, NamedParameterJdbcTemplate jdbc, Clock clock,
+                           PartCommentRepository comments) {
       this.parts = parts;
       this.search = search;
       this.carFilters = carFilters;
@@ -68,6 +71,7 @@ public class VideoFeedService {
       this.directory = directory;
       this.jdbc = jdbc;
       this.clock = clock;
+      this.comments = comments;
    }
 
    @Transactional(readOnly = true)
@@ -95,6 +99,7 @@ public class VideoFeedService {
       shops.findAllById(shopIds).forEach(shop -> cards.put(shop.getId(), shopMapper.card(shop)));
       Map<Long, Integer> replyMinutes = replyMinutes(shopIds);
       Set<Long> favorite = favorites.favoriteAmong(viewerId, ids);
+      Map<Long, Integer> commentCounts = comments.counts(ids);
       List<VideoFeedItemDto> items = new ArrayList<>();
       for (Part part : ordered) {
          VideoDto video = videos.get(part.getVideoMediaId());
@@ -105,6 +110,7 @@ public class VideoFeedService {
          items.add(new VideoFeedItemDto(part.getId(), part.getPublicId(), part.getTitle(), part.getPrice(),
                PartCardDto.KGS, part.getCondition(), video, car == null ? null : Fits.anyFits(part.getFitments(), car),
                fitsLabel(part.getFitments()), part.isShipsToRegions(), favorite.contains(part.getId()),
+               commentCounts.getOrDefault(part.getId(), 0),
                new VideoFeedItemDto.VideoShopDto(shop.id(), shop.name(), shop.avatarUrl(),
                      ShopMapper.place(shop.location()), shop.phone(), replyMinutes.get(shop.id()))));
       }
