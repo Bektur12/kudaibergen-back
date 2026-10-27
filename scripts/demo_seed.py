@@ -520,5 +520,664 @@ def save_video(cur, upload_dir, owner_id, stock_id):
     return cur.fetchone()[0]
 
 
+# ─────────────────────────── заливка ───────────────────────────
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--yes", action="store_true", help="подтвердить удаление пользовательских данных")
+    args = parser.parse_args()
+    db = dict(host=os.getenv("DB_HOST", "localhost"), port=int(os.getenv("DB_PORT", "5432")),
+              dbname=os.getenv("DB_NAME", "postgres"), user=os.getenv("DB_USER", "postgres"),
+              password=os.getenv("DB_PASSWORD", "1111"))
+    upload_dir = os.path.abspath(os.getenv("MEDIA_UPLOAD_DIR", "uploads"))
+    if db["host"] not in ("localhost", "127.0.0.1"):
+        sys.exit("Только для локальной базы: DB_HOST должен быть localhost")
+    if not args.yes:
+        sys.exit("Скрипт удалит всех пользователей, магазины, запчасти, запросы, чаты и фото. Запустите с --yes")
+
+    conn = psycopg2.connect(**db)
+    cur = conn.cursor()
+
+    # ── очистка ──
+    # TRUNCATE users / media CASCADE снёс бы и справочники со схемой рынка (марки ссылаются на логотип, версии карты —
+    # на автора). Поэтому служебные таблицы — TRUNCATE (на них никто не ссылается), а пользователи и медиа — DELETE:
+    # каскады и SET NULL внешних ключей уберут их данные и оставят справочники
+    cur.execute("""truncate idempotency_keys, device_tokens, refresh_tokens, complaints, container_disputes, sanctions,
+                            broadcasts, tenant_imports, admin_audit_log, map_drafts, delivery_orders cascade""")
+    cur.execute("delete from users")
+    cur.execute("delete from media")
+    for sub in os.listdir(upload_dir) if os.path.isdir(upload_dir) else []:
+        target = os.path.join(upload_dir, sub)
+        shutil.rmtree(target) if os.path.isdir(target) else os.remove(target)
+
+    # ── справочники ──
+    cur.execute("select id, slug from brands")
+    brand_id = {slug: i for i, slug in cur.fetchall()}
+    cur.execute("select id, slug from categories")
+    category_id = {slug: i for i, slug in cur.fetchall()}
+    cur.execute("select m.id, b.slug, m.name, coalesce(m.generation, ''), m.year_from, m.year_to from models m join brands b on b.id = m.brand_id")
+    models = {}
+    for mid, bslug, name, gen, yf, yt in cur.fetchall():
+        models.setdefault(bslug, []).append(dict(id=mid, label=f"{name} {gen}".strip(), year_from=yf, year_to=yt or 2025))
+    cur.execute("select id, text_ru, category_id from part_hints")
+    hints_by_category = {}
+    for hid, text, cid in cur.fetchall():
+        hints_by_category.setdefault(cid, []).append(hid)
+    cur.execute("""select c.id, r.code, r.id, c.number, c.side from containers c join market_rows r on r.id = c.row_id
+                   where c.is_active and r.is_active""")
+    containers = cur.fetchall()
+
+    def model_pick(bslug):
+        pool = models[bslug]
+        popular = POPULAR_MODELS.get(bslug)
+        if popular and RNG.random() < .75:
+            pool = [m for m in pool if m["label"] in popular] or pool
+        return RNG.choice(pool)
+
+    # ── пользователи ──
+    def add_user(phone_number, name, role, created):
+        cur.execute("""insert into users (phone, name, role, lang, is_blocked, onboarded_at, created_at, updated_at)
+                       values (%s, %s, %s, 'RU', false, %s, %s, %s) returning id""",
+                    (phone_number, name, role, created, created, created))
+        uid = cur.fetchone()[0]
+        cur.execute("insert into user_settings (user_id) values (%s)", (uid,))
+        return uid
+
+    def add_car(uid, bslug, model, year, engine=None, primary=False):
+        cur.execute("""insert into cars (user_id, brand_id, model_id, year, engine, is_primary, created_at, updated_at)
+                       values (%s, %s, %s, %s, %s, %s, now(), now()) returning id""",
+                    (uid, brand_id[bslug], model["id"], year, engine, primary))
+        return cur.fetchone()[0]
+
+    bakyt = add_user("+996555123456", "Бакыт", "BUYER", NOW - timedelta(days=60))
+    camry = next(m for m in models["toyota"] if m["label"] == "Camry 50")
+    fit = next(m for m in models["honda"] if m["label"].startswith("Fit GE"))
+    bakyt_camry = add_car(bakyt, "toyota", camry, 2012, "2.5 бензин", True)
+    bakyt_fit = add_car(bakyt, "honda", fit, 2009, "1.3", False)
+
+    buyers = []
+    for n, name in enumerate(BUYERS, start=1):
+        uid = add_user(phone("555", 200000 + n), name, "BUYER", NOW - timedelta(days=RNG.randint(20, 120)))
+        bslug = RNG.choice(["toyota"] * 5 + ["lexus", "honda", "honda", "nissan", "hyundai", "kia", "mercedes-benz", "subaru", "mitsubishi", "lada", "daewoo"])
+        model = model_pick(bslug)
+        year = RNG.randint(model["year_from"], min(model["year_to"], 2024))
+        car = add_car(uid, bslug, model, year, None, True)
+        buyers.append(dict(id=uid, car=car, brand=bslug, model=model, year=year))
+
+    # ── магазины ──
+    used_containers = set()
+
+    def container_for(code, number):
+        # нужный номер или ближайший свободный в этом ряду; северная / западная сторона — первой
+        free = [c for c in containers if c[1] == code and c[0] not in used_containers]
+        free.sort(key=lambda c: (abs(c[3] - number), 0 if c[4] in ("NORTH", "WEST") else 1))
+        pick = free[0]
+        used_containers.add(pick[0])
+        return pick
+
+    shops = []
+    for n, (name, row, number, brands, cats, hours, owner_name, used_share) in enumerate(SHOPS, start=1):
+        created = NOW - timedelta(days=RNG.randint(45, 200))
+        owner = add_user(phone("700", 100000 + n), owner_name, "SELLER", created)
+        container = container_for(row, number)
+        work_days = 127 if RNG.random() < .3 else 126  # по понедельникам рынок почти пустой
+        cur.execute("""insert into shops (owner_id, name, container_id, status, verified_at, open_from, open_to, work_days, is_open,
+                                          phone, phone_visible, rating, reviews_count, created_at, updated_at, public_id)
+                       values (%s, %s, %s, 'ACTIVE', %s, %s, %s, %s, true, %s, %s, 0, 0, %s, %s, %s) returning id""",
+                    (owner, name, container[0], created, hours[0], hours[1], work_days, phone("700", 100000 + n),
+                     RNG.random() < .8, created, created, public_id()))
+        sid = cur.fetchone()[0]
+        cur.execute("insert into shop_members (shop_id, user_id, role, created_at) values (%s, %s, 'OWNER', %s)", (sid, owner, created))
+        execute_values(cur, "insert into shop_brands (shop_id, brand_id) values %s", [(sid, brand_id[b]) for b in brands])
+        execute_values(cur, "insert into shop_categories (shop_id, category_id) values %s", [(sid, category_id[c]) for c in cats])
+        shops.append(dict(id=sid, name=name, owner=owner, brands=brands, cats=cats, used=used_share, row=container[2],
+                          container=container[0], row_code=row, number=container[3], parts=[]))
+
+    # сотрудник у пары боксов («Продавцы в боксе · 2»)
+    for shop, staff_name in ((shops[0], "Нурсултан"), (shops[1], "Бахтияр")):
+        staff = add_user(phone("700", 190000 + shop["id"] % 1000), staff_name, "SELLER", NOW - timedelta(days=30))
+        cur.execute("insert into shop_members (shop_id, user_id, role, created_at) values (%s, %s, 'STAFF', now())", (shop["id"], staff))
+
+    # магазины и центры вне рынка — свой адрес и точка, без контейнера
+    for n, (name, address, lat, lng, brands, cats, owner_name) in enumerate(STORES, start=1):
+        created = NOW - timedelta(days=RNG.randint(30, 120))
+        owner = add_user(phone("700", 150000 + n), owner_name, "SELLER", created)
+        cur.execute("""insert into shops (owner_id, name, container_id, address, lat, lng, status, verified_at, open_from, open_to,
+                                          work_days, is_open, phone, phone_visible, rating, reviews_count, created_at, updated_at, public_id)
+                       values (%s, %s, null, %s, %s, %s, 'ACTIVE', %s, '09:00', '19:00', 127, true, %s, true, 0, 0, %s, %s, %s)
+                       returning id""",
+                    (owner, name, address, lat, lng, created, phone("700", 150000 + n), created, created, public_id()))
+        sid = cur.fetchone()[0]
+        cur.execute("insert into shop_members (shop_id, user_id, role, created_at) values (%s, %s, 'OWNER', %s)", (sid, owner, created))
+        execute_values(cur, "insert into shop_brands (shop_id, brand_id) values %s", [(sid, brand_id[b]) for b in brands])
+        execute_values(cur, "insert into shop_categories (shop_id, category_id) values %s", [(sid, category_id[c]) for c in cats])
+        shops.append(dict(id=sid, name=name, owner=owner, brands=brands, cats=cats, used=0.0, row=None, container=None,
+                          row_code=None, number=None, parts=[]))
+
+    # логотипы и один баннер у каждого магазина
+    for shop in shops:
+        cur.execute("update shops set avatar_media_id = %s where id = %s",
+                    (save_media(cur, upload_dir, shop["owner"], "AVATAR", shop_logo(shop["name"])), shop["id"]))
+        sample = next((real_photos(item[0]) for cat in shop["cats"] for item in CATALOG[cat] if real_photos(item[0])), [])
+        banner = save_media(cur, upload_dir, shop["owner"], "SHOP", shop_banner(shop["name"], sample[0] if sample else None))
+        cur.execute("insert into shop_photos (shop_id, sort, media_id) values (%s, 0, %s)", (shop["id"], banner))
+
+    # ── запчасти ──
+    all_parts = []
+    for shop in shops:
+        # только виды запчастей с настоящими фото (scripts/fetch_demo_photos.py) — без нарисованных
+        items = [(cat, item, None) for cat in shop["cats"] for item in CATALOG[cat] if real_photos(item[0])]
+        if len(shop["cats"]) == 1:
+            # узкий магазин: каждая позиция в нескольких вариантах — разные производители
+            items = [(cat, item, maker) for cat, item, _ in items for maker in item[1]]
+        RNG.shuffle(items)
+        count = min(len(items), RNG.randint(10, 16) if len(shop["cats"]) > 1 else RNG.randint(12, 16))
+        for cat, (title, makers, (lo, hi), side, position, can_be_used), fixed_maker in items[:count]:
+            used = can_be_used and fixed_maker is None and RNG.random() < shop["used"]
+            maker = "оригинал" if used else (fixed_maker or RNG.choice(makers))
+            condition = "USED" if used else ("ON_ORDER" if RNG.random() < .08 else "NEW")
+            price = round_price(RNG.uniform(lo, hi) * (.65 if used else 1))
+            quantity = 0 if RNG.random() < .12 else (1 if used else RNG.randint(1, 12))
+            full_title = title if maker in ("оригинал", "Китай") else f"{title} {maker}"
+            if used:
+                full_title += ", б/у"
+            fit_brands = shop["brands"][:]
+            RNG.shuffle(fit_brands)
+            # Toyota — самая частая машина на рынке: у магазинов, где она есть, большинство позиций под неё
+            if "toyota" in fit_brands and RNG.random() < .65:
+                fit_brands.remove("toyota")
+                fit_brands.insert(0, "toyota")
+            main_brand = fit_brands[0]
+            oem = oem_for(main_brand, RNG) if (not used and RNG.random() < .7) else None
+            published = NOW - timedelta(days=RNG.randint(1, 40), hours=RNG.randint(0, 20))
+            cur.execute("""insert into parts (shop_id, status, title, category_id, condition, price, quantity, manufacturer, oem_number,
+                                              oem_norm, side, position, views_count, published_at, created_at, updated_at, public_id)
+                           values (%s, 'ACTIVE', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 0, %s, %s, %s, %s) returning id""",
+                        (shop["id"], full_title, category_id[cat], condition, price, quantity,
+                         None if maker in ("оригинал", "Китай") else maker, oem,
+                         None if oem is None else "".join(ch for ch in oem if ch.isalnum()).upper(),
+                         side, position, published, published, published, public_id()))
+            pid = cur.fetchone()[0]
+            # машины: универсальное — на несколько марок целиком, остальное — 1–3 модели
+            fitments = []
+            if title in UNIVERSAL:
+                for b in fit_brands[:3]:
+                    fitments.append((pid, brand_id[b], None, None, None))
+            else:
+                for b in fit_brands[:RNG.choice([1, 1, 2])]:
+                    picked = {model_pick(b)["id"]: None for _ in range(RNG.choice([1, 2, 2, 3]))}
+                    # демо-машины Бакыта (Camry 50, Fit) — у заметной доли запчастей своей марки
+                    favourite = DEMO_CARS.get(b)
+                    if favourite and RNG.random() < .8:
+                        picked[next(x for x in models[b] if x["label"].startswith(favourite))["id"]] = None
+                    for m in picked:
+                        model = next(x for x in models[b] if x["id"] == m)
+                        fitments.append((pid, brand_id[b], m, model["year_from"], model["year_to"] if model["year_to"] < 2025 else None))
+            execute_values(cur, "insert into part_fitments (part_id, brand_id, model_id, year_from, year_to) values %s", fitments)
+            # фото
+            available = real_photos(title)
+            if available:
+                chosen = RNG.sample(available, k=min(len(available), RNG.choice([1, 2, 2, 3])))
+                photos = [save_media(cur, upload_dir, shop["owner"], "PART", Image.open(path).convert("RGB")) for path in chosen]
+            else:
+                photos = [save_media(cur, upload_dir, shop["owner"], "PART", part_image(cat, maker, v, RNG))
+                          for v in range(1, RNG.choice([1, 2, 2, 3]) + 1)]
+            execute_values(cur, "insert into part_photos (part_id, sort, media_id) values %s", [(pid, i, m) for i, m in enumerate(photos)])
+            # просмотры за 3 недели
+            views = []
+            total = 0
+            for day in range(21):
+                if RNG.random() < .55:
+                    v = RNG.randint(1, 9)
+                    total += v
+                    views.append((pid, (NOW.astimezone(BISHKEK) - timedelta(days=day)).date(), v))
+            if views:
+                execute_values(cur, "insert into part_views_daily (part_id, day, views) values %s", views)
+            cur.execute("update parts set views_count = %s where id = %s", (total + RNG.randint(0, 60), pid))
+            part = dict(id=pid, cat=cat, price=price, condition=condition, shop=shop["id"], title=full_title,
+                        media=photos[0], in_stock=quantity > 0)
+            shop["parts"].append(part)
+            all_parts.append(part)
+
+    # «Отправлю в регионы» — у части обычных запчастей
+    for part in all_parts:
+        if RNG.random() < .35:
+            cur.execute("update parts set ships_to_regions = true where id = %s", (part["id"],))
+
+    # ── тюнинг и красота авто: товары с видео ──
+    video_shops = []
+    for n, (name, row, place, lat, lng, owner_name) in enumerate(VIDEO_SHOPS, start=1):
+        created = NOW - timedelta(days=RNG.randint(20, 90))
+        owner = add_user(phone("700", 160000 + n), owner_name, "SELLER", created)
+        container = container_for(row, place) if row else None
+        cur.execute("""insert into shops (owner_id, name, container_id, address, lat, lng, status, verified_at, open_from, open_to,
+                                          work_days, is_open, phone, phone_visible, rating, reviews_count, created_at, updated_at, public_id)
+                       values (%s, %s, %s, %s, %s, %s, 'ACTIVE', %s, '09:00', '20:00', 127, true, %s, true, 0, 0, %s, %s, %s)
+                       returning id""",
+                    (owner, name, container[0] if container else None, None if row else place, lat, lng, created,
+                     phone("700", 160000 + n), created, created, public_id()))
+        sid = cur.fetchone()[0]
+        cur.execute("insert into shop_members (shop_id, user_id, role, created_at) values (%s, %s, 'OWNER', %s)", (sid, owner, created))
+        execute_values(cur, "insert into shop_brands (shop_id, brand_id) values %s", [(sid, brand_id[b]) for b in VIDEO_BRANDS])
+        execute_values(cur, "insert into shop_categories (shop_id, category_id) values %s",
+                       [(sid, category_id[c]) for c in ("interior", "other")])
+        cur.execute("update shops set avatar_media_id = %s where id = %s",
+                    (save_media(cur, upload_dir, owner, "AVATAR", shop_logo(name)), sid))
+        video_shops.append(dict(id=sid, owner=owner, name=name))
+    for shop_n, stock_id, title, price, ships in VIDEO_POSTS:
+        shop = video_shops[shop_n]
+        video = save_video(cur, upload_dir, shop["owner"], stock_id)
+        if video is None:
+            print(f"  нет ролика {stock_id} — запустите scripts/fetch_demo_videos.py")
+            continue
+        published = NOW - timedelta(days=RNG.randint(0, 10), hours=RNG.randint(0, 20))
+        cur.execute("""insert into parts (shop_id, status, title, category_id, condition, price, quantity, views_count, published_at,
+                                          created_at, updated_at, public_id, video_media_id, ships_to_regions)
+                       values (%s, 'ACTIVE', %s, %s, 'NEW', %s, 10, %s, %s, %s, %s, %s, %s, %s) returning id""",
+                    (shop["id"], title, category_id["other"], price, RNG.randint(40, 400), published, published, published,
+                     public_id(), video, ships))
+        pid = cur.fetchone()[0]
+        execute_values(cur, "insert into part_fitments (part_id, brand_id, model_id, year_from, year_to) values %s",
+                       [(pid, brand_id[b], None, None, None) for b in VIDEO_BRANDS])
+    # баннер у тюнинга — обложка его первого видео
+    for shop in video_shops:
+        cur.execute("""select m.key_1080 from parts p join media m on m.id = p.video_media_id where p.shop_id = %s
+                       order by p.id limit 1""", (shop["id"],))
+        row = cur.fetchone()
+        path = os.path.join(upload_dir, row[0]) if row else None
+        banner = save_media(cur, upload_dir, shop["owner"], "SHOP", shop_banner(shop["name"], path))
+        cur.execute("insert into shop_photos (shop_id, sort, media_id) values (%s, 0, %s)", (shop["id"], banner))
+
+    # ── запросы, ответы, чаты, отзывы ──
+    shop_by_id = {s["id"]: s for s in shops}
+    reviews_by_shop = {}
+
+    def add_message(chat, side, sender, mtype, text, at, code=None, payload=None):
+        at = min(at, NOW - timedelta(seconds=5))
+        cur.execute("""insert into messages (chat_id, side, sender_id, type, text, code, payload, created_at)
+                       values (%s, %s, %s, %s, %s, %s, %s, %s) returning id""",
+                    (chat, side, sender, mtype, text, code, None if payload is None else json.dumps(payload), at))
+        return cur.fetchone()[0]
+
+    def create_request(buyer_id, car_id, bslug, model, year, cat, text, created, status, duration="MIN_30",
+                       force_have=None, recipients_filter=None, answer_rate=.7, chat_rate=.6, close=None, fresh=False):
+        minutes = {"MIN_30": 30, "HOUR_1": 60, "HOUR_3": 180}[duration]
+        expires = created + timedelta(minutes=minutes)
+        hint_pool = hints_by_category.get(category_id.get(cat), [])
+        hint = RNG.choice(hint_pool) if hint_pool and RNG.random() < .5 else None
+        cur.execute("""insert into part_requests (buyer_id, car_id, brand_id, model_id, year, text, category_id, target, status,
+                                                  recipients_count, have_count, sent_at, created_at, duration, expires_at,
+                                                  extended_times, target_row_ids, target_container_ids, hint_id)
+                       values (%s, %s, %s, %s, %s, %s, %s, 'MARKET', %s, 0, 0, %s, %s, %s, %s, 0, '{}', '{}', %s) returning id""",
+                    (buyer_id, car_id, brand_id[bslug], model["id"], year, text, category_id.get(cat), status, created, created,
+                     duration, expires, hint))
+        rid = cur.fetchone()[0]
+        receivers = [s for s in shops if bslug in s["brands"]]
+        if recipients_filter:
+            receivers = [s for s in receivers if recipients_filter(s)]
+        have_shops = []
+        for s in receivers:
+            sells = cat in s["cats"]
+            seen = fresh and RNG.random() < .3 or (not fresh and RNG.random() < .85)
+            answered = not fresh and seen and RNG.random() < answer_rate
+            answer = None
+            if force_have is not None:
+                answer = "HAVE" if s["id"] in force_have else ("NOT_HAVE" if not fresh and RNG.random() < .6 else None)
+                answered = answer is not None
+                seen = seen or answered
+            elif answered:
+                answer = "HAVE" if (sells and RNG.random() < .7) or RNG.random() < .08 else "NOT_HAVE"
+            latest = NOW - timedelta(seconds=40)
+            replied = min(created + timedelta(minutes=RNG.randint(1, 22), seconds=RNG.randint(0, 59)), latest) if answered else None
+            seen_at = (replied - timedelta(seconds=RNG.randint(10, 30))) if replied else (
+                min(created + timedelta(minutes=RNG.randint(0, 15)), latest) if seen else None)
+            if answer:
+                rstatus = answer
+            elif status == "ACTIVE":
+                rstatus = "SEEN" if seen else "DELIVERED"
+            else:
+                rstatus = "EXPIRED"
+            cur.execute("""insert into request_recipients (request_id, shop_id, notified_at, seen_at, replied_at, status, row_id, container_id)
+                           values (%s, %s, %s, %s, %s, %s, %s, %s)""",
+                        (rid, s["id"], created, seen_at, replied, rstatus, s["row"], s["container"]))
+            if answer:
+                part = next((p for p in s["parts"] if p["cat"] == cat and p["in_stock"]), None) if answer == "HAVE" else None
+                condition = (part["condition"] if part else RNG.choice(["NEW", "NEW", "USED"])) if answer == "HAVE" else None
+                price = (part["price"] if part else round_price(RNG.uniform(1500, 9000))) if answer == "HAVE" else None
+                message = RNG.choice(HAVE_MESSAGES) if answer == "HAVE" else None
+                cur.execute("""insert into request_replies (request_id, shop_id, author_id, answer, condition, message, price, created_at, updated_at, part_id)
+                               values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) returning id""",
+                            (rid, s["id"], s["owner"], answer, condition, message, price, replied, replied,
+                             part["id"] if part and RNG.random() < .6 else None))
+                reply_id = cur.fetchone()[0]
+                if answer == "HAVE":
+                    have_shops.append((s, reply_id, replied, price, condition, message, part))
+        # чаты по «Есть»: чат один на пару «покупатель + бокс», ответы по разным запросам — карточками в нём
+        for s, reply_id, replied, price, condition, message, part in have_shops:
+            cur.execute("select id from chats where buyer_id = %s and shop_id = %s", (buyer_id, s["id"]))
+            row = cur.fetchone()
+            if row:
+                chat = row[0]
+            else:
+                cur.execute("""insert into chats (buyer_id, shop_id, request_id, created_at) values (%s, %s, %s, %s) returning id""",
+                            (buyer_id, s["id"], rid, replied))
+                chat = cur.fetchone()[0]
+                add_message(chat, "SYSTEM", None, "SYSTEM", None, replied, code="PAY_AT_BOX")
+            last = add_message(chat, "SHOP", s["owner"], "REPLY", message, replied,
+                               payload={"requestId": rid, "replyId": reply_id, "condition": condition, "price": price,
+                                        "partId": part["id"] if part else None})
+            last_at = replied
+            first_buyer = None
+            buyer_read = last
+            shop_read = last
+            if RNG.random() < chat_rate:
+                at = replied + timedelta(minutes=RNG.randint(1, 30))
+                last = add_message(chat, "BUYER", buyer_id, "TEXT", RNG.choice(BUYER_LINES), at)
+                first_buyer, last_at, buyer_read = at, at, last
+                if RNG.random() < .8:
+                    at += timedelta(minutes=RNG.randint(1, 15))
+                    last = add_message(chat, "SHOP", s["owner"], "TEXT", RNG.choice(SELLER_LINES), at)
+                    last_at, shop_read = at, last
+                    buyer_read = last if not fresh else buyer_read
+                if RNG.random() < .3 and not fresh:
+                    at += timedelta(minutes=RNG.randint(20, 90))
+                    last = add_message(chat, "BUYER", buyer_id, "QUICK", "Покупатель подошёл", at, code="ARRIVED")
+                    last_at, buyer_read, shop_read = at, last, last
+            cur.execute("""update chats set
+                               last_message_id = case when last_message_at is null or %(at)s >= last_message_at
+                                                      then %(last)s else last_message_id end,
+                               request_id = case when last_message_at is null or %(at)s >= last_message_at
+                                                 then %(rid)s else request_id end,
+                               last_message_at = greatest(coalesce(last_message_at, %(at)s), %(at)s),
+                               buyer_first_message_at = least(coalesce(buyer_first_message_at, %(first)s),
+                                                              coalesce(%(first)s, buyer_first_message_at)),
+                               buyer_read_message_id = greatest(buyer_read_message_id, %(br)s),
+                               shop_read_message_id = greatest(shop_read_message_id, %(sr)s)
+                           where id = %(chat)s""",
+                        dict(last=last, at=last_at, rid=rid, first=first_buyer, br=buyer_read, sr=shop_read, chat=chat))
+        # закрытие с оценкой
+        closed_with = None
+        if status == "CLOSED" and have_shops:
+            s, *_ = close if close else RNG.choice(have_shops)
+            closed_with = s
+            closed_at = max(h[2] for h in have_shops) + timedelta(hours=RNG.randint(1, 5))
+            cur.execute("update part_requests set closed_with_shop_id = %s, closed_at = %s where id = %s", (s["id"], closed_at, rid))
+            chat_id = None
+            cur.execute("select id from chats where buyer_id = %s and shop_id = %s", (buyer_id, s["id"]))
+            row = cur.fetchone()
+            if row:
+                add_message(row[0], "SYSTEM", None, "SYSTEM", None, closed_at, code="REQUEST_CLOSED")
+            if RNG.random() < .85:
+                stars = RNG.choices([5, 4, 3, 2], weights=[64, 27, 7, 2])[0]
+                tags = RNG.sample(["FAST_REPLY", "PART_OK", "EASY_TO_FIND"], k=RNG.randint(0, 3) if stars >= 4 else 0)
+                reply = RNG.choice(REVIEW_REPLIES) if RNG.random() < .35 else None
+                cur.execute("""insert into reviews (shop_id, buyer_id, request_id, stars, tags, reply_text, replied_at, created_at)
+                               values (%s, %s, %s, %s, %s, %s, %s, %s)""",
+                            (s["id"], buyer_id, rid, stars, tags or '{}', reply, closed_at + timedelta(hours=3) if reply else None, closed_at))
+        elif status in ("EXPIRED", "CLOSED"):
+            if status == "CLOSED":
+                status = "EXPIRED"
+            cur.execute("update part_requests set status = %s, closed_at = %s where id = %s", (status, expires, rid))
+        if status == "EXPIRED" and not closed_with:
+            cur.execute("update part_requests set closed_at = %s where id = %s", (expires, rid))
+        cur.execute("update part_requests set recipients_count = %s, have_count = %s where id = %s", (len(receivers), len(have_shops), rid))
+        return rid, have_shops
+
+    # история за 30 дней
+    for _ in range(140):
+        b = RNG.choice(buyers)
+        cat = RNG.choice(list(REQUEST_TEXTS))
+        created = market_time(RNG.randint(1, 30), RNG)
+        create_request(b["id"], b["car"], b["brand"], b["model"], b["year"], cat, RNG.choice(REQUEST_TEXTS[cat]), created,
+                       RNG.choices(["CLOSED", "EXPIRED"], weights=[45, 55])[0], RNG.choice(["MIN_30", "HOUR_1", "HOUR_3"]))
+
+    # живые запросы — лента продавцов «Новые»
+    for minutes_ago, cat in ((3, "suspension"), (7, "brakes"), (11, "lights"), (18, "cooling"), (26, "service"), (34, "engine")):
+        b = RNG.choice([x for x in buyers if x["brand"] in ("toyota", "lexus", "honda", "hyundai", "kia")])
+        create_request(b["id"], b["car"], b["brand"], b["model"], b["year"], cat, RNG.choice(REQUEST_TEXTS[cat]),
+                       NOW - timedelta(minutes=minutes_ago), "ACTIVE", "HOUR_3", fresh=True)
+
+    # Бакыт: активный запрос с тремя «Есть» (как экраны 05 и 07), закрытый с оценкой и истёкший без ответов
+    azamat, japan, erlan = shops[0], shops[1], shops[6]
+    rid, _ = create_request(bakyt, bakyt_camry, "toyota", camry, 2012, "suspension", "Стойки передние, пара",
+                            NOW - timedelta(minutes=12), "ACTIVE", "HOUR_3", force_have={azamat["id"], japan["id"], erlan["id"]})
+    cur.execute("update part_requests set hint_id = null where id = %s", (rid,))
+    # первый ответ — «Есть KYB и оригинал · 3 200 сом» от Азамата (как в макете)
+    cur.execute("""update request_replies set message = 'Есть KYB и оригинал', price = 3200, condition = 'NEW',
+                   created_at = %s, updated_at = %s where request_id = %s and shop_id = %s""",
+                (NOW - timedelta(minutes=10), NOW - timedelta(minutes=10), rid, azamat["id"]))
+    cur.execute("""update request_recipients set replied_at = %s where request_id = %s and shop_id = %s""",
+                (NOW - timedelta(minutes=10), rid, azamat["id"]))
+    cur.execute("select id from chats where request_id = %s and shop_id = %s", (rid, azamat["id"]))
+    chat = cur.fetchone()[0]
+    last = add_message(chat, "SHOP", azamat["owner"], "TEXT", "Отложил KYB для вас, работаем до 17:00", NOW - timedelta(minutes=4))
+    cur.execute("update chats set last_message_id = %s, last_message_at = %s where id = %s", (last, NOW - timedelta(minutes=4), chat))
+
+    brakes_shop = shops[10]
+    create_request(bakyt, bakyt_camry, "toyota", camry, 2012, "brakes", "Колодки задние", market_time(3, RNG), "CLOSED",
+                   force_have={brakes_shop["id"], azamat["id"]}, close=None)
+    create_request(bakyt, bakyt_fit, "honda", fit, 2009, "cooling", "Радиатор охлаждения", market_time(6, RNG), "EXPIRED",
+                   force_have=set())
+
+    # отзывы за полгода без привязки к запросу (история до приложения): «★ 4.8 · 126 отзывов»
+    for shop in shops:
+        count = int(RNG.triangular(12, 140, 45))
+        rows = []
+        for _ in range(count):
+            stars = RNG.choices([5, 4, 3, 2, 1], weights=[70, 22, 5, 2, 1])[0]
+            tags = RNG.sample(["FAST_REPLY", "PART_OK", "EASY_TO_FIND"], k=RNG.randint(0, 3)) if stars >= 4 else []
+            at = NOW - timedelta(days=RNG.uniform(2, 180))
+            reply = RNG.choice(REVIEW_REPLIES) if RNG.random() < .3 else None
+            buyer = RNG.choice(buyers)["id"] if RNG.random() < .8 else None
+            rows.append((shop["id"], buyer, None, stars, tags or '{}', reply, at + timedelta(hours=5) if reply else None, at))
+        execute_values(cur, """insert into reviews (shop_id, buyer_id, request_id, stars, tags, reply_text, replied_at, created_at)
+                               values %s""", rows)
+
+    # рейтинги из отзывов
+    cur.execute("""update shops s set rating = coalesce(r.avg, 0), reviews_count = coalesce(r.cnt, 0)
+                   from (select shop_id, round(avg(stars)::numeric, 1) avg, count(*) cnt from reviews group by shop_id) r
+                   where r.shop_id = s.id""")
+
+    # ── мастера и заявки на услуги ──
+    def near(km_min, km_max):
+        angle = RNG.uniform(0, 2 * 3.14159)
+        dist = RNG.uniform(km_min, km_max)
+        return (MARKET_POINT[0] + dist / 111.0 * __import__("math").sin(angle),
+                MARKET_POINT[1] + dist / (111.0 * 0.733) * __import__("math").cos(angle))
+
+    def add_master(owner, name, address, services, brands, origins, radius, mobile, hours, point, created):
+        cur.execute("""insert into masters (owner_id, name, phone, address, lat, lng, radius_km, is_mobile, all_brands,
+                                            open_from, open_to, work_days, is_accepting, status, public_id, created_at, updated_at)
+                       values (%s, %s, (select phone from users where id = %s), %s, %s, %s, %s, %s, %s, %s, %s, 127, true,
+                               'ACTIVE', %s, %s, %s) returning id""",
+                    (owner, name, owner, address, point[0], point[1], radius, mobile, brands is None, hours[0], hours[1],
+                     public_id(), created, created))
+        mid = cur.fetchone()[0]
+        execute_values(cur, "insert into master_services (master_id, service) values %s", [(mid, x) for x in services])
+        if brands:
+            execute_values(cur, "insert into master_brands (master_id, brand_id) values %s", [(mid, brand_id[b]) for b in brands])
+        if origins:
+            execute_values(cur, "insert into master_origins (master_id, origin) values %s", [(mid, o) for o in origins])
+        return mid
+
+    master_rows = []
+    for n, (name, address, services, brands, origins, radius, mobile, hours, owner_name) in enumerate(MASTERS, start=1):
+        created = NOW - timedelta(days=RNG.randint(30, 300))
+        owner = add_user(phone("701", 100000 + n), owner_name, "MASTER", created)
+        point = near(0.5, 4.0)
+        mid = add_master(owner, name, address, services, brands, origins, radius, mobile, hours, point, created)
+        master_rows.append(dict(id=mid, owner=owner, services=services, brands=brands, origins=origins, point=point,
+                                radius=radius, name=name))
+        rows = []
+        for _ in range(int(RNG.triangular(8, 220, 60))):
+            stars = RNG.choices([5, 4, 3, 2, 1], weights=[72, 20, 5, 2, 1])[0]
+            tags = RNG.sample(["FAST_REPLY", "PART_OK", "EASY_TO_FIND"], k=RNG.randint(0, 2)) if stars >= 4 else []
+            rows.append((mid, RNG.choice(buyers)["id"] if RNG.random() < .8 else None, stars, tags or '{}',
+                         NOW - timedelta(days=RNG.uniform(1, 200))))
+        execute_values(cur, "insert into master_reviews (master_id, buyer_id, stars, tags, created_at) values %s", rows)
+    cur.execute("""update masters m set rating = r.avg, reviews_count = r.cnt
+                   from (select master_id, round(avg(stars)::numeric, 1) avg, count(*) cnt from master_reviews group by master_id) r
+                   where r.master_id = m.id""")
+
+    # тестовый мастер: все услуги и марки, радиус 30 км, круглосуточно — любая заявка рядом с рынком доходит
+    master_tester = add_user("+996555000003", "Мастер", "MASTER", NOW - timedelta(days=1))
+    add_master(master_tester, "Мой сервис", "ул. Садыгалиева 1", list(SERVICE_TEXTS) + ["LPG", "CAR_WASH", "BODY_PAINT",
+               "TINTING", "MOBILE_MASTER"], None, [], 30, True, ("00:00", "23:59"), MARKET_POINT, NOW - timedelta(days=1))
+
+    # живые заявки клиентов — лента мастеров «Новые»
+    brand_slug_by_id = {v: k for k, v in brand_id.items()}
+    for minutes_ago, service in ((4, "TIRE_SERVICE"), (9, "CAR_REPAIR"), (15, "DIAGNOSTICS"), (21, "AUTO_ELECTRIC"), (28, "OIL_CHANGE")):
+        b = RNG.choice(buyers)
+        created = NOW - timedelta(minutes=minutes_ago)
+        point = near(0.3, 2.0)
+        cur.execute("""insert into service_requests (buyer_id, service, car_id, brand_id, model_id, year, origin, description,
+                                                     when_kind, where_kind, lat, lng, radius_km, status, duration, sent_at,
+                                                     expires_at, created_at)
+                       values (%s, %s, %s, %s, %s, %s, %s, %s, 'TODAY', 'I_COME', %s, %s, 10, 'ACTIVE', 'HOUR_3', %s, %s, %s)
+                       returning id""",
+                    (b["id"], service, b["car"], brand_id[b["brand"]], b["model"]["id"], b["year"],
+                     {"hyundai": "KOREA", "kia": "KOREA", "daewoo": "KOREA", "mercedes-benz": "EUROPE", "lada": "EUROPE"}.get(b["brand"], "JAPAN"),
+                     RNG.choice(SERVICE_TEXTS[service]), point[0], point[1], created, created + timedelta(hours=3), created))
+        sid = cur.fetchone()[0]
+        count = 0
+        for m in master_rows:
+            works = service in m["services"] and (m["brands"] is None or b["brand"] in m["brands"])
+            distance = int(((m["point"][0] - point[0]) * 111000) ** 2 + ((m["point"][1] - point[1]) * 111000 * 0.733) ** 2) ** 0.5
+            if works and distance <= min(10, m["radius"]) * 1000:
+                cur.execute("""insert into service_recipients (request_id, master_id, status, distance_m, notified_at)
+                               values (%s, %s, 'DELIVERED', %s, %s)""", (sid, m["id"], int(distance), created))
+                count += 1
+        cur.execute("update service_requests set recipients_count = %s where id = %s", (count, sid))
+
+    # тестовые аккаунты для ручной проверки: клиент с Camry 50 и продавец, открытый круглосуточно со всеми марками
+    tester = add_user("+996555000001", "Клиент", "BUYER", NOW - timedelta(days=1))
+    add_car(tester, "toyota", camry, 2014, "2.5 бензин", True)
+    seller = add_user("+996555000002", "Продавец", "SELLER", NOW - timedelta(days=1))
+    box = container_for("14", 8)
+    cur.execute("""insert into shops (owner_id, name, container_id, status, verified_at, open_from, open_to, work_days, is_open,
+                                      phone, phone_visible, rating, reviews_count, created_at, updated_at, public_id)
+                   values (%s, 'Мой бокс', %s, 'ACTIVE', now(), '00:00', '23:59', 127, true, '+996555000002', true, 0, 0,
+                           now(), now(), %s) returning id""", (seller, box[0], public_id()))
+    box_id = cur.fetchone()[0]
+    cur.execute("insert into shop_members (shop_id, user_id, role, created_at) values (%s, %s, 'OWNER', now())", (box_id, seller))
+    cur.execute("insert into shop_brands (shop_id, brand_id) select %s, id from brands", (box_id,))
+    cur.execute("insert into shop_categories (shop_id, category_id) select %s, id from categories", (box_id,))
+
+    # сотрудники админки, пароль Kudaibergen2026 (bcrypt), второй шаг — код из debugCode
+    for admin_phone, admin_role, full_name, title in (
+            ("+996555000010", "SUPER_ADMIN", "Суперадмин", "Суперадмин"),
+            ("+996555000011", "MARKET_ADMIN", "Айбек Т.", "Администратор рынка")):
+        admin_user = add_user(admin_phone, full_name, "BUYER", NOW - timedelta(days=30))
+        cur.execute("""insert into admin_members (user_id, admin_role, full_name, title, password_hash, password_changed_at)
+                       values (%s, %s, %s, %s, %s, now())""", (admin_user, admin_role, full_name, title, ADMIN_PASSWORD_HASH))
+
+    # ── админка: список арендаторов, статусы, спор, санкции ──
+    # арендаторы по базе рынка: у большинства боксов телефон владельца, у части — другой («Нет в списке»)
+    cur.execute("update containers set tenant_name = null, tenant_phone = null")
+    cur.execute("""select s.id, s.container_id, u.phone, u.name from shops s join users u on u.id = s.owner_id
+                   order by s.id""")
+    for n, (sid, cid, owner_phone, owner_name) in enumerate(cur.fetchall()):
+        if n % 5 == 4:
+            continue                                            # «Ждёт сверки»: арендатора в базе нет
+        tenant_phone = owner_phone if n % 7 != 3 else phone("777", 300000 + n)
+        cur.execute("update containers set tenant_name = %s, tenant_phone = %s where id = %s",
+                    (f"{owner_name or 'Арендатор'} {RNG.choice('АБДЕКМНСТ')}.", tenant_phone, cid))
+
+    def shop_of(seller_phone):
+        cur.execute("select s.id from shops s join users u on u.id = s.owner_id where u.phone = %s", (seller_phone,))
+        return cur.fetchone()[0]
+
+    admin_id = admin_user
+    # на проверке (видно при SHOP_VERIFICATION_REQUIRED=true; иначе при старте подтверждаются сами)
+    for seller_phone in ("+996700100020", "+996700100021"):
+        sid = shop_of(seller_phone)
+        cur.execute("update shops set status = 'PENDING_VERIFICATION', verified_at = null where id = %s", (sid,))
+        cur.execute("""insert into shop_verifications (shop_id, container_id, method, status, created_at)
+                       select id, container_id, 'ADMIN', 'PENDING', now() - interval '3 hours' from shops where id = %s""",
+                    (sid,))
+    sid = shop_of("+996700100022")
+    cur.execute("update shops set status = 'REJECTED', block_reason = 'Нет в списке арендаторов' where id = %s", (sid,))
+    sid = shop_of("+996700100023")
+    cur.execute("update shops set status = 'BLOCKED', block_reason = 'Продаёт контрафакт под видом оригинала' where id = %s",
+                (sid,))
+    cur.execute("""insert into sanctions (target_type, target_id, type, reason, admin_id, created_at)
+                   values ('SHOP', %s, 'BLOCK', 'Продаёт контрафакт под видом оригинала', %s, now() - interval '2 days')""",
+                (sid, admin_id))
+    sid = shop_of("+996700100024")
+    cur.execute("""insert into sanctions (target_type, target_id, type, reason, admin_id, active_until, created_at)
+                   values ('SHOP', %s, 'WARNING', 'Цены без наличия', %s, now() + interval '80 days',
+                           now() - interval '10 days')""", (sid, admin_id))
+    # спор: покупатель говорит, что контейнер продавца 19 — его
+    sid = shop_of("+996700100019")
+    claimant = add_user("+996555000020", "Нурлан", "BUYER", NOW - timedelta(days=2))
+    cur.execute("""insert into container_disputes (container_id, claimant_user_id, current_shop_id, text, created_at)
+                   select container_id, %s, id, 'Арендую этот контейнер с 2019 года, договор есть',
+                          now() - interval '5 hours' from shops where id = %s""", (claimant, sid))
+    # мастера: двое на проверке, один заблокирован, на одного жалоба
+    cur.execute("""update masters set status = 'PENDING_VERIFICATION'
+                   where owner_id in (select id from users where phone in ('+996701100010', '+996701100011'))""")
+    cur.execute("""update masters set status = 'BLOCKED', block_reason = 'Не приезжал по заявкам'
+                   where owner_id = (select id from users where phone = '+996701100012') returning id""")
+    blocked_master = cur.fetchone()[0]
+    cur.execute("""insert into sanctions (target_type, target_id, type, reason, admin_id, created_at)
+                   values ('MASTER', %s, 'BLOCK', 'Не приезжал по заявкам', %s, now() - interval '1 day')""",
+                (blocked_master, admin_id))
+    cur.execute("""insert into complaints (author_id, type, target_id, text, created_at)
+                   select %s, 'MASTER', m.id, 'Взял предоплату и не приехал', now() - interval '6 hours'
+                   from masters m join users u on u.id = m.owner_id where u.phone = '+996701100013'""", (bakyt,))
+
+    # рассылки: отправленная продавцам Toyota (с открытиями) и черновик для мастеров
+    cur.execute("""insert into broadcasts (audience, filters, title_ru, title_kg, body_ru, body_kg, status, scheduled_at,
+                                         started_at, sent_at, created_by, created_at)
+                   values ('SELLERS', jsonb_build_object('brandIds', jsonb_build_array(%s)),
+                           'Покупатели ищут детали на Toyota', 'Сатып алуучулар Toyota тетиктерин издешет',
+                           'Проверьте, что бокс открыт и марка Toyota в списке — запросов стало больше',
+                           'Бокс ачык экенин жана Toyota тизмеде экенин текшериңиз',
+                           'SENT', now() - interval '3 days', now() - interval '3 days', now() - interval '3 days', %s,
+                           now() - interval '3 days') returning id""", (brand_id["toyota"], admin_id))
+    sent = cur.fetchone()[0]
+    cur.execute("""insert into broadcast_recipients (broadcast_id, user_id, delivered_at, opened_at)
+                   select %s, m.user_id, now() - interval '3 days',
+                          case when random() < .45 then now() - interval '3 days' + interval '20 minutes' end
+                   from shop_members m join shops s on s.id = m.shop_id
+                   where s.status = 'ACTIVE' and exists (select 1 from shop_brands sb where sb.shop_id = s.id and sb.brand_id = %s)
+                   on conflict do nothing""", (sent, brand_id["toyota"]))
+    cur.execute("""update broadcasts b set recipients_count = r.n, delivered_count = r.n, opened_count = r.o
+                   from (select count(*) n, count(opened_at) o from broadcast_recipients where broadcast_id = %s) r
+                   where b.id = %s""", (sent, sent))
+    cur.execute("""insert into broadcasts (audience, filters, title_ru, body_ru, created_by)
+                   values ('MASTERS', '{"serviceTypes": ["TIRE_SERVICE"]}', 'Сезон переобувки',
+                           'С 15 октября много заявок на шиномонтаж — включите «Принимаю»', %s)""", (admin_id,))
+
+    # избранное Бакыта
+    for p in RNG.sample([p for p in all_parts if p["shop"] in (azamat["id"], japan["id"])], 3):
+        cur.execute("insert into favorite_parts (user_id, part_id, created_at) values (%s, %s, now())", (bakyt, p["id"]))
+    for s in (azamat, brakes_shop):
+        cur.execute("insert into favorite_shops (user_id, shop_id, created_at) values (%s, %s, now())", (bakyt, s["id"]))
+
+    conn.commit()
+
+    # ── итог ──
+    cur.execute("""select (select count(*) from users), (select count(*) from shops), (select count(*) from parts),
+                          (select count(*) from media), (select count(*) from part_requests), (select count(*) from reviews),
+                          (select count(*) from chats), (select count(*) from part_requests where status = 'ACTIVE')""")
+    u, s, p, m, r, rv, ch, act = cur.fetchone()
+    print(f"Готово: пользователей {u}, магазинов {s}, запчастей {p}, фото {m}, запросов {r} (активных {act}), отзывов {rv}, чатов {ch}")
+    print("\nПокупатель: +996555123456 (Бакыт, Camry 50 · 2012)")
+    print("Тестовые: клиент +996555000001 (Camry 50 · 2014), продавец +996555000002 («Мой бокс», открыт всегда, все марки),")
+    print("          мастер +996555000003 («Мой сервис», все услуги и марки, радиус 30 км, круглосуточно)")
+    print("Мастера: +996701100001…+996701100014")
+    print("Админка: суперадмин +996555000010, админ рынка +996555000011, пароль Kudaibergen2026")
+    print("Продавцы (вход по коду из debugCode):")
+    cur.execute("""select u.phone, s.name, r.code, c.number, s.rating, s.reviews_count,
+                          (select count(*) from parts p where p.shop_id = s.id)
+                   , s.address from shops s join users u on u.id = s.owner_id left join containers c on c.id = s.container_id
+                   left join market_rows r on r.id = c.row_id order by s.id""")
+    for ph, name, row, num, rating, cnt, parts, address in cur.fetchall():
+        where = f"ряд {row:<3} бокс {num:<3}" if row else f"{address}"
+        print(f"  {ph}  {name:<24} {where} ★ {rating} ({cnt})  запчастей {parts}")
+    conn.close()
+
+
 if __name__ == "__main__":
     main()
