@@ -69,9 +69,8 @@ public class PartVideoService {
       }
       String text;
       try {
-         String name = file.getOriginalFilename() == null || file.getOriginalFilename().isBlank()
-               ? "video.mp4" : file.getOriginalFilename();
-         text = speech.transcribe(file.getBytes(), file.getContentType(), name);
+         // MOV с iPhone — тот же контейнер MP4, но распознавание принимает только расширение .mp4
+         text = speech.transcribe(file.getBytes(), "video/mp4", "video.mp4");
       } catch (IOException | RuntimeException e) {
          log.warn("Звук видео не распознан: {}", e.getMessage());
          return null;

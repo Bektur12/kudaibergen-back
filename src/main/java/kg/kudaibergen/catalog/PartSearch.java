@@ -70,7 +70,16 @@ public class PartSearch {
     * остальные запчасти; внутри — sort.
     */
    public List<Hit> find(Query query, int offset, int limit) {
-      Sql sql = build(query, false);
+      return find(query, false, offset, limit);
+   }
+
+   /** Только подходящие машине — «Приложить товар из каталога» к ответу «Есть» (12). */
+   public List<Hit> findFitting(Query query, int offset, int limit) {
+      return find(query, true, offset, limit);
+   }
+
+   private List<Hit> find(Query query, boolean onlyFitting, int offset, int limit) {
+      Sql sql = build(query, onlyFitting);
       if (sql == null) {
          return List.of();
       }

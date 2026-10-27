@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import kg.kudaibergen.common.idempotency.Idempotent;
 import kg.kudaibergen.common.security.AuthPrincipal;
 import kg.kudaibergen.delivery.dto.DeliveryInputs;
 import kg.kudaibergen.delivery.dto.DeliveryOrderDto;
@@ -44,6 +45,7 @@ public class DeliveryController {
 
    @PostMapping("/delivery-orders")
    @ResponseStatus(HttpStatus.CREATED)
+   @Idempotent
    @Operation(summary = "Заказать доставку", description = """
          Товар должен быть в продаже и с «Отправлю в регионы». Продавцу — пуш и карточка заказа в чате
          покупателя с боксом (chatId в ответе). Оплату товара договариваются в чате.""")

@@ -2,6 +2,7 @@ package kg.kudaibergen.delivery;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
@@ -70,9 +71,17 @@ public class DeliveryTariffs {
             properties.courierName(), properties.courierPhone());
    }
 
-   /** Курьер заберёт в тот же день, если упаковали (at) до отсечки по Бишкеку. */
+   /**
+    * Курьер заберёт сегодня: упаковали (at) сегодня до отсечки по Бишкеку — или ещё вчера и раньше (тогда
+    * курьер приезжает в ближайший день, то есть сегодня).
+    */
    public boolean pickupToday(Instant at) {
-      return at.atZone(ClockConfig.MARKET_ZONE).toLocalTime().isBefore(cutoff());
+      ZonedDateTime packed = at.atZone(ClockConfig.MARKET_ZONE);
+      LocalDate today = ZonedDateTime.now(clock.withZone(ClockConfig.MARKET_ZONE)).toLocalDate();
+      if (packed.toLocalDate().isBefore(today)) {
+         return true;
+      }
+      return packed.toLocalDate().equals(today) && packed.toLocalTime().isBefore(cutoff());
    }
 
    /** Сегодняшняя отсечка — «ещё 6 ч 25 мин» в админке. */

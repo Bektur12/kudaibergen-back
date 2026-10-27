@@ -232,11 +232,11 @@ public class MyPartsService {
       PartSearch.Query byText = new PartSearch.Query(text, car, null, null, null, null, false, false, shopId,
             PartSort.NEWEST, List.of());
       LinkedHashSet<Long> ids = new LinkedHashSet<>();
-      search.find(byText, 0, limit).forEach(hit -> ids.add(hit.partId()));
+      search.findFitting(byText, 0, limit).forEach(hit -> ids.add(hit.partId()));
       if (ids.size() < limit) {
          PartSearch.Query byCar = new PartSearch.Query(null, car, null, null, null, null, false, false, shopId,
                PartSort.NEWEST, List.of());
-         search.find(byCar, 0, limit).forEach(hit -> ids.add(hit.partId()));
+         search.findFitting(byCar, 0, limit).forEach(hit -> ids.add(hit.partId()));
       }
       return view.cards(ids.stream().limit(limit).toList(), car, null);
    }

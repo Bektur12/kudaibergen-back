@@ -12,7 +12,7 @@ public interface MediaRepository extends JpaRepository<Media, Long> {
    /**
     * Фото, которые так и не прикрепили (или открепили) и которые старше порога: ни товар (фото и видео), ни фото места,
     * ни аватар магазина или пользователя, ни запрос или ответ «Есть» (фото и голосовые), ни заявка или отклик мастера, ни карточка товара в чате
-    * на них не ссылаются.
+    * и голосовое, скопированное в чат (ответ «Есть», отклик мастера), на них не ссылаются.
     */
    @Query(nativeQuery = true, value = """
          select m.* from media m
@@ -33,6 +33,7 @@ public interface MediaRepository extends JpaRepository<Media, Long> {
            and not exists (select 1 from service_offers so where so.voice_media_id = m.id)
            and not exists (select 1 from messages msg
                            where msg.type = 'PART' and (msg.payload ->> 'mediaId')::bigint = m.id)
+           and not exists (select 1 from messages vm where m.file_key is not null and vm.media_key = m.file_key)
          order by m.id
          limit :limit""")
    List<Media> findOrphans(@Param("before") Instant before, @Param("limit") int limit);

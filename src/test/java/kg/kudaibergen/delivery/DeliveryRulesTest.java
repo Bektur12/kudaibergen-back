@@ -58,6 +58,9 @@ class DeliveryRulesTest {
    void cutoff() {
       assertThat(tariffs.pickupToday(MORNING)).isTrue();
       assertThat(tariffs.pickupToday(EVENING)).isFalse();
+      // упаковали вчера после отсечки — курьер заберёт сегодня, а не «завтра»
+      Instant yesterdayEvening = ZonedDateTime.of(2026, 10, 25, 18, 0, 0, 0, BISHKEK).toInstant();
+      assertThat(tariffs.pickupToday(yesterdayEvening)).isTrue();
       assertThat(tariffs.cutoffAt()).isEqualTo(ZonedDateTime.of(2026, 10, 26, 17, 30, 0, 0, BISHKEK).toInstant());
    }
 
