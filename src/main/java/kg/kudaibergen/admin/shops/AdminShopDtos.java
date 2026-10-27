@@ -31,9 +31,9 @@ public final class AdminShopDtos {
     * предупреждение. openDisputes — открытые споры с участием магазина.
     */
    public record AdminShopRow(Long id, String name, @Nullable String avatarUrl, ShopStatus status, boolean warned,
-                              @MaskedPhone String ownerPhone, LocationDto location,
+                              @MaskedPhone String ownerPhone, @Nullable LocationDto location,
                               @Nullable LocationDto pendingLocation, TenantMatch tenantMatch, Instant submittedAt,
-                              Instant createdAt, int openDisputes) {
+                              Instant createdAt, int openDisputes, boolean onMarket, @Nullable String address) {
    }
 
    public record ShopTabCounts(long all, long pending, long disputes, long blocked, long rejected) {
@@ -58,14 +58,15 @@ public final class AdminShopDtos {
    public record AdminShopDetailDto(Long id, String publicId, String name, @Nullable String avatarUrl,
                                     ShopStatus status, @Nullable String statusReason, boolean warned,
                                     AdminShopOwnerDto owner, @Nullable @MaskedPhone String shopPhone,
-                                    LocationDto location, @Nullable LocationDto pendingLocation,
-                                    AdminTenantDto tenant, TenantMatch tenantMatch, List<String> brands,
+                                    @Nullable LocationDto location, @Nullable LocationDto pendingLocation,
+                                    @Nullable AdminTenantDto tenant, TenantMatch tenantMatch, List<String> brands,
                                     List<String> categories, LocalTime openFrom, LocalTime openTo,
                                     Set<DayOfWeek> workDays, boolean open, java.math.BigDecimal rating,
                                     int reviewsCount, long activeParts, long staffCount, Instant createdAt,
                                     @Nullable Instant verifiedAt, List<AdminVerificationDto> verifications,
                                     List<AdminDisputeDto> openDisputes, long complaints90d, long warnings90d,
-                                    List<SanctionDto> sanctions) {
+                                    List<SanctionDto> sanctions, boolean onMarket, @Nullable String address,
+                                    @Nullable Double lat, @Nullable Double lng) {
    }
 
    /** Сторона спора. shopId / shopName — null, если у заявителя магазина нет. */

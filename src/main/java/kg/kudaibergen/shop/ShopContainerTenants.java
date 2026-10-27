@@ -35,7 +35,7 @@ public class ShopContainerTenants implements ContainerTenants {
       Map<Long, String> avatars = media.thumbUrls(occupying.stream().map(Shop::getAvatarMediaId).toList());
       for (Shop shop : occupying) {
          boolean visible = shop.isActive();
-         if (containerIds.contains(shop.getContainerId())) {
+         if (shop.getContainerId() != null && containerIds.contains(shop.getContainerId())) {
             result.put(shop.getContainerId(), visible ? new Tenant(shop.getId(), shop.getName(),
                   avatars.get(shop.getAvatarMediaId()), Set.copyOf(shop.getBrandIds())) : HIDDEN);
          }

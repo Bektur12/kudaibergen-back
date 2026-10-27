@@ -15,7 +15,11 @@ final class RequestTexts {
 
    /** «Ряд 14 · конт. 12 — 3 200 сом». */
    static String haveBody(String rowLabel, int boxNumber, Integer price) {
-      String place = rowLabel + " · конт. " + boxNumber;
+      return haveBody(rowLabel + " · конт. " + boxNumber, price);
+   }
+
+   /** place — «Ряд 14 · конт. 12» или адрес магазина вне рынка. */
+   static String haveBody(String place, Integer price) {
       return price == null ? place : place + " — " + price(price) + " сом";
    }
 

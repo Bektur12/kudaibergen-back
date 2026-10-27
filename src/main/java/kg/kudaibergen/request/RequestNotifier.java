@@ -7,7 +7,6 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import kg.kudaibergen.market.dto.LocationDto;
 import kg.kudaibergen.media.MediaService;
 import kg.kudaibergen.media.VoiceDto;
 import kg.kudaibergen.notification.push.PushMessage;
@@ -97,10 +96,10 @@ public class RequestNotifier {
       PartRequest request = requests.findById(event.requestId()).orElseThrow();
       RequestReply reply = replies.findById(event.replyId()).orElseThrow();
       Shop shop = shops.findById(reply.getShopId()).orElseThrow();
-      LocationDto location = shopMapper.location(shop.getContainerId());
+      String place = shopMapper.place(shop);
       toBuyer(request, user -> new PushMessage(
             RequestTexts.haveTitle(shop.getName(), user.getLang()),
-            RequestTexts.haveBody(location.rowLabel(), location.number(), reply.getPrice()),
+            RequestTexts.haveBody(place == null ? shop.getName() : place, reply.getPrice()),
             Map.of("type", "REPLY_HAVE", "requestId", request.getId().toString(),
                   "replyId", reply.getId().toString(), "shopId", shop.getId().toString()),
             null, !quietHours.now()));

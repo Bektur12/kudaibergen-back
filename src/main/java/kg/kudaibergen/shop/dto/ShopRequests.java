@@ -5,6 +5,8 @@ import java.time.LocalTime;
 import java.util.List;
 import java.util.Set;
 
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
@@ -19,12 +21,15 @@ public final class ShopRequests {
    }
 
    /**
-    * «Начать получать запросы» (11): ряд и номер контейнера + марки. Название по умолчанию — «Ряд 14, конт. 12»
-    * (поменять — «Изменить» в «Мой бокс»), категории — по желанию, телефон — номер владельца (для «Позвонить»).
-    * Часы по умолчанию 08:00–17:00 без выходных.
+    * «Начать получать запросы» (11): на рынке — ряд и номер контейнера (containerId); вне рынка (свой магазин,
+    * центр) — containerId не передают, нужны address, lat, lng. Плюс марки. Название по умолчанию — «Ряд 14,
+    * конт. 12» (вне рынка — обязательно), категории — по желанию, телефон — номер владельца (для «Позвонить»).
     */
    public record CreateShop(
-         @NotNull(message = "Выберите контейнер") Long containerId,
+         Long containerId,
+         @Size(max = 160, message = "Адрес — до 160 символов") String address,
+         @DecimalMin(value = "-90", message = "Некорректная точка") @DecimalMax(value = "90", message = "Некорректная точка") Double lat,
+         @DecimalMin(value = "-180", message = "Некорректная точка") @DecimalMax(value = "180", message = "Некорректная точка") Double lng,
          String name,
          @NotEmpty(message = "Выберите хотя бы одну марку") Set<Long> brandIds,
          Set<Long> categoryIds,
@@ -33,9 +38,15 @@ public final class ShopRequests {
          Set<DayOfWeek> workDays) {
    }
 
-   /** Частичное обновление профиля (только владелец). phone: пустая строка — убрать. */
+   /**
+    * Частичное обновление профиля (только владелец). phone: пустая строка — убрать. address, lat, lng — только
+    * магазину вне рынка (все три вместе).
+    */
    public record UpdateShop(
          String name,
+         @Size(min = 1, max = 160, message = "Адрес — от 1 до 160 символов") String address,
+         @DecimalMin(value = "-90", message = "Некорректная точка") @DecimalMax(value = "90", message = "Некорректная точка") Double lat,
+         @DecimalMin(value = "-180", message = "Некорректная точка") @DecimalMax(value = "180", message = "Некорректная точка") Double lng,
          LocalTime openFrom,
          LocalTime openTo,
          @Size(min = 1, message = "Нужен хотя бы один рабочий день") Set<DayOfWeek> workDays,

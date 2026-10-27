@@ -414,9 +414,16 @@ public class ChatService {
          }
          Shop shop = shops.findById(chat.getShopId()).orElseThrow();
          payload = new LinkedHashMap<>();
-         payload.put("location", json.convertValue(shopMapper.location(shop.getContainerId()),
-               new TypeReference<Map<String, Object>>() {
-               }));
+         if (shop.isOnMarket()) {
+            payload.put("location", json.convertValue(shopMapper.location(shop.getContainerId()),
+                  new TypeReference<Map<String, Object>>() {
+                  }));
+         } else {
+            // магазин вне рынка — маршрут в 2GIS по адресу и точке
+            payload.put("address", shop.getAddress());
+            payload.put("lat", shop.getLat());
+            payload.put("lng", shop.getLng());
+         }
       }
       return Message.quick(chat.getId(), participant.side(), participant.userId(), reply, reply.label(lang), payload,
             clientId, now);

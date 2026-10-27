@@ -112,7 +112,7 @@ public class VideoFeedService {
                fitsLabel(part.getFitments()), part.isShipsToRegions(), favorite.contains(part.getId()),
                commentCounts.getOrDefault(part.getId(), 0),
                new VideoFeedItemDto.VideoShopDto(shop.id(), shop.name(), shop.avatarUrl(),
-                     ShopMapper.place(shop.location()), shop.phone(), replyMinutes.get(shop.id()))));
+                     ShopMapper.place(shop), shop.phone(), replyMinutes.get(shop.id()))));
       }
       return items;
    }

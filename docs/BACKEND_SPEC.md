@@ -480,3 +480,23 @@ multipart: `file` (аудио до 60 с и 15 МБ), `durationSec` (у M4A се
 - `POST /admin/delivery-orders/{id}/courier-ordered | delivered | cancel` (REQUESTS_MANAGE, без тела) →
   `AdminDeliveryOrderDto`, 409 `BAD_STATUS`. Живые события — `admin:requests`
   `{type: DELIVERY_CHANGED, payload: {id, number, event, sellerName, at}}`.
+
+## 15. Магазины вне рынка (Kia-центр, Toyota-центр…)
+
+Продавец регистрируется либо в контейнере на рынке Кудайберген, либо как отдельный магазин со своим адресом.
+
+- `POST /shops`: на рынке — `{containerId, brandIds, name?, …}` как раньше. Вне рынка — без `containerId`:
+  `{address (1–160), lat, lng, name, brandIds, categoryIds?}` → сразу `ACTIVE` (проверки места нет, даже при
+  `SHOP_VERIFICATION_REQUIRED=true`). Ошибки: `ADDRESS_REQUIRED`, `POINT_REQUIRED`, `NAME_REQUIRED`.
+- `PATCH /my/shop {address, lat, lng}` — новый адрес магазина вне рынка (все три вместе; рыночному — 400
+  `ON_MARKET`). `POST /my/shop/relocation` магазину вне рынка — 400 `NOT_ON_MARKET`.
+- В `ShopCardDto`, `ShopPublicDto`, `MyShopDto` (и `PartDetailDto.shop`, `ReplyDto.shop`): `location` — `null`
+  вне рынка; новые поля `onMarket`, `address`, `lat`, `lng` (заполнены только вне рынка). `ShopBriefDto`:
+  `row`, `rowLabel`, `container`, `side` — `null` вне рынка, плюс `onMarket`, `address`.
+- Строка места («Ряд 14 · конт. 12» под видео, в доставке, чате, пуше «Есть») вне рынка — адрес магазина.
+  Шаблон Ылдам: «Адрес» отправителя — адрес магазина. Быстрый ответ «Маршрут» в чате: payload
+  `{address, lat, lng}` вместо `location`.
+- Запросы: `target=MARKET` — и рыночным, и внешним магазинам марки; `ROWS` / `CONTAINERS` — только рыночным.
+  Карта, маршрут по рынку, споры за контейнер и арендаторы магазины вне рынка не касаются; `NEAREST` — они в конце.
+- Админка: `AdminShopRow` / `AdminShopDetailDto` — `location` и `tenant` могут быть `null`, плюс `onMarket`,
+  `address` (в карточке ещё `lat`, `lng`); поиск — и по адресу.

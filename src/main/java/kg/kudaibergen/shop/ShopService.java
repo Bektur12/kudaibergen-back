@@ -93,17 +93,14 @@ public class ShopService {
       Set<Long> brandIds = requireBrands(request.brandIds());
       Set<Long> categoryIds = request.categoryIds() == null || request.categoryIds().isEmpty() ? Set.of()
             : categories.requireExisting(request.categoryIds());
-      Long containerId = requireFreeContainer(request.containerId());
-      String name = request.name() == null || request.name().isBlank() ? defaultName(containerId)
-            : ShopNames.validate(request.name());
-
-      Shop shop = new Shop(userId, name, containerId);
+      Shop shop = newShop(userId, request);
       // «Позвонить» — главная кнопка у покупателя (05, 06): сразу номер владельца, скрыть можно в профиле
       users.findById(userId).ifPresent(owner -> {
          shop.setPhone(owner.getPhone());
          shop.setPhoneVisible(true);
       });
-      if (!verificationRequired) {
+      // вне рынка проверять место нечего — магазин действует сразу (Shop.offMarket)
+      if (!verificationRequired && shop.isOnMarket()) {
          shop.verified();
       }
       shop.setSchedule(request.openFrom(), request.openTo(), request.workDays());
@@ -118,6 +115,27 @@ public class ShopService {
       members.save(new ShopMember(shop.getId(), userId, MemberRole.OWNER));
       userService.changeRole(userId, UserRole.SELLER);
       return mine(access.requireMember(userId), lang);
+   }
+
+   /** На рынке — в свободном контейнере; без контейнера — магазин вне рынка с адресом, точкой и названием. */
+   Shop newShop(Long userId, ShopRequests.CreateShop request) {
+      if (request.containerId() != null) {
+         Long containerId = requireFreeContainer(request.containerId());
+         String name = request.name() == null || request.name().isBlank() ? defaultName(containerId)
+               : ShopNames.validate(request.name());
+         return new Shop(userId, name, containerId);
+      }
+      if (request.address() == null || request.address().isBlank()) {
+         throw new BadRequestException("ADDRESS_REQUIRED", "Укажите адрес магазина или выберите контейнер на рынке");
+      }
+      if (request.lat() == null || request.lng() == null) {
+         throw new BadRequestException("POINT_REQUIRED", "Поставьте точку магазина на карте");
+      }
+      if (request.name() == null || request.name().isBlank()) {
+         throw new BadRequestException("NAME_REQUIRED", "Укажите название магазина");
+      }
+      return Shop.offMarket(userId, ShopNames.validate(request.name()), request.address().strip(), request.lat(),
+            request.lng());
    }
 
    /** «Ряд 14, конт. 12» — пока продавец не назвал бокс. */
@@ -136,6 +154,15 @@ public class ShopService {
       Shop shop = access.requireOwner(userId).shop();
       if (request.name() != null) {
          shop.setName(ShopNames.validate(request.name()));
+      }
+      if (request.address() != null || request.lat() != null || request.lng() != null) {
+         if (shop.isOnMarket()) {
+            throw new BadRequestException("ON_MARKET", "Бокс на рынке меняет место через «Переехать»");
+         }
+         if (request.address() == null || request.address().isBlank() || request.lat() == null || request.lng() == null) {
+            throw new BadRequestException("ADDRESS_REQUIRED", "Укажите адрес и точку магазина");
+         }
+         shop.moveOffMarket(request.address().strip(), request.lat(), request.lng());
       }
       shop.setSchedule(request.openFrom(), request.openTo(), request.workDays());
       validateSchedule(shop.getOpenFrom(), shop.getOpenTo(), shop.getWorkDays());

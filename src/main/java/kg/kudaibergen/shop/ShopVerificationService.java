@@ -163,6 +163,9 @@ public class ShopVerificationService {
    @Transactional
    public void relocate(Long userId, Long containerId) {
       Shop shop = ownerShop(userId);
+      if (!shop.isOnMarket()) {
+         throw new BadRequestException("NOT_ON_MARKET", "Магазин вне рынка меняет адрес в профиле");
+      }
       if (containerId.equals(shop.getContainerId()) && !shop.isRejected()) {
          throw new BadRequestException("SAME_CONTAINER", "Магазин уже стоит в этом контейнере");
       }

@@ -89,7 +89,8 @@ public class RequestMapper {
 
    /** shop = null — «мой ответ» в ленте продавца: ни карточки, ни пути от входа не нужно. */
    public ReplyDto reply(RequestReply reply, ShopCardDto shop, Long chatId, PartCardDto part) {
-      Integer walkMinutes = shop == null ? null
+      // вне рынка (location = null) пешком от входа не считаем
+      Integer walkMinutes = shop == null || shop.location() == null ? null
             : market.walkMinutesFromEntrance(shop.location().containerId()).orElse(null);
       return new ReplyDto(reply.getId(), reply.getRequestId(), shop, reply.getAnswer(), reply.getCondition(),
             reply.getMessage(), reply.getPrice(), photos(reply.getPhotoIds()), reply.getCreatedAt(),

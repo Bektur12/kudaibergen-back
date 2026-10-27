@@ -77,8 +77,9 @@ public class DeliveryView {
       User owner = users.findById(shop.getOwnerId()).orElse(null);
       String name = owner != null && owner.getName() != null && !owner.getName().isBlank()
             ? owner.getName() : shop.getName();
-      String place = ShopMapper.place(shopMapper.location(shop.getContainerId()));
-      String address = place == null ? "рынок Кудайберген"
+      String place = shopMapper.place(shop);
+      // вне рынка — адрес самого магазина; на рынке — «рынок Кудайберген, ряд 14, конт. 12»
+      String address = !shop.isOnMarket() ? shop.getAddress() : place == null ? "рынок Кудайберген"
             : "рынок Кудайберген, " + place.toLowerCase(Locale.ROOT).replace(" · ", ", ");
       String phone = shop.getPhone() != null ? shop.getPhone() : owner == null ? null : owner.getPhone();
       return new Seller(shop.getId(), shop.getName(), name, place, address, phone);

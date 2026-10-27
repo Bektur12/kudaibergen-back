@@ -292,12 +292,14 @@ public class AdminModerationService {
 
    private PartyDto shopParty(Long shopId) {
       return jdbc.query("""
-            select s.id, s.name, s.status, s.container_id, s.rating, s.reviews_count, u.phone
+            select s.id, s.name, s.status, s.container_id, s.address, s.rating, s.reviews_count, u.phone
               from shops s join users u on u.id = s.owner_id
             where s.id = :id""", Map.of("id", shopId), (rs, n) -> {
-         LocationDto location = market.location(rs.getLong("container_id"));
+         // вне рынка — адрес магазина
+         LocationDto location = market.location((Long) rs.getObject("container_id"));
+         String place = location == null ? rs.getString("address") : location.rowLabel() + " · " + location.number();
          return new PartyDto(SanctionTarget.SHOP, rs.getLong("id"), rs.getString("name"), rs.getString("phone"),
-               rs.getString("status"), location.rowLabel() + " · " + location.number(), rs.getBigDecimal("rating"),
+               rs.getString("status"), place, rs.getBigDecimal("rating"),
                rs.getInt("reviews_count"));
       }).stream().findFirst().orElse(null);
    }

@@ -19,13 +19,17 @@ import org.springframework.stereotype.Component;
 @Component
 public class AdminShopQueries {
 
-   /** Магазин + владелец + контейнер, который проверяется (новое место при переезде, иначе текущее). */
+   /**
+    * Магазин + владелец + контейнер, который проверяется (новое место при переезде, иначе текущее). Магазин вне
+    * рынка — без контейнера (left join), ищется и по адресу.
+    */
    private static final String FROM = """
           from shops s
           join users u on u.id = s.owner_id
-          join containers c on c.id = coalesce(s.pending_container_id, s.container_id)
+          left join containers c on c.id = coalesce(s.pending_container_id, s.container_id)
          where (cast(:q as text) is null
                 or lower(s.name) like :like escape '\\'
+                or lower(coalesce(s.address, '')) like :like escape '\\'
                 or (cast(:digits as text) is not null and u.phone like '%' || :digits || '%')
                 or (cast(:row as text) is not null and exists (
                       select 1 from containers k join market_rows r on r.id = k.row_id
@@ -46,7 +50,7 @@ public class AdminShopQueries {
 
    /** Строка списка из базы: что нужно для AdminShopRow, без вычислений над картой. */
    public record ShopRowData(Long id, String name, Long avatarMediaId, String status, String ownerPhone,
-                             Long containerId, Long pendingContainerId, boolean tenantPhoneKnown,
+                             Long containerId, String address, Long pendingContainerId, boolean tenantPhoneKnown,
                              boolean tenantIsMember, boolean smsConfirmed, int openDisputes, Instant submittedAt,
                              Instant createdAt) {
    }
@@ -54,7 +58,7 @@ public class AdminShopQueries {
    public List<ShopRowData> page(ShopTab tab, String q, long afterId, int limit) {
       MapSqlParameterSource params = search(q).addValue("after", afterId).addValue("limit", limit + 1);
       return jdbc.query("""
-            select s.id, s.name, s.avatar_media_id, s.status, u.phone as owner_phone, s.container_id,
+            select s.id, s.name, s.avatar_media_id, s.status, u.phone as owner_phone, s.container_id, s.address,
                    s.pending_container_id, c.tenant_phone is not null as tenant_known,
                    (c.tenant_phone is not null and exists (
                       select 1 from shop_members m join users mu on mu.id = m.user_id
@@ -84,7 +88,7 @@ public class AdminShopQueries {
    /** Сверка с арендатором для одного магазина — тот же расчёт, что в списке. */
    public ShopRowData one(Long shopId) {
       List<ShopRowData> rows = jdbc.query("""
-            select s.id, s.name, s.avatar_media_id, s.status, u.phone as owner_phone, s.container_id,
+            select s.id, s.name, s.avatar_media_id, s.status, u.phone as owner_phone, s.container_id, s.address,
                    s.pending_container_id, c.tenant_phone is not null as tenant_known,
                    (c.tenant_phone is not null and exists (
                       select 1 from shop_members m join users mu on mu.id = m.user_id
@@ -98,7 +102,7 @@ public class AdminShopQueries {
                    s.created_at
               from shops s
               join users u on u.id = s.owner_id
-              join containers c on c.id = coalesce(s.pending_container_id, s.container_id)
+              left join containers c on c.id = coalesce(s.pending_container_id, s.container_id)
              where s.id = :id""", new MapSqlParameterSource("id", shopId), AdminShopQueries::row);
       return rows.isEmpty() ? null : rows.get(0);
    }
@@ -226,8 +230,8 @@ public class AdminShopQueries {
 
    private static ShopRowData row(ResultSet rs, int n) throws SQLException {
       return new ShopRowData(rs.getLong("id"), rs.getString("name"), (Long) rs.getObject("avatar_media_id"),
-            rs.getString("status"), rs.getString("owner_phone"), rs.getLong("container_id"),
-            (Long) rs.getObject("pending_container_id"), rs.getBoolean("tenant_known"),
+            rs.getString("status"), rs.getString("owner_phone"), (Long) rs.getObject("container_id"),
+            rs.getString("address"), (Long) rs.getObject("pending_container_id"), rs.getBoolean("tenant_known"),
             rs.getBoolean("tenant_member"), rs.getBoolean("sms_ok"), rs.getInt("disputes"),
             rs.getTimestamp("submitted_at").toInstant(), rs.getTimestamp("created_at").toInstant());
    }

@@ -7,8 +7,10 @@ import org.springframework.lang.Nullable;
 
 /**
  * Краткая карточка магазина: ответы «Есть» (05), карточка запчасти (29), список рядом (15).
- * phone — для «Позвонить» (null — продавец скрыл номер).
+ * phone — для «Позвонить» (null — продавец скрыл номер). onMarket — бокс на рынке Кудайберген (location — ряд и
+ * контейнер); вне рынка (свой магазин, центр) location = null, address, lat, lng — адрес и точка.
  */
 public record ShopCardDto(Long id, String name, @Nullable String avatarUrl, BigDecimal rating, int reviewsCount,
-                          LocationDto location, OpenStateDto open, @Nullable String phone) {
+                          @Nullable LocationDto location, OpenStateDto open, @Nullable String phone, boolean onMarket,
+                          @Nullable String address, @Nullable Double lat, @Nullable Double lng) {
 }

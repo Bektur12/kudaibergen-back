@@ -48,7 +48,8 @@ public class ShopMapper {
 
    public ShopCardDto card(Shop shop) {
       return new ShopCardDto(shop.getId(), shop.getName(), avatarUrl(shop), shop.getRating(), shop.getReviewsCount(),
-            location(shop.getContainerId()), hours.state(shop), shop.isPhoneVisible() ? shop.getPhone() : null);
+            location(shop.getContainerId()), hours.state(shop), shop.isPhoneVisible() ? shop.getPhone() : null,
+            shop.isOnMarket(), shop.getAddress(), shop.getLat(), shop.getLng());
    }
 
    public ShopPublicDto publicProfile(Shop shop, boolean favorite, Lang lang) {
@@ -57,7 +58,7 @@ public class ShopMapper {
             shop.getReviewsCount(), location(shop.getContainerId()), hours.state(shop), brands(shop),
             categories(shop, lang), shop.isPhoneVisible() ? shop.getPhone() : null, favorite, photos,
             new ShopPublicDto.ShopCounts(parts.countByShopIdAndStatus(shop.getId(), PartStatus.ACTIVE), photos.size(),
-                  shop.getReviewsCount()));
+                  shop.getReviewsCount()), shop.isOnMarket(), shop.getAddress(), shop.getLat(), shop.getLng());
    }
 
    public MyShopDto mine(Shop shop, MemberRole role, VerificationDto verification, int staffCount, Lang lang) {
@@ -66,7 +67,8 @@ public class ShopMapper {
             shop.getPendingContainerId() == null ? null : location(shop.getPendingContainerId()),
             verification, hours.state(shop), shop.isOpen(), shop.getPhone(), shop.isPhoneVisible(), shop.getRating(),
             shop.getReviewsCount(), brands(shop), categories(shop, lang), staffCount,
-            List.copyOf(media.photos(shop.getPhotoIds()).values()));
+            List.copyOf(media.photos(shop.getPhotoIds()).values()), shop.isOnMarket(), shop.getAddress(), shop.getLat(),
+            shop.getLng());
    }
 
    /** Аватар — превью 320 px; null — клиент рисует первую букву названия. */
@@ -82,6 +84,16 @@ public class ShopMapper {
    /** «Ряд 14 · конт. 12» — под видео, в заказе с доставкой и в заявке курьеру; null — места нет. */
    public static String place(LocationDto location) {
       return location == null ? null : location.rowLabel() + " · конт. " + location.number();
+   }
+
+   /** Место магазина строкой: на рынке — «Ряд 14 · конт. 12», вне рынка — его адрес. */
+   public static String place(ShopCardDto shop) {
+      return shop.onMarket() ? place(shop.location()) : shop.address();
+   }
+
+   /** То же по сущности — для пушей и шаблонов. */
+   public String place(Shop shop) {
+      return shop.isOnMarket() ? place(location(shop.getContainerId())) : shop.getAddress();
    }
 
    public LocationDto location(Long containerId) {

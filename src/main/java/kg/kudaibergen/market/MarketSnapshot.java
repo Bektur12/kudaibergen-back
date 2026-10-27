@@ -130,7 +130,7 @@ public final class MarketSnapshot {
    }
 
    public Optional<ContainerView> container(Long id) {
-      return Optional.ofNullable(containersById.get(id));
+      return id == null ? Optional.empty() : Optional.ofNullable(containersById.get(id));
    }
 
    public Optional<ContainerView> containerByToken(String token) {

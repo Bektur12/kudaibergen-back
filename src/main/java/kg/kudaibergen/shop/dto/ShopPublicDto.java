@@ -13,11 +13,13 @@ import org.springframework.lang.Nullable;
  * Профиль продавца для покупателя (экран 30). phone — только если продавец разрешил показывать
  * (иначе «Позвонить» неактивна). photos — фото места, первое — обложка («1 / 5»). counts — вкладки
  * «Запчасти 38», «Фото 5», «Отзывы 126». publicId — для ссылки «Поделиться» (GET /shops/public/{publicId}).
+ * onMarket / address / lat / lng — как в ShopCardDto: вне рынка location = null, есть адрес и точка.
  */
 public record ShopPublicDto(Long id, String publicId, String name, @Nullable String avatarUrl, BigDecimal rating, int reviewsCount,
-                            LocationDto location, OpenStateDto open, List<BrandDto> brands,
+                            @Nullable LocationDto location, OpenStateDto open, List<BrandDto> brands,
                             List<CategoryDto> categories, @Nullable String phone, boolean isFavorite, List<PhotoDto> photos,
-                            ShopCounts counts) {
+                            ShopCounts counts, boolean onMarket, @Nullable String address, @Nullable Double lat,
+                            @Nullable Double lng) {
 
    public record ShopCounts(long parts, int photos, int reviews) {
    }

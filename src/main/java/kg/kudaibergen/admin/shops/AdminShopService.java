@@ -105,7 +105,7 @@ public class AdminShopService {
             row.avatarMediaId() == null ? null : avatars.get(row.avatarMediaId()), ShopStatus.valueOf(row.status()),
             warned.contains(row.id()), row.ownerPhone(), market.location(row.containerId()),
             row.pendingContainerId() == null ? null : market.location(row.pendingContainerId()), match(row),
-            row.submittedAt(), row.createdAt(), row.openDisputes())).toList();
+            row.submittedAt(), row.createdAt(), row.openDisputes(), row.containerId() != null, row.address())).toList();
       String next = more ? CursorPage.encode(String.valueOf(page.get(page.size() - 1).id())) : null;
       return new AdminPage<>(items, next, queries.counts(q));
    }
@@ -118,8 +118,9 @@ public class AdminShopService {
       ShopRowData row = queries.one(shopId);
       User owner = users.findById(shop.getOwnerId()).orElseThrow();
       Long checked = shop.getPendingContainerId() != null ? shop.getPendingContainerId() : shop.getContainerId();
-      // арендатор — из базы, а не из снимка карты: импорт и споры меняют его без перезагрузки схемы
-      Container container = containers.findById(checked).orElseThrow();
+      // арендатор — из базы, а не из снимка карты: импорт и споры меняют его без перезагрузки схемы;
+      // у магазина вне рынка контейнера и арендатора нет
+      Container container = checked == null ? null : containers.findById(checked).orElseThrow();
       Instant since = Instant.now().minus(Duration.ofDays(90));
       List<AdminVerificationDto> history = verifications
             .findByShopIdOrderByCreatedAtDescIdDesc(shopId, PageRequest.of(0, VERIFICATIONS)).stream()
@@ -132,13 +133,14 @@ public class AdminShopService {
             new AdminShopOwnerDto(owner.getId(), owner.getName(), owner.getPhone()), shop.getPhone(),
             market.location(shop.getContainerId()),
             shop.getPendingContainerId() == null ? null : market.location(shop.getPendingContainerId()),
-            new AdminTenantDto(container.getTenantName(), container.getTenantPhone(),
+            container == null ? null : new AdminTenantDto(container.getTenantName(), container.getTenantPhone(),
                   container.getTenantPhone() == null ? null : row.tenantIsMember()),
             match(row), queries.brandNames(shopId), queries.categoryNames(shopId), shop.getOpenFrom(),
             shop.getOpenTo(), shop.workDaySet(), shop.isOpen(), shop.getRating(), shop.getReviewsCount(),
             queries.activeParts(shopId), queries.members(shopId), shop.getCreatedAt(), shop.getVerifiedAt(), history,
             disputesOf(shopId), queries.complaints90d(shopId),
-            sanctions.warningsSince(SanctionTarget.SHOP, shopId, since), sanctions.history(SanctionTarget.SHOP, shopId));
+            sanctions.warningsSince(SanctionTarget.SHOP, shopId, since), sanctions.history(SanctionTarget.SHOP, shopId),
+            shop.isOnMarket(), shop.getAddress(), shop.getLat(), shop.getLng());
    }
 
    // ─────────────────────── решения ───────────────────────

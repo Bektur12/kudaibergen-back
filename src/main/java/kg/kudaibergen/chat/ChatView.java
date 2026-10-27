@@ -232,7 +232,8 @@ public class ChatView {
          } else if (mySide == ChatSide.BUYER) {
             Shop shop = shopsById.get(chat.getShopId());
             LocationDto location = shopMapper.location(shop.getContainerId());
-            String place = location.rowLabel() + " · Бокс " + location.number();
+            // вне рынка — адрес магазина
+            String place = location == null ? shop.getAddress() : location.rowLabel() + " · Бокс " + location.number();
             title = shop.getName();
             subtitle = topic == null ? place : topic + " · " + place;
             avatarUrl = avatars.get(shop.getAvatarMediaId());

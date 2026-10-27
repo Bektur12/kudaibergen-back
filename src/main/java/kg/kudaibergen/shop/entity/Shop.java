@@ -26,7 +26,10 @@ import jakarta.persistence.OrderColumn;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 
-/** Магазин продавца в контейнере (экраны 10а, 10, 21, 22, 23, 30). */
+/**
+ * Магазин продавца (экраны 10а, 10, 21, 22, 23, 30): в контейнере на рынке Кудайберген (containerId) или вне
+ * рынка — свой магазин или центр с адресом и точкой (address, lat, lng; containerId = null).
+ */
 @Entity
 @Table(name = "shops")
 public class Shop {
@@ -41,8 +44,17 @@ public class Shop {
    @Column(nullable = false, length = 60)
    private String name;
 
-   @Column(name = "container_id", nullable = false)
+   /** null — магазин вне рынка. */
+   @Column(name = "container_id")
    private Long containerId;
+
+   /** Магазин вне рынка: адрес и точка («Маршрут» в 2GIS). У рыночного — null. */
+   @Column(length = 160)
+   private String address;
+
+   private Double lat;
+
+   private Double lng;
 
    @Column(name = "pending_container_id")
    private Long pendingContainerId;
@@ -130,6 +142,43 @@ public class Shop {
       this.containerId = containerId;
    }
 
+   /** Магазин вне рынка: проверять место не нужно — действует сразу. */
+   public static Shop offMarket(Long ownerId, String name, String address, double lat, double lng) {
+      Shop shop = new Shop(ownerId, name, null);
+      shop.address = address;
+      shop.lat = lat;
+      shop.lng = lng;
+      shop.verified();
+      return shop;
+   }
+
+   /** На рынке Кудайберген — есть контейнер. */
+   public boolean isOnMarket() {
+      return containerId != null;
+   }
+
+   /** Новый адрес и точка магазина вне рынка. */
+   public void moveOffMarket(String address, double lat, double lng) {
+      if (isOnMarket()) {
+         throw new IllegalStateException("Рыночный магазин переезжает через контейнер");
+      }
+      this.address = address;
+      this.lat = lat;
+      this.lng = lng;
+   }
+
+   public String getAddress() {
+      return address;
+   }
+
+   public Double getLat() {
+      return lat;
+   }
+
+   public Double getLng() {
+      return lng;
+   }
+
    public String getPublicId() {
       return publicId;
    }
@@ -187,6 +236,9 @@ public class Shop {
 
    /** Контейнер, который сейчас надо подтвердить; null — подтверждать нечего. */
    public Long containerToVerify() {
+      if (!isOnMarket() && pendingContainerId == null) {
+         return null;
+      }
       if (pendingContainerId != null) {
          return pendingContainerId;
       }

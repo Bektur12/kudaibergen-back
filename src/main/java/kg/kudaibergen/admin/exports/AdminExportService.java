@@ -77,7 +77,8 @@ public class AdminExportService {
       log("SHOPS", rows.size());
       return new Xlsx().sheet("Продавцы", List.of("ID", "Магазин", "Телефон владельца", "Место", "Переезд",
                   "Сверка с арендатором", "Статус", "Предупреждён", "Споров", "Подал", "Создан"),
-            rows.stream().map(r -> row(r.id(), r.name(), Phones.forViewer(r.ownerPhone()), place(r.location()),
+            rows.stream().map(r -> row(r.id(), r.name(), Phones.forViewer(r.ownerPhone()),
+                  r.location() == null ? r.address() : place(r.location()),
                   r.pendingLocation() == null ? null : place(r.pendingLocation()), r.tenantMatch().name(),
                   r.status().name(), r.warned(), r.openDisputes(), r.submittedAt(), r.createdAt())).toList());
    }

@@ -138,8 +138,9 @@ public class MarketMapService {
             .orElseThrow(() -> new NotFoundException("CONTAINER_NOT_FOUND", "Контейнер не найден"));
    }
 
+   /** Место контейнера; null — контейнера нет (магазин вне рынка). */
    public LocationDto location(Long containerId) {
-      return LocationDto.of(container(containerId));
+      return containerId == null ? null : LocationDto.of(container(containerId));
    }
 
    // ─────────────────────── где я ───────────────────────
