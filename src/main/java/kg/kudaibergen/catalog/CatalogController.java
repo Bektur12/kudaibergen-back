@@ -20,6 +20,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -158,6 +159,13 @@ public class CatalogController {
    @Operation(summary = "В избранное (сердечко)")
    public void favorite(@AuthenticationPrincipal AuthPrincipal principal, @PathVariable Long id) {
       catalog.addFavorite(principal.userId(), id);
+   }
+
+   @PostMapping("/parts/{id}/share")
+   @ResponseStatus(HttpStatus.NO_CONTENT)
+   @Operation(summary = "Поделились товаром (самолётик в ленте видео) — +1 к счётчику; гостю тоже")
+   public void share(@PathVariable Long id) {
+      videos.share(id);
    }
 
    @DeleteMapping("/parts/{id}/favorite")

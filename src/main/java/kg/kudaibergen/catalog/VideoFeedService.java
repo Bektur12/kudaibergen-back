@@ -56,11 +56,12 @@ public class VideoFeedService {
    private final NamedParameterJdbcTemplate jdbc;
    private final Clock clock;
    private final PartCommentRepository comments;
+   private final PartShareRepository shares;
 
    public VideoFeedService(PartRepository parts, PartSearch search, CarFilters carFilters, MediaService media,
                            ShopRepository shops, ShopMapper shopMapper, FavoritePartRepository favorites,
                            VehicleDirectory directory, NamedParameterJdbcTemplate jdbc, Clock clock,
-                           PartCommentRepository comments) {
+                           PartCommentRepository comments, PartShareRepository shares) {
       this.parts = parts;
       this.search = search;
       this.carFilters = carFilters;
@@ -72,6 +73,7 @@ public class VideoFeedService {
       this.jdbc = jdbc;
       this.clock = clock;
       this.comments = comments;
+      this.shares = shares;
    }
 
    @Transactional(readOnly = true)
@@ -99,7 +101,9 @@ public class VideoFeedService {
       shops.findAllById(shopIds).forEach(shop -> cards.put(shop.getId(), shopMapper.card(shop)));
       Map<Long, Integer> replyMinutes = replyMinutes(shopIds);
       Set<Long> favorite = favorites.favoriteAmong(viewerId, ids);
+      Map<Long, Integer> favoriteCounts = favorites.counts(ids);
       Map<Long, Integer> commentCounts = comments.counts(ids);
+      Map<Long, Integer> shareCounts = shares.counts(ids);
       List<VideoFeedItemDto> items = new ArrayList<>();
       for (Part part : ordered) {
          VideoDto video = videos.get(part.getVideoMediaId());
@@ -110,11 +114,20 @@ public class VideoFeedService {
          items.add(new VideoFeedItemDto(part.getId(), part.getPublicId(), part.getTitle(), part.getPrice(),
                PartCardDto.KGS, part.getCondition(), video, car == null ? null : Fits.anyFits(part.getFitments(), car),
                fitsLabel(part.getFitments()), part.isShipsToRegions(), favorite.contains(part.getId()),
-               commentCounts.getOrDefault(part.getId(), 0),
+               favoriteCounts.getOrDefault(part.getId(), 0), commentCounts.getOrDefault(part.getId(), 0),
+               shareCounts.getOrDefault(part.getId(), 0),
                new VideoFeedItemDto.VideoShopDto(shop.id(), shop.name(), shop.avatarUrl(),
                      ShopMapper.place(shop), shop.phone(), replyMinutes.get(shop.id()))));
       }
       return items;
+   }
+
+   /** «Поделиться» в ленте: +1 к счётчику; гостю тоже. */
+   @Transactional
+   public void share(Long partId) {
+      if (!shares.increment(partId)) {
+         throw CatalogService.notFound();
+      }
    }
 
    /**

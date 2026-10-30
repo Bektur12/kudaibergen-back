@@ -82,7 +82,7 @@ public class SecurityConfig {
                   // гость (ТЗ, раздел 2): карта, маршрут, каталог, карточка товара, профиль магазина.
                   // Токен, если он есть, всё равно разбирается — например, для признака «Подходит».
                   .requestMatchers(HttpMethod.GET, PUBLIC_READ).permitAll()
-                  .requestMatchers(HttpMethod.POST, "/api/v1/market/locate").permitAll()
+                  .requestMatchers(HttpMethod.POST, "/api/v1/market/locate", "/api/v1/parts/*/share").permitAll()
                   .requestMatchers(HttpMethod.POST, ADMIN_AUTH).permitAll()
                   // только токен админки; конкретное право — @PreAuthorize на каждом эндпоинте
                   .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")

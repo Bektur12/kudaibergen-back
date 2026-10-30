@@ -1,6 +1,7 @@
 package kg.kudaibergen.catalog;
 
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -36,6 +37,20 @@ public class FavoritePartRepository {
       return new HashSet<>(jdbc.queryForList(
             "select part_id from favorite_parts where user_id = :userId and part_id in (:partIds)",
             Map.of("userId", userId, "partIds", partIds), Long.class));
+   }
+
+   /** Сколько человек сохранили каждый товар — цифра под закладкой в ленте видео. */
+   public Map<Long, Integer> counts(Collection<Long> partIds) {
+      Map<Long, Integer> result = new HashMap<>();
+      if (partIds.isEmpty()) {
+         return result;
+      }
+      jdbc.query("select part_id, count(*) as n from favorite_parts where part_id in (:ids) group by part_id",
+            Map.of("ids", partIds),
+            rs -> {
+               result.put(rs.getLong("part_id"), rs.getInt("n"));
+            });
+      return result;
    }
 
    /** Кто держит запчасть в избранном — для «подешевело» и «закончилось». */
