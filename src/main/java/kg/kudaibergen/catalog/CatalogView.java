@@ -97,13 +97,16 @@ public class CatalogView {
    public List<MyPartItemDto> myItems(List<Part> page, Lang lang) {
       Map<Long, PhotoDto> photos = media.photos(page.stream()
             .filter(part -> !part.getPhotoIds().isEmpty()).map(part -> part.getPhotoIds().get(0)).toList());
+      Map<Long, VideoDto> videos = media.videos(page.stream().filter(Part::hasVideo).map(Part::getVideoMediaId).toList());
       return page.stream().map(part -> {
          List<BrandDto> brands = part.getFitments().stream().map(Fitment::getBrandId).distinct()
                .map(directory::brand).map(BrandDto::of).toList();
          List<String> labels = fitments(part.getFitments(), lang).stream().map(FitmentDto::label).toList();
          return new MyPartItemDto(part.getId(), part.getStatus(), part.getTitle(),
                part.getPhotoIds().isEmpty() ? null : photos.get(part.getPhotoIds().get(0)), brands, labels,
-               part.getPrice(), part.getQuantity(), StockStatus.of(part.inStock()), part.getViewsCount());
+               part.getPrice(), part.getQuantity(), StockStatus.of(part.inStock()), part.getViewsCount(),
+               part.hasVideo() && videos.containsKey(part.getVideoMediaId())
+                     ? videos.get(part.getVideoMediaId()).posterUrl() : null);
       }).toList();
    }
 
