@@ -556,13 +556,16 @@ public class ChatService {
          return result;
       }
       if (participant.side() == ChatSide.BUYER) {
+         List<String> templates = lang == Lang.KG ? SHOP_TEMPLATES_KG : SHOP_TEMPLATES_RU;
+         // «Ассаламу алейкум!» — первым, до действий; остальные шаблоны после них.
+         buyerTemplates(templates.subList(0, 1), result);
          result.add(quick(QuickReply.ROUTE_TO_BOX, lang));
          boolean requestOpen = chat.getRequestId() != null
                && requests.findById(chat.getRequestId()).map(PartRequest::isOpen).orElse(false);
          if (requestOpen) {
             result.add(quick(QuickReply.CLOSE_REQUEST, lang));
          }
-         buyerTemplates(lang == Lang.KG ? SHOP_TEMPLATES_KG : SHOP_TEMPLATES_RU, result);
+         buyerTemplates(templates.subList(1, templates.size()), result);
          return result;
       }
       if (chat.withMaster()) {
