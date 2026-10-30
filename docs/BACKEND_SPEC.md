@@ -396,7 +396,7 @@ multipart: `file` (аудио до 60 с и 15 МБ), `durationSec` (у M4A се
 - `POST /requests`: машина — `carId` из гаража **или** `modelId` + `year` без гаража (мастер СТО ищет запчасть для
   машины клиента; в гараж не сохраняется; 400 `CAR_REQUIRED`, `YEAR_OUT_OF_RANGE`). Счётчик — `GET /requests/estimate?brandId=`.
   `text` необязателен; нужно хоть что-то: фото (`mediaIds`), голосовое (`voiceMediaId`) или текст
-  от 3 символов (400 `TEXT_REQUIRED` / `TEXT_TOO_SHORT`). Без текста подпись — распознанное голосовое, иначе
+  без минимальной длины (400 `TEXT_REQUIRED`). Без текста подпись — распознанное голосовое, иначе
   «Голосовой запрос» / «Запчасть по фото». `target` по умолчанию `MARKET`.
 - `RequestDetailDto.voice`, `IncomingRequestDto.voice` — голосовое покупателя. `RequestSummaryDto.minPrice` — «3 есть · от 2 900 с».
 - `ReplyDto`: `voice?`, `original?`, `manufacturer?`, `tags[]`, `walkMinutes?` (пешком от главного входа — «Ряд Ц · конт. 4 ·
@@ -428,8 +428,8 @@ multipart: `file` (аудио до 60 с и 15 МБ), `durationSec` (у M4A се
 
 ### 13.5 Мастера (16–20)
 - `POST /service-requests`: `when` по умолчанию `NOW`, `where` — `I_COME` (эвакуатор — `PICKUP_POINT`, выездной —
-  `MASTER_COMES`); `description` необязателен при фото / видео / `voiceMediaId` (400 `DESCRIPTION_REQUIRED` /
-  `DESCRIPTION_TOO_SHORT`). «Рядом с рынком Кудайберген» — координаты рынка в `lat/lng`.
+  `MASTER_COMES`); `description` необязателен при фото / видео / `voiceMediaId`, без минимальной длины
+  (400 `DESCRIPTION_REQUIRED`). «Рядом с рынком Кудайберген» — координаты рынка в `lat/lng`.
 - `ServiceRequestDetailDto.voice`, `MasterFeedItemDto.voice` — голосовое клиента; `ServiceOfferDto.voice` — мастера.
 - Отклик `POST /my/master/requests/{id}/offer {answer, priceFrom?, availableAt?, voiceMediaId?}`; голосовое мастера
   приходит клиенту в чат. «Выезжаю к клиенту в радиусе 5 км» — `PATCH /my/master {mobile, radiusKm}`.

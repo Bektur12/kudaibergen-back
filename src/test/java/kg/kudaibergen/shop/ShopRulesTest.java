@@ -64,7 +64,8 @@ class ShopRulesTest {
    void названиеБезТелефоновИСсылок() {
       assertThat(ShopNames.validate("  Автодеталь   Азамат ")).isEqualTo("Автодеталь Азамат");
       assertThat(ShopNames.validate("Бокс 12")).isEqualTo("Бокс 12");
-      assertThatThrownBy(() -> ShopNames.validate("А")).isInstanceOf(BadRequestException.class);
+      assertThat(ShopNames.validate("А")).isEqualTo("А");
+      assertThatThrownBy(() -> ShopNames.validate("  ")).isInstanceOf(BadRequestException.class);
       assertThatThrownBy(() -> ShopNames.validate("Запчасти 0555 123 456")).isInstanceOf(BadRequestException.class);
       assertThatThrownBy(() -> ShopNames.validate("parts.kg")).isInstanceOf(BadRequestException.class);
       assertThatThrownBy(() -> ShopNames.validate("Пишите @autoparts")).isInstanceOf(BadRequestException.class);

@@ -227,9 +227,6 @@ public class RequestService {
    static String requestText(String typed, Media voice, boolean hasPhotos, Lang lang) {
       String text = typed == null ? "" : typed.trim().replaceAll("\\s+", " ");
       if (!text.isEmpty()) {
-         if (text.length() < 3) {
-            throw new BadRequestException("TEXT_TOO_SHORT", "Напишите хотя бы 3 буквы — или скажите голосом");
-         }
          return text;
       }
       if (voice != null && voice.getTranscript() != null && voice.getTranscript().strip().length() >= 3) {

@@ -400,12 +400,12 @@ public class MyPartsService {
    }
 
    /**
-    * Незаполненные обязательные поля — имена полей формы. С видео («Выложить видео») фото и категория
-    * не нужны: товар виден в ленте и в поиске по тексту и машине.
+    * Незаполненные обязательные поля — имена полей формы. С видео («Выложить видео») фото, категория и машины
+    * не нужны: ролик — реклама в ленте, его видят все.
     */
    static List<String> missing(Part part) {
       List<String> missing = new ArrayList<>();
-      if (part.getTitle() == null || part.getTitle().length() < 3) {
+      if (part.getTitle() == null || part.getTitle().isBlank()) {
          missing.add("title");
       }
       if (part.getCategoryId() == null && !part.hasVideo()) {
@@ -420,7 +420,8 @@ public class MyPartsService {
       if (part.getPhotoIds().isEmpty() && !part.hasVideo()) {
          missing.add("mediaIds");
       }
-      if (part.getFitments().isEmpty()) {
+      // видео-ролик (реклама в ленте) — без машин: его видят все
+      if (part.getFitments().isEmpty() && !part.hasVideo()) {
          missing.add("fitments");
       }
       return missing;

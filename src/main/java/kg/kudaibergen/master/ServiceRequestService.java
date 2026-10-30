@@ -166,9 +166,6 @@ public class ServiceRequestService {
    static String description(String typed, Media voice, boolean hasMedia, Lang lang) {
       String text = typed == null ? "" : typed.trim().replaceAll("\\s+", " ");
       if (!text.isEmpty()) {
-         if (text.length() < 10) {
-            throw new BadRequestException("DESCRIPTION_TOO_SHORT", "Опишите подробнее — от 10 символов, или скажите голосом");
-         }
          return text;
       }
       String said = voice == null || voice.getTranscript() == null ? "" : voice.getTranscript().strip().replaceAll("\\s+", " ");
