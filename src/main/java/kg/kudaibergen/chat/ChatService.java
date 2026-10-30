@@ -552,6 +552,7 @@ public class ChatService {
       Chat chat = participant.chat();
       List<QuickReplyDto> result = new ArrayList<>();
       if (participant.side() == ChatSide.BUYER && chat.withMaster()) {
+         buyerTemplates(lang == Lang.KG ? MASTER_TEMPLATES_KG : MASTER_TEMPLATES_RU, result);
          return result;
       }
       if (participant.side() == ChatSide.BUYER) {
@@ -561,6 +562,7 @@ public class ChatService {
          if (requestOpen) {
             result.add(quick(QuickReply.CLOSE_REQUEST, lang));
          }
+         buyerTemplates(lang == Lang.KG ? SHOP_TEMPLATES_KG : SHOP_TEMPLATES_RU, result);
          return result;
       }
       if (chat.withMaster()) {
@@ -572,6 +574,20 @@ public class ChatService {
       templates.findByShopIdOrderBySortOrderAscIdAsc(chat.getShopId()).forEach(template ->
             result.add(new QuickReplyDto(null, QuickReply.QuickReplyKind.MESSAGE, template.getId(), template.getText())));
       return result;
+   }
+
+   /** Шаблоны покупателя над полем ввода: обычный текст, отправляется как есть. */
+   private static final List<String> SHOP_TEMPLATES_RU = List.of("Есть в наличии?", "Какая последняя цена?",
+         "Можно ещё фото?", "Подойдёт на мою машину?", "Отложите, пожалуйста");
+   private static final List<String> SHOP_TEMPLATES_KG = List.of("Барбы?", "Акыркы баасы канча?",
+         "Дагы сүрөт жибересизби?", "Менин машинама келеби?", "Калтырып коюңузчу");
+   private static final List<String> MASTER_TEMPLATES_RU = List.of("Когда можете принять?", "Сколько будет стоить?",
+         "Где вы находитесь?", "Сколько займёт по времени?");
+   private static final List<String> MASTER_TEMPLATES_KG = List.of("Качан кабыл аласыз?", "Канча турат?",
+         "Кайда жайгашкансыз?", "Канча убакыт кетет?");
+
+   private static void buyerTemplates(List<String> texts, List<QuickReplyDto> result) {
+      texts.forEach(text -> result.add(new QuickReplyDto(null, QuickReply.QuickReplyKind.MESSAGE, null, text)));
    }
 
    private static QuickReplyDto quick(QuickReply reply, Lang lang) {
