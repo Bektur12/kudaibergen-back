@@ -577,14 +577,14 @@ public class ChatService {
    }
 
    /** Шаблоны покупателя над полем ввода: обычный текст, отправляется как есть. */
-   private static final List<String> SHOP_TEMPLATES_RU = List.of("Есть в наличии?", "Какая последняя цена?",
-         "Можно ещё фото?", "Подойдёт на мою машину?", "Отложите, пожалуйста");
-   private static final List<String> SHOP_TEMPLATES_KG = List.of("Барбы?", "Акыркы баасы канча?",
+   private static final List<String> SHOP_TEMPLATES_RU = List.of("Ассаламу алейкум!", "Есть в наличии?",
+         "Какая последняя цена?", "Можно ещё фото?", "Подойдёт на мою машину?", "Отложите, пожалуйста");
+   private static final List<String> SHOP_TEMPLATES_KG = List.of("Ассаламу алейкум!", "Барбы?", "Акыркы баасы канча?",
          "Дагы сүрөт жибересизби?", "Менин машинама келеби?", "Калтырып коюңузчу");
-   private static final List<String> MASTER_TEMPLATES_RU = List.of("Когда можете принять?", "Сколько будет стоить?",
-         "Где вы находитесь?", "Сколько займёт по времени?");
-   private static final List<String> MASTER_TEMPLATES_KG = List.of("Качан кабыл аласыз?", "Канча турат?",
-         "Кайда жайгашкансыз?", "Канча убакыт кетет?");
+   private static final List<String> MASTER_TEMPLATES_RU = List.of("Ассаламу алейкум!", "Когда можете принять?",
+         "Сколько будет стоить?", "Где вы находитесь?", "Сколько займёт по времени?");
+   private static final List<String> MASTER_TEMPLATES_KG = List.of("Ассаламу алейкум!", "Качан кабыл аласыз?",
+         "Канча турат?", "Кайда жайгашкансыз?", "Канча убакыт кетет?");
 
    private static void buyerTemplates(List<String> texts, List<QuickReplyDto> result) {
       texts.forEach(text -> result.add(new QuickReplyDto(null, QuickReply.QuickReplyKind.MESSAGE, null, text)));
