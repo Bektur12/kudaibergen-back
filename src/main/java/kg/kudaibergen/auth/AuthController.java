@@ -5,6 +5,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import kg.kudaibergen.auth.dto.DeletionResponse;
 import kg.kudaibergen.auth.dto.RefreshRequest;
 import kg.kudaibergen.auth.dto.SendOtpRequest;
 import kg.kudaibergen.auth.dto.SendOtpResponse;
@@ -44,6 +45,13 @@ public class AuthController {
    @ApiResponse(responseCode = "400", description = "OTP_INVALID (attemptsLeft), OTP_EXPIRED, OTP_ATTEMPTS_EXCEEDED")
    public TokenResponse verify(@Valid @RequestBody VerifyOtpRequest request) {
       return authService.verifyOtp(request);
+   }
+
+   @PostMapping("/account-deletion")
+   @Operation(summary = "Удалить аккаунт с сайта (страница /delete-account)",
+         description = "Код входа из /otp/send; данные стираются через 30 дней, вход до этого срока отменяет удаление")
+   public DeletionResponse deleteAccount(@Valid @RequestBody VerifyOtpRequest request) {
+      return authService.deleteWithLoginCode(request.phone(), request.code());
    }
 
    @PostMapping("/refresh")

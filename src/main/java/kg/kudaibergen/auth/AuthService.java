@@ -11,6 +11,7 @@ import kg.kudaibergen.auth.sms.SmsProvider;
 import kg.kudaibergen.auth.sms.SmsTexts;
 import kg.kudaibergen.auth.token.RefreshTokenService;
 import kg.kudaibergen.common.config.AppProperties;
+import kg.kudaibergen.common.error.BadRequestException;
 import kg.kudaibergen.common.error.ForbiddenException;
 import kg.kudaibergen.common.error.UnauthorizedException;
 import kg.kudaibergen.user.DeviceService;
@@ -115,6 +116,24 @@ public class AuthService {
       refreshTokens.revokeAll(userId);
       devices.removeAllOf(userId);
       log.info("Пользователь {} запросил удаление аккаунта", userId);
+      return new DeletionResponse(user.getDeletionRequestedAt().plus(UserService.DELETION_GRACE));
+   }
+
+   /**
+    * Удаление с сайта (страница /delete-account, требование Google Play): код входа из /auth/otp/send → аккаунт
+    * помечается к удалению, сессии закрываются. Как и из профиля — стирание через 30 дней, вход отменяет.
+    */
+   @Transactional
+   public DeletionResponse deleteWithLoginCode(String phone, String code) {
+      otpService.verify(OtpPurpose.LOGIN, phone, code);
+      User user = users.findByPhone(phone)
+            .orElseThrow(() -> new BadRequestException("ACCOUNT_NOT_FOUND", "Аккаунта с этим номером нет"));
+      if (user.getDeletionRequestedAt() == null) {
+         user.requestDeletion();
+      }
+      refreshTokens.revokeAll(user.getId());
+      devices.removeAllOf(user.getId());
+      log.info("Пользователь {} запросил удаление аккаунта с сайта", user.getId());
       return new DeletionResponse(user.getDeletionRequestedAt().plus(UserService.DELETION_GRACE));
    }
 

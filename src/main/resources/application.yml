@@ -99,6 +99,12 @@ app:
     # HMAC-ключ токенов подключения и подписки клиента — не путать с app.jwt.secret
     token-secret: ${CENTRIFUGO_TOKEN_SECRET:change-me-centrifugo-secret-32-bytes-min}
     token-ttl: 1h
+  legal:
+    # реквизиты на страницах /privacy, /terms, /support, /delete-account
+    operator: ${LEGAL_OPERATOR:Кудайберген}
+    email: ${LEGAL_EMAIL:support@kudaibergen.kg}
+    phone: ${LEGAL_PHONE:}
+    updated: ${LEGAL_UPDATED:31 октября 2026}
   media:
     # local — папка на диске, отдаётся по /media/** (dev); s3 — приватный бакет MinIO/S3 + presigned-ссылки
     storage: ${MEDIA_STORAGE:local}

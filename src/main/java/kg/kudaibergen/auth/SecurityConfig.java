@@ -76,7 +76,10 @@ public class SecurityConfig {
                   .requestMatchers(HttpMethod.POST,
                         "/api/v1/auth/otp/send",
                         "/api/v1/auth/otp/verify",
-                        "/api/v1/auth/refresh").permitAll()
+                        "/api/v1/auth/refresh",
+                        "/api/v1/auth/account-deletion").permitAll()
+                  // публичные страницы для App Store / Google Play: политика, правила, поддержка, удаление аккаунта
+                  .requestMatchers(HttpMethod.GET, "/privacy", "/terms", "/support", "/delete-account").permitAll()
                   .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html",
                         "/actuator/health", "/actuator/health/**", "/error").permitAll()
                   // гость (ТЗ, раздел 2): карта, маршрут, каталог, карточка товара, профиль магазина.
