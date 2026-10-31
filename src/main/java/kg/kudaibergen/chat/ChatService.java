@@ -544,7 +544,7 @@ public class ChatService {
 
    /**
     * Кнопки над полем ввода (ТЗ 11.1). Покупателю — «Как пройти к боксу» и, пока запрос открыт,
-    * «Купил — закрыть запрос». Продавцу — «Отложил для вас», «Как пройти», «Продано» и свои шаблоны бокса.
+    * «Купил — закрыть запрос». Продавцу и мастеру — «Ассаламу алейкум!»; продавцу ещё «Отложил для вас», «Как пройти», «Продано» и свои шаблоны бокса.
     */
    @Transactional(readOnly = true)
    public List<QuickReplyDto> quickReplies(Long userId, Long chatId, Lang lang) {
@@ -567,6 +567,8 @@ public class ChatService {
          buyerTemplates(templates.subList(1, templates.size()), result);
          return result;
       }
+      // продавцу и мастеру — тоже «Ассаламу алейкум!» первым
+      buyerTemplates(List.of(GREETING), result);
       if (chat.withMaster()) {
          return result;
       }
@@ -577,6 +579,8 @@ public class ChatService {
             result.add(new QuickReplyDto(null, QuickReply.QuickReplyKind.MESSAGE, template.getId(), template.getText())));
       return result;
    }
+
+   private static final String GREETING = "Ассаламу алейкум!";
 
    /** Шаблоны покупателя над полем ввода: обычный текст, отправляется как есть. */
    private static final List<String> SHOP_TEMPLATES_RU = List.of("Ассаламу алейкум!", "Есть в наличии?",
