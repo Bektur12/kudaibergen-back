@@ -233,7 +233,8 @@ public class ChatView {
             Shop shop = shopsById.get(chat.getShopId());
             LocationDto location = shopMapper.location(shop.getContainerId());
             // вне рынка — адрес магазина
-            String place = location == null ? shop.getAddress() : location.rowLabel() + " · Контейнер " + location.number();
+            String place = location == null ? shop.getAddress()
+                  : "Кудайберген · " + location.rowLabel() + " · Контейнер " + location.number();
             title = shop.getName();
             subtitle = topic == null ? place : topic + " · " + place;
             avatarUrl = avatars.get(shop.getAvatarMediaId());
