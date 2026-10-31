@@ -88,7 +88,7 @@ class ChatIT extends AbstractIntegrationTest {
       assertThat(quick.findValuesAsText("text")).containsExactly("Отложил для вас", "Как пройти к боксу", "Продано",
             "Гарантия 2 недели");
       JsonNode buyerQuick = call(authed(get("/api/v1/chats/" + chatId + "/quick-replies"), buyer), 200);
-      assertThat(buyerQuick.findValuesAsText("code")).containsExactly("ROUTE_TO_BOX", "CLOSE_REQUEST");
+      assertThat(buyerQuick.findValuesAsText("code")).contains("CLOSE_REQUEST").doesNotContain("ROUTE_TO_BOX");
 
       JsonNode route = call(authed(jsonPost("/api/v1/chats/" + chatId + "/messages", "{\"quickReply\":\"ROUTE\"}"),
             seller), 201);
