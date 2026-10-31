@@ -72,6 +72,10 @@ app:
     expose-code: ${SMS_EXPOSE_CODE:true}
     # тестовый стенд: если задан, все коды входа равны ему (SMS_FIXED_CODE=1111). В проде оставить пустым
     fixed-code: ${SMS_FIXED_CODE:}
+    # номера для проверки App Store / Google Play через запятую (+996700000101,…): у них постоянный код
+    # review-code, SMS не отправляется. Пустой review-code — выключено
+    review-phones: ${OTP_REVIEW_PHONES:}
+    review-code: ${OTP_REVIEW_CODE:}
   sms:
     provider: ${SMS_PROVIDER:log}       # log | nikita
     nikita:

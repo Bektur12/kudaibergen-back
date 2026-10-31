@@ -53,6 +53,10 @@ public class OtpService {
 
    /** Выпускает новый код. Бросает 429, если номер заблокирован, не прошла пауза или исчерпан лимит. */
    public String issue(OtpPurpose purpose, String phone, String clientIp) {
+      if (config.isReview(phone)) {
+         // проверяющий магазина: постоянный код, без пауз и лимитов — повторы не должны его заблокировать
+         return store(purpose, phone, config.reviewCode());
+      }
       ensureNotBlocked(phone);
       String cooldownKey = cooldownKey(purpose, phone);
       Boolean cooldownSet = redis.opsForValue().setIfAbsent(cooldownKey, "1", config.resendInterval());
@@ -69,6 +73,15 @@ public class OtpService {
       }
 
       String code = config.hasFixedCode() ? config.fixedCode() : String.format("%04d", RANDOM.nextInt(10_000));
+      return store(purpose, phone, code);
+   }
+
+   /** Номер проверяющего App Store / Google Play — SMS ему не отправляется. */
+   public boolean isReview(String phone) {
+      return config.isReview(phone);
+   }
+
+   private String store(OtpPurpose purpose, String phone, String code) {
       String key = codeKey(purpose, phone);
       redis.opsForHash().putAll(key, Map.of(FIELD_HASH, hash(purpose, phone, code), FIELD_ATTEMPTS, "0"));
       redis.expire(key, config.codeTtl());
@@ -80,7 +93,9 @@ public class OtpService {
     * Неверный код увеличивает счётчик попыток; на последней попытке код удаляется, номер блокируется.
     */
    public void verify(OtpPurpose purpose, String phone, String code) {
-      ensureNotBlocked(phone);
+      if (!config.isReview(phone)) {
+         ensureNotBlocked(phone);
+      }
       String key = codeKey(purpose, phone);
       Object stored = redis.opsForHash().get(key, FIELD_HASH);
       if (stored == null) {

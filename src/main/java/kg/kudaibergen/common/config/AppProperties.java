@@ -45,10 +45,24 @@ public record AppProperties(Jwt jwt, Otp otp, Sms sms, Fcm fcm, Market market, R
 
    /** Код входа: TTL, пауза до повторной отправки, попытки и блокировка номера, лимиты отправки на номер и IP. */
    public record Otp(Duration codeTtl, Duration resendInterval, int maxAttempts, Duration blockDuration, int phoneLimit,
-                     int ipLimit, Duration limitWindow, String hashSecret, boolean exposeCode, String fixedCode) {
+                     int ipLimit, Duration limitWindow, String hashSecret, boolean exposeCode, String fixedCode,
+                     String reviewPhones, String reviewCode) {
 
       public boolean hasFixedCode() {
          return fixedCode != null && !fixedCode.isBlank();
+      }
+
+      /** Номер для проверки App Store / Google Play: постоянный код, SMS не уходит. Без reviewCode — выключено. */
+      public boolean isReview(String phone) {
+         if (reviewCode == null || reviewCode.isBlank() || reviewPhones == null || phone == null) {
+            return false;
+         }
+         for (String review : reviewPhones.split(",")) {
+            if (review.trim().equals(phone)) {
+               return true;
+            }
+         }
+         return false;
       }
    }
 

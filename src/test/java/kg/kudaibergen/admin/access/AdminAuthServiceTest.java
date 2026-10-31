@@ -89,7 +89,7 @@ class AdminAuthServiceTest {
       AdminProperties config = new AdminProperties(List.of("http://localhost:*"), Duration.ofMinutes(15),
             Duration.ofHours(12), true, "Strict", "", "", 10, Duration.ofMinutes(15));
       AppProperties properties = new AppProperties(null, new AppProperties.Otp(Duration.ofMinutes(2),
-            Duration.ofSeconds(42), 5, Duration.ofMinutes(15), 5, 20, Duration.ofHours(1), "x", true, ""),
+            Duration.ofSeconds(42), 5, Duration.ofMinutes(15), 5, 20, Duration.ofHours(1), "x", true, "", null, null),
             null, null, null, null, null, null);
       service = new AdminAuthService(members, users, access, profiles, otp, sms, jwt, refreshTokens,
             rateLimiter, mock(AuditLog.class), config, properties);

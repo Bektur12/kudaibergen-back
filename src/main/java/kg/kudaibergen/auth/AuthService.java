@@ -61,7 +61,9 @@ public class AuthService {
       String code = otpService.issue(OtpPurpose.LOGIN, request.phone(), clientIp);
       // язык SMS: у существующего пользователя — его сохранённый, иначе выбранный на экране 01
       Lang lang = users.findByPhone(request.phone()).map(User::getLang).orElse(request.langOrDefault());
-      smsProvider.send(request.phone(), SmsTexts.loginCode(code, lang));
+      if (!otpService.isReview(request.phone())) {
+         smsProvider.send(request.phone(), SmsTexts.loginCode(code, lang));
+      }
       return otpResponse(code);
    }
 
@@ -98,7 +100,9 @@ public class AuthService {
    public SendOtpResponse sendDeletionOtp(Long userId, String clientIp) {
       User user = userService.getRequired(userId);
       String code = otpService.issue(OtpPurpose.DELETE_ACCOUNT, user.getPhone(), clientIp);
-      smsProvider.send(user.getPhone(), SmsTexts.deletionCode(code, user.getLang()));
+      if (!otpService.isReview(user.getPhone())) {
+         smsProvider.send(user.getPhone(), SmsTexts.deletionCode(code, user.getLang()));
+      }
       return otpResponse(code);
    }
 
