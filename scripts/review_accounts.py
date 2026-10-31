@@ -58,7 +58,7 @@ def main():
                                           open_to, work_days, is_open, phone, phone_visible, rating, reviews_count,
                                           created_at, updated_at, public_id)
                        values (%s, 'Демо-магазин (проверка)', null, 'ул. Ахунбаева 98, Бишкек', 42.8466, 74.5866,
-                               'ACTIVE', now(), '00:00', '23:59', 127, true, %s, false, 0, 0, now(), now(), %s)
+                               'ACTIVE', now(), '00:00', '23:59', 127, true, %s, true, 0, 0, now(), now(), %s)
                        returning id""", (seller, SELLER, public_id()))
         shop = cur.fetchone()[0]
         cur.execute("insert into shop_members (shop_id, user_id, role, created_at) values (%s, %s, 'OWNER', now())",
