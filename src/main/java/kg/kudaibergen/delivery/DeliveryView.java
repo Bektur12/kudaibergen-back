@@ -59,7 +59,8 @@ public class DeliveryView {
             order.getRecipientName(), order.getRecipientPhone(), order.getPrice(), order.getDays(),
             order.getWeightKg(), order.isFragile(), order.getChatId(), pickupToday(order),
             tariffs.properties().courierPhone(), order.getCreatedAt(), order.getPackedAt(),
-            order.getCourierOrderedAt(), order.getPickedUpAt(), order.getDeliveredAt(), order.getCancelledAt());
+            order.getCourierOrderedAt(), order.getPickedUpAt(), order.getDeliveredAt(), order.getCancelledAt(),
+            whatsappUrl(template(order, seller)));
    }
 
    public DeliveryOrderDto.DeliveryPartDto part(DeliveryOrder order) {

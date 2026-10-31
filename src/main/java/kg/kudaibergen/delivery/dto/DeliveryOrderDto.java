@@ -14,6 +14,8 @@ import org.springframework.lang.Nullable;
  * Заказ с доставкой: «Где посылка» покупателя и «Заказ с доставкой» продавца. buyer — только магазину
  * («покупатель Бакыт»), покупателю null. price — тариф до 5 кг (null — назовёт курьер). pickupToday — курьер
  * заберёт сегодня: упаковано (или, пока не упаковано, сейчас) до 17:30 по Бишкеку. courierPhone — «Курьер Ылдам».
+ * courierWhatsappUrl — WhatsApp Ылдам с заполненным шаблоном: отправитель (продавец, адрес бокса или магазина, его
+ * телефон), получатель, посылка — клиент договаривается с курьером сам.
  */
 public record DeliveryOrderDto(Long id, String number, DeliveryStatus status, DeliveryPartDto part, DeliveryShopDto shop,
                                @Nullable DeliveryBuyerDto buyer, DeliveryRegion region, String regionName, String inName,
@@ -23,7 +25,7 @@ public record DeliveryOrderDto(Long id, String number, DeliveryStatus status, De
                                boolean pickupToday, @Nullable String courierPhone, Instant createdAt,
                                @Nullable Instant packedAt, @Nullable Instant courierOrderedAt,
                                @Nullable Instant pickedUpAt, @Nullable Instant deliveredAt,
-                               @Nullable Instant cancelledAt) {
+                               @Nullable Instant cancelledAt, String courierWhatsappUrl) {
 
    /** Товар снимком; id = null — товар удалён. */
    public record DeliveryPartDto(@Nullable Long id, String title, int price, @Nullable VideoDto video,
