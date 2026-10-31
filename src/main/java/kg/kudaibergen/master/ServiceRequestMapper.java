@@ -93,7 +93,16 @@ public class ServiceRequestMapper {
    public ServiceRequestSummaryDto summary(ServiceRequest request, Lang lang) {
       return new ServiceRequestSummaryDto(request.getId(), service(request, lang), request.getDescription(),
             car(request).label(), request.getStatus(), state(request), request.getCanHelpCount(),
-            request.getCreatedAt(), request.getExpiresAt());
+            request.getCreatedAt(), request.getExpiresAt(), firstThumb(request.getPhotoIds()));
+   }
+
+   /** Плитка в «Моих запросах»: превью первого фото или обложка видео; без вложений — null. */
+   private String firstThumb(List<Long> mediaIds) {
+      if (mediaIds == null || mediaIds.isEmpty()) {
+         return null;
+      }
+      return media.items(List.of(mediaIds.get(0))).stream().findFirst()
+            .map(item -> item.thumbUrl() != null ? item.thumbUrl() : item.url()).orElse(null);
    }
 
    public ServiceRequestDetailDto detail(ServiceRequest request, long seenCount, Lang lang) {

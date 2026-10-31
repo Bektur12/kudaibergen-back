@@ -74,7 +74,17 @@ public class RequestMapper {
 
    public RequestSummaryDto summary(PartRequest request, Integer minPrice) {
       return new RequestSummaryDto(request.getId(), request.getText(), car(request).label(), request.getStatus(),
-            state(request), request.getHaveCount(), minPrice, request.getCreatedAt(), request.getExpiresAt());
+            state(request), request.getHaveCount(), minPrice, request.getCreatedAt(), request.getExpiresAt(),
+            firstThumb(request.getPhotoIds()));
+   }
+
+   /** Плитка в «Моих запросах»: превью первого фото; без фото — null. */
+   private String firstThumb(List<Long> photoIds) {
+      if (photoIds == null || photoIds.isEmpty()) {
+         return null;
+      }
+      PhotoDto photo = media.photos(List.of(photoIds.get(0))).get(photoIds.get(0));
+      return photo == null ? null : photo.thumbUrl();
    }
 
    public RequestDetailDto detail(PartRequest request, long seenCount, Lang lang) {
