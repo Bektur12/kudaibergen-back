@@ -79,7 +79,7 @@ class MarketIT extends AbstractIntegrationTest {
       assertThat(fromPoint.get("steps").findValuesAsText("text")).containsExactly(
             "Прямо по центральному проходу ~20 м",
             "Направо — между рядами 16 и 14",
-            "Через ~30 м бокс 12 по левую руку");
+            "Через ~30 м контейнер 12 по левую руку");
       assertThat(fromPoint.get("minutes").asInt()).isEqualTo(1);
 
       JsonNode kg = call(get("/api/v1/market/route").param("toContainerId", String.valueOf(box12))
@@ -134,7 +134,7 @@ class MarketIT extends AbstractIntegrationTest {
             marketAdmin)).andReturn();
       assertThat(sheet.getResponse().getContentType()).startsWith("text/html");
       assertThat(sheet.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8))
-            .contains("Ряд Ш · Бокс 6", "data:image/png;base64,");
+            .contains("Ряд Ш · Контейнер 6", "data:image/png;base64,");
 
       // калибровка — право MARKET_MAP_PUBLISH; отказ без права проверяет AdminAccessIT
       String anchors = """

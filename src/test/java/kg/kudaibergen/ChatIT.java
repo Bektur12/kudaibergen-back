@@ -85,7 +85,7 @@ class ChatIT extends AbstractIntegrationTest {
       // быстрые ответы и свои шаблоны
       call(authed(jsonPost("/api/v1/my/shop/reply-templates", "{\"text\":\"Гарантия 2 недели\"}"), seller), 201);
       JsonNode quick = call(authed(get("/api/v1/chats/" + chatId + "/quick-replies"), seller), 200);
-      assertThat(quick.findValuesAsText("text")).containsExactly("Отложил для вас", "Как пройти к боксу", "Продано",
+      assertThat(quick.findValuesAsText("text")).containsExactly("Отложил для вас", "Как пройти к контейнеру", "Продано",
             "Гарантия 2 недели");
       JsonNode buyerQuick = call(authed(get("/api/v1/chats/" + chatId + "/quick-replies"), buyer), 200);
       assertThat(buyerQuick.findValuesAsText("code")).contains("CLOSE_REQUEST").doesNotContain("ROUTE_TO_BOX");

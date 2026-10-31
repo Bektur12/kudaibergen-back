@@ -88,7 +88,7 @@ public class ShopService {
    @Transactional
    public MyShopDto register(Long userId, ShopRequests.CreateShop request, Lang lang) {
       if (members.findByUserId(userId).isPresent()) {
-         throw new ConflictException("ALREADY_IN_SHOP", "Вы уже состоите в боксе");
+         throw new ConflictException("ALREADY_IN_SHOP", "Вы уже состоите в контейнере");
       }
       Set<Long> brandIds = requireBrands(request.brandIds());
       Set<Long> categoryIds = request.categoryIds() == null || request.categoryIds().isEmpty() ? Set.of()
@@ -157,7 +157,7 @@ public class ShopService {
       }
       if (request.address() != null || request.lat() != null || request.lng() != null) {
          if (shop.isOnMarket()) {
-            throw new BadRequestException("ON_MARKET", "Бокс на рынке меняет место через «Переехать»");
+            throw new BadRequestException("ON_MARKET", "Контейнер на рынке меняет место через «Переехать»");
          }
          if (request.address() == null || request.address().isBlank() || request.lat() == null || request.lng() == null) {
             throw new BadRequestException("ADDRESS_REQUIRED", "Укажите адрес и точку магазина");
@@ -215,13 +215,13 @@ public class ShopService {
    public List<MemberDto> addMember(Long userId, String phone) {
       Shop shop = access.requireOwner(userId).shop();
       if (members.countByShopIdAndRole(shop.getId(), MemberRole.STAFF) >= MAX_STAFF) {
-         throw new ConflictException("STAFF_LIMIT", "В боксе может быть не больше " + MAX_STAFF + " сотрудников");
+         throw new ConflictException("STAFF_LIMIT", "В контейнере может быть не больше " + MAX_STAFF + " сотрудников");
       }
       User invited = userService.findOrCreate(phone, Lang.RU);
       members.findByUserId(invited.getId()).ifPresent(existing -> {
          throw new ConflictException(existing.getShopId().equals(shop.getId()) ? "ALREADY_MEMBER" : "USER_IN_OTHER_SHOP",
-               existing.getShopId().equals(shop.getId()) ? "Этот продавец уже в вашем боксе"
-                     : "Этот номер уже работает в другом боксе");
+               existing.getShopId().equals(shop.getId()) ? "Этот продавец уже в вашем контейнере"
+                     : "Этот номер уже работает в другом контейнере");
       });
       members.save(new ShopMember(shop.getId(), invited.getId(), MemberRole.STAFF));
       if (!invited.isOnboarded()) {
@@ -237,9 +237,9 @@ public class ShopService {
       Shop shop = access.requireOwner(userId).shop();
       ShopMember member = members.findByUserId(memberUserId)
             .filter(found -> found.getShopId().equals(shop.getId()))
-            .orElseThrow(() -> new NotFoundException("MEMBER_NOT_FOUND", "Такого продавца в боксе нет"));
+            .orElseThrow(() -> new NotFoundException("MEMBER_NOT_FOUND", "Такого продавца в контейнере нет"));
       if (member.isOwner()) {
-         throw new BadRequestException("CANNOT_REMOVE_OWNER", "Владельца бокса удалить нельзя");
+         throw new BadRequestException("CANNOT_REMOVE_OWNER", "Владельца контейнера удалить нельзя");
       }
       members.delete(member);
       return members(userId);

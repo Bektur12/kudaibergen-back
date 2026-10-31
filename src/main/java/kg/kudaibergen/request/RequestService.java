@@ -245,9 +245,9 @@ public class RequestService {
    /** Почему запрос некому отправить — текст для показа. */
    private static String noRecipientsMessage(RequestTarget target) {
       return switch (target) {
-         case MARKET -> "Сейчас запрос никому не уйдёт: боксы с вашей маркой закрыты. Попробуйте в рабочее время";
-         case ROWS -> "В выбранных рядах сейчас нет открытых боксов с вашей маркой — выберите другие ряды или весь рынок";
-         case CONTAINERS -> "Выбранные боксы сейчас закрыты — выберите другие или отправьте всему рынку";
+         case MARKET -> "Сейчас запрос никому не уйдёт: контейнеры с вашей маркой закрыты. Попробуйте в рабочее время";
+         case ROWS -> "В выбранных рядах сейчас нет открытых контейнеров с вашей маркой — выберите другие ряды или весь рынок";
+         case CONTAINERS -> "Выбранные контейнеры сейчас закрыты — выберите другие или отправьте всему рынку";
       };
    }
 
@@ -499,10 +499,10 @@ public class RequestService {
       boolean byBuyer = request.getBuyerId().equals(principal.userId());
       Long shopId = input.shopId();
       if (input.stars() != null && (shopId == null || !byBuyer)) {
-         throw new BadRequestException("SHOP_REQUIRED", "Оценку можно поставить только боксу, у которого купили");
+         throw new BadRequestException("SHOP_REQUIRED", "Оценку можно поставить только контейнеру, у которого купили");
       }
       if (shopId != null && !replies.existsByRequestIdAndShopIdAndAnswer(requestId, shopId, ReplyAnswer.HAVE)) {
-         throw new BadRequestException("SHOP_NOT_REPLIED", "Этот бокс не отвечал «Есть» на запрос");
+         throw new BadRequestException("SHOP_NOT_REPLIED", "Этот контейнер не отвечал «Есть» на запрос");
       }
       Instant now = clock.instant();
       request.close(shopId, now);
@@ -526,7 +526,7 @@ public class RequestService {
       PartRequest request = visible(principal, requestId);
       Long shopId = input.shopId();
       if (!replies.existsByRequestIdAndShopIdAndAnswer(requestId, shopId, ReplyAnswer.HAVE)) {
-         throw new BadRequestException("SHOP_NOT_REPLIED", "Этот бокс не отвечал «Есть» на запрос");
+         throw new BadRequestException("SHOP_NOT_REPLIED", "Этот контейнер не отвечал «Есть» на запрос");
       }
       if (falseHaves.existsByRequestIdAndShopId(requestId, shopId)) {
          throw new ConflictException("ALREADY_MARKED", "Вы уже отметили этого продавца");

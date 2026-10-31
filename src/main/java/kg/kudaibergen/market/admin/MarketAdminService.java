@@ -311,7 +311,7 @@ public class MarketAdminService {
       html.append(card(row.row().getQrToken(), row.row().getLabel(), "Табличка в начале ряда", true));
       for (MarketSnapshot.ContainerView container : row.all()) {
          html.append(card(container.container().getQrToken(),
-               row.row().getLabel() + " · Бокс " + container.container().getNumber(),
+               row.row().getLabel() + " · Контейнер " + container.container().getNumber(),
                sideName(container.container().getSide()) + " сторона", false));
       }
       return html.append("</div></body></html>").toString();

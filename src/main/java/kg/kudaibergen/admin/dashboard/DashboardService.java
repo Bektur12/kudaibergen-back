@@ -182,7 +182,7 @@ public class DashboardService {
          return null;
       }
       BrandUnanswered worst = sorted.get(0);
-      String sellers = worst.sellers() == 0 ? "её не продаёт ни один бокс"
+      String sellers = worst.sellers() == 0 ? "её не продаёт ни один контейнер"
             : "её продают всего " + worst.sellers() + " " + boxes(worst.sellers());
       return new BrandHint(worst.brandId(), worst.brand() + ": " + worst.pct() + "% запросов без ответа за 30 минут — "
             + sellers + ". Напомните продавцам рассылкой", List.of(worst.brandId()));
@@ -192,9 +192,9 @@ public class DashboardService {
       long mod10 = n % 10;
       long mod100 = n % 100;
       if (mod10 == 1 && mod100 != 11) {
-         return "бокс";
+         return "контейнер";
       }
-      return mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14) ? "бокса" : "боксов";
+      return mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14) ? "контейнера" : "контейнеров";
    }
 
    // ─────────────────────── чаще всего ищут ───────────────────────

@@ -103,7 +103,7 @@ public class ShopVerificationService {
       MarketSnapshot.ContainerView target = market.container(requireTarget(shop));
       if (!target.container().getQrToken().equals(qrToken)) {
          throw new BadRequestException("QR_MISMATCH",
-               "Это не наклейка вашего контейнера: нужен " + target.row().row().getLabel() + " · Бокс "
+               "Это не наклейка вашего контейнера: нужен " + target.row().row().getLabel() + " · Контейнер "
                      + target.container().getNumber());
       }
       Optional<Boolean> inside = lat == null || lon == null ? Optional.empty() : market.insideMarket(lat, lon);
@@ -131,7 +131,7 @@ public class ShopVerificationService {
       }
       String code = otp.issue(OtpPurpose.SHOP_VERIFY, tenantPhone, clientIp);
       sms.send(tenantPhone, SmsTexts.shopVerificationCode(code,
-            target.row().row().getLabel() + " · Бокс " + target.container().getNumber(), lang));
+            target.row().row().getLabel() + " · Контейнер " + target.container().getNumber(), lang));
       return new SmsVerificationSentDto(mask(tenantPhone), otp.codeTtl().toSeconds(),
             otp.resendInterval().toSeconds(), exposeCode ? code : null);
    }

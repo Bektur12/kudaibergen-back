@@ -58,7 +58,7 @@ public class MeController {
 
    @PutMapping("/role")
    @Operation(summary = "Выбрать режим: покупатель или продавец",
-         description = "Экран 03, а также «Я продавец — открыть бокс» (19) и «Перейти в режим покупателя» (21)")
+         description = "Экран 03, а также «Я продавец — открыть контейнер» (19) и «Перейти в режим покупателя» (21)")
    public MeResponse changeRole(@AuthenticationPrincipal AuthPrincipal principal,
                                 @Valid @RequestBody ChangeRoleRequest request) {
       return me(userService.changeRole(principal.userId(), request.role()));

@@ -10,7 +10,7 @@ public enum QuickReply {
 
    // ── покупатель ──
    /** «Как пройти к боксу» → экран маршрута 18. */
-   ROUTE_TO_BOX(ChatSide.BUYER, QuickReplyKind.ACTION, "Как пройти к боксу", "Бокска кантип барам"),
+   ROUTE_TO_BOX(ChatSide.BUYER, QuickReplyKind.ACTION, "Как пройти к контейнеру", "Контейнерге кантип барам"),
    /** «Купил — закрыть запрос» → шторка 09 (POST /requests/{id}/close). */
    CLOSE_REQUEST(ChatSide.BUYER, QuickReplyKind.ACTION, "Купил — закрыть запрос", "Сатып алдым — суроону жабуу"),
    /** «Я на месте» с экрана маршрута 18: продавцу плашка «Покупатель подошёл». */
@@ -19,7 +19,7 @@ public enum QuickReply {
    // ── продавец ──
    RESERVED(ChatSide.SHOP, QuickReplyKind.MESSAGE, "Отложил для вас", "Сиз үчүн калтырдым"),
    /** «Как пройти» — карточка маршрута до бокса с кнопкой «Маршрут». */
-   ROUTE(ChatSide.SHOP, QuickReplyKind.MESSAGE, "Как пройти к боксу", "Бокска кантип барса болот"),
+   ROUTE(ChatSide.SHOP, QuickReplyKind.MESSAGE, "Как пройти к контейнеру", "Контейнерге кантип барса болот"),
    /** «Продано» — покупателю кнопка «Закрыть запрос». */
    SOLD(ChatSide.SHOP, QuickReplyKind.MESSAGE, "Продано", "Сатылды");
 

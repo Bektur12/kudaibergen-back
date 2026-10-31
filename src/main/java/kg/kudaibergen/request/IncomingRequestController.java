@@ -66,7 +66,7 @@ public class IncomingRequestController {
 
    @GetMapping("/my/shop/requests/{id}/suggested-parts")
    @Operation(summary = "Подходящие свои запчасти для ответа «Есть» (12)",
-         description = "Опубликованные запчасти бокса под машину запроса, сначала совпавшие с текстом. id — в partId ответа")
+         description = "Опубликованные запчасти контейнера под машину запроса, сначала совпавшие с текстом. id — в partId ответа")
    public List<PartCardDto> suggestedParts(@AuthenticationPrincipal AuthPrincipal principal, @PathVariable Long id) {
       return incoming.suggestedParts(principal.userId(), id);
    }
@@ -86,7 +86,7 @@ public class IncomingRequestController {
          Покупатель получает пуш. «Нет» — запрос скрывается, покупатель видит только место в статистике.
          Первый ответ бокса засчитывается за магазин. После expiresAt ответить нельзя.""")
    @ApiResponse(responseCode = "409", description = "REQUEST_CLOSED, REQUEST_EXPIRED, ALREADY_REPLIED")
-   @ApiResponse(responseCode = "403", description = "SHOP_NOT_ACTIVE — бокс не проверен или заблокирован")
+   @ApiResponse(responseCode = "403", description = "SHOP_NOT_ACTIVE — контейнер не проверен или заблокирован")
    public ReplyDto reply(@AuthenticationPrincipal AuthPrincipal principal, @PathVariable Long id,
                          @Valid @RequestBody RequestInputs.Reply request) {
       return incoming.reply(principal.userId(), id, request);

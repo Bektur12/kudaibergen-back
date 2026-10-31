@@ -187,7 +187,7 @@ public class IncomingRequestService {
       RequestRecipient recipient = recipient(requestId, shop.getId());
       RequestService.requireActive(request);
       if (replies.findByRequestIdAndShopId(requestId, shop.getId()).isPresent()) {
-         throw new ConflictException("ALREADY_REPLIED", "Бокс уже ответил на этот запрос");
+         throw new ConflictException("ALREADY_REPLIED", "Контейнер уже ответил на этот запрос");
       }
       requirePrice(input);
       requirePart(shop, input);
@@ -201,7 +201,7 @@ public class IncomingRequestService {
       try {
          replies.saveAndFlush(reply);
       } catch (DataIntegrityViolationException parallel) {
-         throw new ConflictException("ALREADY_REPLIED", "Бокс уже ответил на этот запрос");
+         throw new ConflictException("ALREADY_REPLIED", "Контейнер уже ответил на этот запрос");
       }
       recipient.answered(reply.getAnswer(), now);
       Long chatId = null;
@@ -221,7 +221,7 @@ public class IncomingRequestService {
       Shop shop = activeShop(userId);
       PartRequest request = requests.findForUpdate(requestId).filter(found -> !found.isHiddenByAdmin()).orElseThrow(RequestService::notFound);
       RequestReply reply = replies.findByRequestIdAndShopId(requestId, shop.getId())
-            .orElseThrow(() -> new NotFoundException("REPLY_NOT_FOUND", "Бокс ещё не отвечал на этот запрос"));
+            .orElseThrow(() -> new NotFoundException("REPLY_NOT_FOUND", "Контейнер ещё не отвечал на этот запрос"));
       RequestService.requireActive(request);
       Instant now = clock.instant();
       if (now.isAfter(reply.getCreatedAt().plus(config.replyEditWindow()))) {
@@ -251,7 +251,7 @@ public class IncomingRequestService {
    private Shop activeShop(Long userId) {
       Shop shop = access.requireMember(userId).shop();
       if (!shop.isActive()) {
-         throw new ForbiddenException("SHOP_NOT_ACTIVE", "Бокс не проверен или заблокирован");
+         throw new ForbiddenException("SHOP_NOT_ACTIVE", "Контейнер не проверен или заблокирован");
       }
       return shop;
    }

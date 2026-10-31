@@ -144,7 +144,7 @@ public class ChatService {
       Shop shop = shops.findById(input.shopId()).filter(Shop::isActive)
             .orElseThrow(() -> new NotFoundException("SHOP_NOT_FOUND", "Магазин не найден"));
       if (shop.getId().equals(view.shopIdOf(buyerId))) {
-         throw new BadRequestException("SELF_CHAT", "Нельзя написать своему боксу");
+         throw new BadRequestException("SELF_CHAT", "Нельзя написать своему контейнеру");
       }
       if (input.requestId() != null) {
          requests.findById(input.requestId())

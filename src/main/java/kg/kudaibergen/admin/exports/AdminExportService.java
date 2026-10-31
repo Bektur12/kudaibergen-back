@@ -56,13 +56,13 @@ public class AdminExportService {
             row("Запросов сегодня", kpi.requestsToday(), pct(kpi.requestsDeltaPct(), "% к среднему за неделю")),
             row("«Есть» за 30 минут, %", kpi.haveIn30Pct(), kpi.haveIn30DeltaPp() == null ? null
                   : signed(kpi.haveIn30DeltaPp()) + " п.п. к прошлой неделе"),
-            row("Активных боксов", kpi.activeShops(), "+" + kpi.activeShopsNewWeek() + " за неделю"),
+            row("Активных контейнеров", kpi.activeShops(), "+" + kpi.activeShopsNewWeek() + " за неделю"),
             row("Заявок на услуги сегодня", kpi.serviceRequestsToday(), pct(kpi.serviceDeltaPct(), "% к вчера"))));
       xlsx.sheet("По дням", List.of("Дата", "Запросов", "С «Есть»", "Заявок на услуги"),
             dashboard.requestsByDay(ChartRange.D30).days().stream()
                   .map(d -> List.<Object>of(d.date().toString(), d.requests(), d.withHave(), d.serviceRequests()))
                   .toList());
-      xlsx.sheet("Без ответа по маркам", List.of("Марка", "Запросов", "Без ответа за 30 мин", "%", "Боксов с маркой"),
+      xlsx.sheet("Без ответа по маркам", List.of("Марка", "Запросов", "Без ответа за 30 мин", "%", "Контейнеров с маркой"),
             dashboard.unansweredByBrand(DashboardPeriod.MONTH).brands().stream()
                   .map(b -> List.<Object>of(b.brand(), b.requests(), b.unanswered(), b.pct(), b.sellers())).toList());
       xlsx.sheet("Чаще всего ищут", List.of("Что", "Запросов", "% «Есть»"),

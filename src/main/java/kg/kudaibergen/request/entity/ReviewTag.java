@@ -6,7 +6,7 @@ import kg.kudaibergen.user.entity.Lang;
 public enum ReviewTag {
    FAST_REPLY("Быстро ответил", "Тез жооп берди"),
    PART_OK("Деталь как надо", "Тетик туура келди"),
-   EASY_TO_FIND("Легко найти бокс", "Боксту табуу оңой");
+   EASY_TO_FIND("Легко найти контейнер", "Контейнерди табуу оңой");
 
    private final String ru;
    private final String kg;

@@ -151,9 +151,9 @@ public final class RouteSteps {
    private static String arrive(Lang lang, int number, int meters, boolean rightHand) {
       boolean near = meters == 0;
       return switch (lang) {
-         case RU -> (near ? "Бокс " : "Через ~" + meters + " м бокс ") + number
+         case RU -> (near ? "Контейнер " : "Через ~" + meters + " м контейнер ") + number
                + (rightHand ? " по правую руку" : " по левую руку");
-         case KG -> (near ? "" : "~" + meters + " м өткөндөн кийин ") + number + "-бокс"
+         case KG -> (near ? "" : "~" + meters + " м өткөндөн кийин ") + number + "-контейнер"
                + (rightHand ? " оң жагыңызда" : " сол жагыңызда");
       };
    }

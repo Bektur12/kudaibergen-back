@@ -34,14 +34,14 @@ public class ShopAccess {
    @Transactional(readOnly = true)
    public Membership requireMember(Long userId) {
       return membership(userId)
-            .orElseThrow(() -> new NotFoundException("NO_SHOP", "У вас ещё нет бокса на рынке"));
+            .orElseThrow(() -> new NotFoundException("NO_SHOP", "У вас ещё нет контейнера на рынке"));
    }
 
    @Transactional(readOnly = true)
    public Membership requireOwner(Long userId) {
       Membership membership = requireMember(userId);
       if (!membership.member().isOwner()) {
-         throw new ForbiddenException("OWNER_ONLY", "Это может сделать только владелец бокса");
+         throw new ForbiddenException("OWNER_ONLY", "Это может сделать только владелец контейнера");
       }
       return membership;
    }

@@ -82,7 +82,7 @@ class RouteOnDesignMapTest {
       assertThat(steps).extracting(RouteSteps.Step::text).containsExactly(
             "Прямо по центральному проходу ~20 м",
             "Направо — между рядами 16 и 14",
-            "Через ~30 м бокс 12 по левую руку");
+            "Через ~30 м контейнер 12 по левую руку");
       assertThat(steps).extracting(RouteSteps.Step::kind).containsExactly(
             RouteSteps.StepKind.STRAIGHT, RouteSteps.StepKind.RIGHT, RouteSteps.StepKind.ARRIVE);
       // полилиния идёт по проходам и заканчивается у двери контейнера
@@ -94,7 +94,7 @@ class RouteOnDesignMapTest {
       List<RouteSteps.Step> kg = RouteSteps.build(path, names, center, 12, METERS_PER_PX, Lang.KG);
       assertThat(kg.get(0).text()).isEqualTo("Борбордук өтмөк менен түз ~20 м");
       assertThat(kg.get(1).text()).isEqualTo("Оңго — 16 жана 14 катарлардын ортосуна");
-      assertThat(kg.get(2).text()).isEqualTo("~30 м өткөндөн кийин 12-бокс сол жагыңызда");
+      assertThat(kg.get(2).text()).isEqualTo("~30 м өткөндөн кийин 12-контейнер сол жагыңызда");
    }
 
    @Test

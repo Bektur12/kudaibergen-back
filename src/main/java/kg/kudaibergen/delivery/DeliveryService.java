@@ -79,7 +79,7 @@ public class DeliveryService {
             .orElseThrow(() -> new BadRequestException("DELIVERY_NOT_AVAILABLE", "Магазин сейчас не принимает заказы"));
       Long ownShopId = shopAccess.membership(buyerId).map(membership -> membership.shop().getId()).orElse(null);
       if (shop.getId().equals(ownShopId)) {
-         throw new BadRequestException("SELF_ORDER", "Нельзя заказать у своего бокса");
+         throw new BadRequestException("SELF_ORDER", "Нельзя заказать у своего контейнера");
       }
       DeliveryTariffs.Tariff tariff = tariffs.of(input.region(), input.district());
       DeliveryOrder order = new DeliveryOrder(part.getId(), shop.getId(), buyerId, part.getTitle(), part.getPrice(),
