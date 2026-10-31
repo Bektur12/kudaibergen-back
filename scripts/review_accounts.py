@@ -2,7 +2,7 @@
 """
 Аккаунты для проверки App Store / Google Play — по одному на роль, повторный запуск ничего не дублирует.
 
-  +996100000101  покупатель «Проверка», машина Toyota Camry 50 2015
+  +996100000101  покупатель «Азамат», машина Toyota Camry 50 2015
   +996100000102  продавец, магазин «Демо-магазин (проверка)» вне рынка — Toyota, Lexus
   +996100000103  мастер «Демо-мастер (проверка)» — ремонт, диагностика
 
@@ -45,7 +45,7 @@ def main():
     conn = psycopg2.connect(**db)
     cur = conn.cursor()
 
-    buyer, new = user(cur, BUYER, "Проверка", "BUYER")
+    buyer, new = user(cur, BUYER, "Азамат", "BUYER")
     if new:
         cur.execute("""insert into cars (user_id, brand_id, model_id, year, is_primary, created_at, updated_at)
                        select %s, m.brand_id, m.id, 2015, true, now(), now()
