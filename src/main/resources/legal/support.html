@@ -16,11 +16,11 @@
 <body>
 <main>
 <h1>Поддержка «Кудайберген»</h1>
-<p>Вопросы по приложению, жалобы на продавцов и мастеров, проблемы со входом — напишите нам, ответим в течение дня.</p>
+<p>Вопросы по приложению, жалобы на продавцов и мастеров, проблемы со входом — напишите нам в WhatsApp или на почту, ответим в течение дня.</p>
 
 <div class="card">
   <p><b>Email:</b> <a href="mailto:{{email}}">{{email}}</a></p>
-  <p id="phone"><b>Телефон / WhatsApp:</b> {{phone}}</p>
+  <p><b>WhatsApp:</b> <a href="https://wa.me/996700488402">+996 700 48 84 02</a> · <a href="https://wa.me/996700212070">+996 700 21 20 70</a></p>
 </div>
 
 <h2>Частые вопросы</h2>
@@ -61,11 +61,5 @@
 
 <p><a href="/privacy">Политика конфиденциальности</a> · <a href="/terms">Правила пользования</a></p>
 </main>
-<script>
-  // телефон не задан — строку не показываем
-  if (!document.getElementById('phone').textContent.replace('Телефон / WhatsApp:', '').trim()) {
-    document.getElementById('phone').remove()
-  }
-</script>
 </body>
 </html>
