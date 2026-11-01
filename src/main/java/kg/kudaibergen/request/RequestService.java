@@ -234,7 +234,7 @@ public class RequestService {
          return said.length() > 200 ? said.substring(0, 199).strip() + "…" : said;
       }
       if (voice != null) {
-         return lang == Lang.KG ? "Үн менен суроо" : "Голосовой запрос";
+         return lang == Lang.KG ? "Үн менен өтүнмө" : "Голосовой запрос";
       }
       if (hasPhotos) {
          return lang == Lang.KG ? "Сүрөт боюнча тетик" : "Запчасть по фото";

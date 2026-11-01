@@ -12,7 +12,7 @@ public enum QuickReply {
    /** «Как пройти к боксу» → экран маршрута 18. */
    ROUTE_TO_BOX(ChatSide.BUYER, QuickReplyKind.ACTION, "Как пройти к контейнеру", "Контейнерге кантип барам"),
    /** «Купил — закрыть запрос» → шторка 09 (POST /requests/{id}/close). */
-   CLOSE_REQUEST(ChatSide.BUYER, QuickReplyKind.ACTION, "Купил — закрыть запрос", "Сатып алдым — суроону жабуу"),
+   CLOSE_REQUEST(ChatSide.BUYER, QuickReplyKind.ACTION, "Купил — закрыть запрос", "Сатып алдым — өтүнмөнү жабуу"),
    /** «Я на месте» с экрана маршрута 18: продавцу плашка «Покупатель подошёл». */
    ARRIVED(ChatSide.BUYER, QuickReplyKind.MESSAGE, "Покупатель подошёл", "Сатып алуучу келди"),
 

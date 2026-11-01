@@ -41,7 +41,7 @@ final class RequestTexts {
    }
 
    static String noReplyBody(String text, Lang lang) {
-      return lang == Lang.KG ? "«" + text + "» — бүт базарга жөнөтөсүзбү?" : "«" + text + "» — отправить всему рынку?";
+      return lang == Lang.KG ? "«" + text + "» — бүт базарга жибересизби?" : "«" + text + "» — отправить всему рынку?";
    }
 
    /** «Время вышло: 3 ответа». */
