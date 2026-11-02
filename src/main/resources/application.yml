@@ -101,7 +101,7 @@ app:
     token-ttl: 1h
   legal:
     # реквизиты на страницах /privacy, /terms, /support, /delete-account
-    operator: ${LEGAL_OPERATOR:Кудайберген}
+    operator: ${LEGAL_OPERATOR:KUDAIBERDI}
     email: ${LEGAL_EMAIL:support@kudaibergen.kg}
     phone: ${LEGAL_PHONE:}
     updated: ${LEGAL_UPDATED:31 октября 2026}

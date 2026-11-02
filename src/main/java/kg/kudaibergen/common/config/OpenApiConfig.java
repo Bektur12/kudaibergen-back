@@ -51,7 +51,7 @@ public class OpenApiConfig {
             .info(new Info()
                   .title("Kudaibergen API")
                   .version("v2")
-                  .description("Рынок автозапчастей «Кудайберген»: запросы продавцам, каталог, чаты, карта рынка"))
+                  .description("KUDAIBERDI — запчасти авторынка: запросы продавцам, каталог, чаты, карта рынка"))
             .components(new Components().addSecuritySchemes(BEARER, new SecurityScheme()
                   .type(SecurityScheme.Type.HTTP)
                   .scheme("bearer")
