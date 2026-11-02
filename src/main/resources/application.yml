@@ -102,7 +102,7 @@ app:
   legal:
     # реквизиты на страницах /privacy, /terms, /support, /delete-account
     operator: ${LEGAL_OPERATOR:KUDAIBERDI}
-    email: ${LEGAL_EMAIL:support@kudaibergen.kg}
+    email: ${LEGAL_EMAIL:kudaiberdiavto@gmail.com}
     phone: ${LEGAL_PHONE:}
     updated: ${LEGAL_UPDATED:31 октября 2026}
   media:
