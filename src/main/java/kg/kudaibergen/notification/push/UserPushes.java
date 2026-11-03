@@ -3,6 +3,7 @@ package kg.kudaibergen.notification.push;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -10,6 +11,7 @@ import kg.kudaibergen.user.DeviceTokenRepository;
 import kg.kudaibergen.user.UserRepository;
 import kg.kudaibergen.user.UserSettingsRepository;
 import kg.kudaibergen.user.entity.DeviceToken;
+import kg.kudaibergen.user.entity.Platform;
 import kg.kudaibergen.user.entity.User;
 import kg.kudaibergen.user.entity.UserSettings;
 import org.slf4j.Logger;
@@ -19,7 +21,7 @@ import org.springframework.stereotype.Component;
 /**
  * Пуш пользователям на все их устройства. Сообщение собирается под каждого получателя: его язык
  * и настройки уведомлений; factory вернул null — этому пользователю не шлём. Ошибка одного
- * получателя не мешает остальным.
+ * получателя не мешает остальным. iPhone при включённом APNs — напрямую через Apple, остальное — через push.
  */
 @Component
 public class UserPushes {
@@ -30,22 +32,23 @@ public class UserPushes {
    private final UserRepository users;
    private final UserSettingsRepository settings;
    private final PushSender push;
+   private final Optional<ApnsPushSender> apns;
 
    public UserPushes(DeviceTokenRepository devices, UserRepository users, UserSettingsRepository settings,
-                     PushSender push) {
+                     PushSender push, Optional<ApnsPushSender> apns) {
       this.devices = devices;
       this.users = users;
       this.settings = settings;
       this.push = push;
+      this.apns = apns;
    }
 
    public void send(Collection<Long> userIds, MessageFactory factory) {
       if (userIds.isEmpty()) {
          return;
       }
-      Map<Long, List<String>> tokens = devices.findByUserIdIn(userIds).stream()
-            .collect(Collectors.groupingBy(DeviceToken::getUserId,
-                  Collectors.mapping(DeviceToken::getToken, Collectors.toList())));
+      Map<Long, List<DeviceToken>> tokens = devices.findByUserIdIn(userIds).stream()
+            .collect(Collectors.groupingBy(DeviceToken::getUserId));
       if (tokens.isEmpty()) {
          return;
       }
@@ -58,10 +61,22 @@ public class UserPushes {
             continue;
          }
          try {
-            push.send(tokens.get(user.getId()), message);
+            send(tokens.get(user.getId()), message);
          } catch (RuntimeException ex) {
             log.warn("Пуш пользователю {} не отправлен: {}", user.getId(), ex.getMessage());
          }
+      }
+   }
+
+   private void send(List<DeviceToken> userDevices, PushMessage message) {
+      Map<Boolean, List<String>> byApple = userDevices.stream()
+            .collect(Collectors.partitioningBy(d -> apns.isPresent() && d.getPlatform() == Platform.IOS,
+                  Collectors.mapping(DeviceToken::getToken, Collectors.toList())));
+      if (!byApple.get(true).isEmpty()) {
+         apns.get().send(byApple.get(true), message);
+      }
+      if (!byApple.get(false).isEmpty()) {
+         push.send(byApple.get(false), message);
       }
    }
 
