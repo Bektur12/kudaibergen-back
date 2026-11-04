@@ -11,7 +11,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/** Магазин вне рынка: адрес, точка и название обязательны, проверки места нет — действует сразу. */
+/** Магазин вне рынка: адрес, точка и название обязательны, контейнера нет — ждёт подтверждения администрации. */
 class ShopOffMarketTest {
 
    private final ShopService service = new ShopService(null, null, null, null, null, null, null, null, null, null,
@@ -22,13 +22,25 @@ class ShopOffMarketTest {
    }
 
    @Test
-   void внеРынкаДействуетСразуДажеСПроверкой() {
+   void внеРынкаЖдётПроверки() {
       Shop shop = service.newShop(7L, create("  пр. Чуй 155  ", 42.87, 74.6, "Kia центр"));
       assertThat(shop.isOnMarket()).isFalse();
-      assertThat(shop.getStatus()).isEqualTo(ShopStatus.ACTIVE);
+      assertThat(shop.getStatus()).isEqualTo(ShopStatus.PENDING_VERIFICATION);
       assertThat(shop.getAddress()).isEqualTo("пр. Чуй 155");
       assertThat(shop.getLat()).isEqualTo(42.87);
       assertThat(shop.containerToVerify()).isNull();
+   }
+
+   @Test
+   void отклонённыйВнеРынкаПослеПравкиСноваНаПроверке() {
+      Shop shop = service.newShop(7L, create("пр. Чуй 155", 42.87, 74.6, "Kia центр"));
+      shop.reject("Нет такого адреса");
+      assertThat(shop.getStatus()).isEqualTo(ShopStatus.REJECTED);
+      shop.resubmit();
+      assertThat(shop.getStatus()).isEqualTo(ShopStatus.PENDING_VERIFICATION);
+      assertThat(shop.getBlockReason()).isNull();
+      shop.verified();
+      assertThat(shop.getStatus()).isEqualTo(ShopStatus.ACTIVE);
    }
 
    @Test

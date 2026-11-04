@@ -142,13 +142,12 @@ public class Shop {
       this.containerId = containerId;
    }
 
-   /** Магазин вне рынка: проверять место не нужно — действует сразу. */
+   /** Магазин вне рынка: контейнера нет, но сам магазин, как и рыночный, ждёт подтверждения администрации. */
    public static Shop offMarket(Long ownerId, String name, String address, double lat, double lng) {
       Shop shop = new Shop(ownerId, name, null);
       shop.address = address;
       shop.lat = lat;
       shop.lng = lng;
-      shop.verified();
       return shop;
    }
 
@@ -210,6 +209,14 @@ public class Shop {
          throw new IllegalStateException("Проверенный магазин переезжает через pendingContainerId");
       }
       this.containerId = containerId;
+      if (status == ShopStatus.REJECTED) {
+         status = ShopStatus.PENDING_VERIFICATION;
+         blockReason = null;
+      }
+   }
+
+   /** Отклонённый магазин вне рынка исправил профиль — снова на проверку. */
+   public void resubmit() {
       if (status == ShopStatus.REJECTED) {
          status = ShopStatus.PENDING_VERIFICATION;
          blockReason = null;

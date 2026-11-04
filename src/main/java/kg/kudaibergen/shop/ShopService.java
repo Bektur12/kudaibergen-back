@@ -99,8 +99,8 @@ public class ShopService {
          shop.setPhone(owner.getPhone());
          shop.setPhoneVisible(true);
       });
-      // вне рынка проверять место нечего — магазин действует сразу (Shop.offMarket)
-      if (!verificationRequired && shop.isOnMarket()) {
+      // и на рынке, и вне его магазин ждёт администрацию, если проверка включена
+      if (!verificationRequired) {
          shop.verified();
       }
       shop.setSchedule(request.openFrom(), request.openTo(), request.workDays());
@@ -174,6 +174,12 @@ public class ShopService {
       }
       if (shop.isPhoneVisible() && shop.getPhone() == null) {
          throw new BadRequestException("PHONE_REQUIRED", "Укажите телефон, чтобы показывать его покупателям");
+      }
+      if (!shop.isOnMarket() && shop.isRejected()) {
+         shop.resubmit();
+         if (!verificationRequired) {
+            shop.verified();
+         }
       }
       return mine(access.requireMember(userId), lang);
    }

@@ -201,6 +201,13 @@ public class ShopVerificationService {
    @Transactional
    public void adminApprove(Long shopId, Long adminId) {
       Shop shop = shop(shopId);
+      if (!shop.isOnMarket()) {
+         // вне рынка контейнера нет — подтверждается сам магазин
+         requireUnverified(shop);
+         shop.verified();
+         log.info("Админ {} подтвердил магазин {} вне рынка", adminId, shopId);
+         return;
+      }
       Long target = requireTarget(shop);
       if (shop.isRejected() && shops.findStandingIn(target).filter(other -> !other.getId().equals(shopId)).isPresent()) {
          throw ShopService.containerTaken();
@@ -228,6 +235,11 @@ public class ShopVerificationService {
       Shop shop = shop(shopId);
       if (shop.isRejected()) {
          throw new ConflictException("ALREADY_REJECTED", "Магазин уже отклонён");
+      }
+      if (!shop.isOnMarket()) {
+         requireUnverified(shop);
+         shop.reject(reason);
+         return;
       }
       Long target = requireTarget(shop);
       ShopVerification verification = verifications.findFirstByShopIdAndContainerIdAndStatusOrderByCreatedAtDesc(
@@ -320,6 +332,12 @@ public class ShopVerificationService {
 
    private Shop shop(Long shopId) {
       return shops.findById(shopId).orElseThrow(() -> new NotFoundException("SHOP_NOT_FOUND", "Магазин не найден"));
+   }
+
+   private static void requireUnverified(Shop shop) {
+      if (shop.getStatus() != ShopStatus.PENDING_VERIFICATION && !shop.isRejected()) {
+         throw new ConflictException("NOTHING_TO_VERIFY", "Магазин уже подтверждён");
+      }
    }
 
    private static Long requireTarget(Shop shop) {
