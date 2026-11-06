@@ -39,6 +39,7 @@ public interface PartRequestRepository extends JpaRepository<PartRequest, Long> 
    @Query("""
          select r from PartRequest r
          where r.buyerId = :buyerId
+           and r.hiddenAt is null
            and (:status is null or r.status = :status)
            and ((case when r.status = :active then 0 else 1 end) > :rank
              or ((case when r.status = :active then 0 else 1 end) = :rank and r.id < :beforeId))

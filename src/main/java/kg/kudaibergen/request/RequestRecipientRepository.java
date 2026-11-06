@@ -39,6 +39,20 @@ public interface RequestRecipientRepository extends JpaRepository<RequestRecipie
          from request_recipients where request_id = :requestId""")
    Counts counts(@Param("requestId") Long requestId);
 
+   /** Те же счётчики для страницы «Моих запросов» — одним запросом. */
+   @Query(nativeQuery = true, value = """
+         select request_id as "requestId",
+                count(*) as delivered,
+                count(seen_at) as seen,
+                count(*) filter (where status = 'HAVE') as have,
+                count(*) filter (where status = 'NOT_HAVE') as "notHave"
+         from request_recipients where request_id in (:requestIds) group by request_id""")
+   List<CountsById> countsFor(@Param("requestIds") Collection<Long> requestIds);
+
+   interface CountsById extends Counts {
+      Long getRequestId();
+   }
+
    interface Counts {
       long getDelivered();
 

@@ -411,8 +411,11 @@ public class RequestService {
             : replies.minPrices(rows.stream().map(PartRequest::getId).toList(), ReplyAnswer.HAVE).stream()
             .collect(Collectors.toMap(RequestReplyRepository.MinPrice::getRequestId,
                   RequestReplyRepository.MinPrice::getPrice));
+      Map<Long, RequestRecipientRepository.CountsById> counts = rows.isEmpty() ? Map.of()
+            : recipients.countsFor(rows.stream().map(PartRequest::getId).toList()).stream()
+            .collect(Collectors.toMap(RequestRecipientRepository.CountsById::getRequestId, Function.identity()));
       return CursorPage.of(rows, size, request -> (request.isActive() ? 0 : 1) + ":" + request.getId(),
-            request -> mapper.summary(request, minPrices.get(request.getId())));
+            request -> mapper.summary(request, minPrices.get(request.getId()), counts.get(request.getId())));
    }
 
    @Transactional(readOnly = true)
@@ -514,6 +517,21 @@ public class RequestService {
       events.publishEvent(new RequestEvents.Closed(requestId, shopId, input.stars()));
       events.publishEvent(new RequestEvents.StatsChanged(requestId));
       return mapper.detail(request, recipients.countByRequestIdAndSeenAtIsNotNull(requestId), lang);
+   }
+
+   /**
+    * «Удалить» в «Моих запросах»: запрос пропадает из списка покупателя. Открытый закрывается — продавцы
+    * его больше не видят; ответы, чаты и статистика у продавцов остаются.
+    */
+   @Transactional
+   public void hide(AuthPrincipal principal, Long requestId) {
+      PartRequest request = ownForUpdate(principal, requestId);
+      boolean wasOpen = request.isOpen();
+      request.hide(clock.instant());
+      if (wasOpen) {
+         events.publishEvent(new RequestEvents.Closed(requestId, null, null));
+         events.publishEvent(new RequestEvents.StatsChanged(requestId));
+      }
    }
 
    /**

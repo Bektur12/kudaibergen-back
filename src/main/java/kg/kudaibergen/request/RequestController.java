@@ -25,6 +25,7 @@ import kg.kudaibergen.request.entity.RequestTarget;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -135,6 +136,14 @@ public class RequestController {
                                   @Parameter(hidden = true) @RequestHeader(value = HttpHeaders.ACCEPT_LANGUAGE,
                                         required = false) String language) {
       return requests.extend(principal, id, request, Langs.fromHeader(language));
+   }
+
+   @DeleteMapping("/requests/{id}")
+   @ResponseStatus(HttpStatus.NO_CONTENT)
+   @Operation(summary = "Удалить запрос из «Моих запросов»", description = """
+         Пропадает у покупателя. Открытый закрывается — продавцы его больше не видят; их ответы и чаты остаются.""")
+   public void hide(@AuthenticationPrincipal AuthPrincipal principal, @PathVariable Long id) {
+      requests.hide(principal, id);
    }
 
    @PostMapping("/requests/{id}/close")

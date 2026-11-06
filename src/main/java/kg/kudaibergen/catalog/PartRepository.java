@@ -25,6 +25,19 @@ public interface PartRepository extends JpaRepository<Part, Long> {
 
    long countByShopIdAndStatus(Long shopId, PartStatus status);
 
+   /** Фильтр запчастей в профиле магазина (30): категории, где у него есть выложенные запчасти. */
+   @Query("""
+         select p.categoryId as categoryId, count(p) as count from Part p
+         where p.shopId = :shopId and p.status = :active and p.categoryId is not null
+         group by p.categoryId""")
+   List<ShopPartsByCategory> countByCategory(@Param("shopId") Long shopId, @Param("active") PartStatus active);
+
+   interface ShopPartsByCategory {
+      Long getCategoryId();
+
+      long getCount();
+   }
+
    @Query("select count(p) from Part p where p.shopId = :shopId and p.status = :active and p.quantity > 0")
    long countInStock(@Param("shopId") Long shopId, @Param("active") PartStatus active);
 

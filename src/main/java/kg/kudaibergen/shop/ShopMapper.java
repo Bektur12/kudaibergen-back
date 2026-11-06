@@ -58,7 +58,21 @@ public class ShopMapper {
             shop.getReviewsCount(), location(shop.getContainerId()), hours.state(shop), brands(shop),
             categories(shop, lang), shop.isPhoneVisible() ? shop.getPhone() : null, favorite, photos,
             new ShopPublicDto.ShopCounts(parts.countByShopIdAndStatus(shop.getId(), PartStatus.ACTIVE), photos.size(),
-                  shop.getReviewsCount()), shop.isOnMarket(), shop.getAddress(), shop.getLat(), shop.getLng());
+                  shop.getReviewsCount()), shop.isOnMarket(), shop.getAddress(), shop.getLat(), shop.getLng(),
+            partCategories(shop, lang));
+   }
+
+   private List<ShopPublicDto.ShopPartCategory> partCategories(Shop shop, Lang lang) {
+      Map<Long, Category> byId = categories.byId();
+      return parts.countByCategory(shop.getId(), PartStatus.ACTIVE).stream()
+            .filter(row -> byId.containsKey(row.getCategoryId()))
+            .sorted(Comparator.comparing(row -> byId.get(row.getCategoryId()).getSortOrder()))
+            .map(row -> {
+               Category category = byId.get(row.getCategoryId());
+               return new ShopPublicDto.ShopPartCategory(category.getId(), category.getSlug(), category.name(lang),
+                     row.getCount());
+            })
+            .toList();
    }
 
    public MyShopDto mine(Shop shop, MemberRole role, VerificationDto verification, int staffCount, Lang lang) {
