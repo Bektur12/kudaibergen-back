@@ -77,12 +77,16 @@ app:
     review-phones: ${OTP_REVIEW_PHONES:}
     review-code: ${OTP_REVIEW_CODE:}
   sms:
-    provider: ${SMS_PROVIDER:log}       # log | nikita
+    provider: ${SMS_PROVIDER:log}       # log | nikita | whatsapp (Green-API, пока нет SMS)
     nikita:
       url: ${SMS_URL:https://smspro.nikita.kg/api/message}
       login: ${SMS_LOGIN:}
       password: ${SMS_PASSWORD:}
       sender: ${SMS_SENDER:Kudaibergen}
+    green-api:
+      url: ${GREEN_API_URL:https://api.green-api.com}
+      id-instance: ${GREEN_API_ID_INSTANCE:}
+      token: ${GREEN_API_TOKEN:}
   market:
     # ссылка в QR-наклейках рядов и контейнеров; приложение ловит её как deep link
     qr-base-url: ${QR_BASE_URL:https://kudaibergen.kg/qr/}

@@ -11,5 +11,7 @@ public record UpdateMeRequest(
       String name,
       Lang lang,
       /** Фото из POST /media/photos (purpose AVATAR); убрать — DELETE /me/avatar. */
-      Long avatarMediaId) {
+      Long avatarMediaId,
+      /** Город; пустая строка — убрать. */
+      @Size(max = 60, message = "Город — до 60 символов") String city) {
 }

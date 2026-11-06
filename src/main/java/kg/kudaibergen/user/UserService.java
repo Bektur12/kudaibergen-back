@@ -64,6 +64,9 @@ public class UserService {
       if (request.lang() != null) {
          user.setLang(request.lang());
       }
+      if (request.city() != null) {
+         user.setCity(request.city().isBlank() ? null : request.city().strip());
+      }
       if (request.avatarMediaId() != null) {
          media.requireUsable(List.of(request.avatarMediaId()), List.of(userId),
                Set.of(MediaPurpose.AVATAR, MediaPurpose.SHOP));

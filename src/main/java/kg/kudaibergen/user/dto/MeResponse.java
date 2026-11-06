@@ -16,13 +16,14 @@ import org.springframework.lang.Nullable;
  * hasMaster / master — профиль мастера: нет — в режиме мастера ведут на регистрацию (38).
  * adminRole — пользователь активный сотрудник админки (вход в неё — отдельный, веб).
  */
-public record MeResponse(Long id, String phone, @Nullable String name, @Nullable String avatarUrl, UserRole role, Lang lang,
+public record MeResponse(Long id, String phone, @Nullable String name, @Nullable String city, @Nullable String avatarUrl,
+                         UserRole role, Lang lang,
                          @Nullable AdminRole adminRole, boolean onboarded, boolean hasShop, @Nullable UserShops.ShopRef shop,
                          boolean hasMaster, @Nullable UserMasters.MasterRef master, Instant createdAt) {
 
    public static MeResponse of(User user, String avatarUrl, UserShops.ShopRef shop, UserMasters.MasterRef master,
                                AdminRole adminRole) {
-      return new MeResponse(user.getId(), user.getPhone(), user.getName(), avatarUrl, user.getRole(),
+      return new MeResponse(user.getId(), user.getPhone(), user.getName(), user.getCity(), avatarUrl, user.getRole(),
             user.getLang(), adminRole, user.isOnboarded(), shop != null, shop, master != null, master,
             user.getCreatedAt());
    }

@@ -26,6 +26,10 @@ public class User {
    @Column(length = 120)
    private String name;
 
+   /** Город из профиля; null — не указан. */
+   @Column(length = 60)
+   private String city;
+
    @Column(name = "avatar_media_id")
    private Long avatarMediaId;
 
@@ -115,6 +119,14 @@ public class User {
 
    public void setName(String name) {
       this.name = name;
+   }
+
+   public String getCity() {
+      return city;
+   }
+
+   public void setCity(String city) {
+      this.city = city;
    }
 
    public Long getAvatarMediaId() {
