@@ -82,7 +82,7 @@ public class ShopMapper {
             verification, hours.state(shop), shop.isOpen(), shop.getPhone(), shop.isPhoneVisible(), shop.getRating(),
             shop.getReviewsCount(), brands(shop), categories(shop, lang), staffCount,
             List.copyOf(media.photos(shop.getPhotoIds()).values()), shop.isOnMarket(), shop.getAddress(), shop.getLat(),
-            shop.getLng());
+            shop.getLng(), shop.getManualPlace());
    }
 
    /** Аватар — превью 320 px; null — клиент рисует первую букву названия. */
@@ -100,14 +100,17 @@ public class ShopMapper {
       return location == null ? null : location.rowLabel() + " · конт. " + location.number();
    }
 
-   /** Место магазина строкой: на рынке — «Ряд 14 · конт. 12», вне рынка — его адрес. */
+   /**
+    * Место магазина строкой: в контейнере — «Ряд 14 · конт. 12», вне рынка — его адрес, место на рынке текстом —
+    * оно само (лежит в address).
+    */
    public static String place(ShopCardDto shop) {
-      return shop.onMarket() ? place(shop.location()) : shop.address();
+      return shop.location() != null ? place(shop.location()) : shop.address();
    }
 
    /** То же по сущности — для пушей и шаблонов. */
    public String place(Shop shop) {
-      return shop.isOnMarket() ? place(location(shop.getContainerId())) : shop.getAddress();
+      return shop.hasContainer() ? place(location(shop.getContainerId())) : shop.getAddress();
    }
 
    public LocationDto location(Long containerId) {

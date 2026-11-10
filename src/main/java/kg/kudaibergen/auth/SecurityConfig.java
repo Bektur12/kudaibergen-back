@@ -87,6 +87,8 @@ public class SecurityConfig {
                   .requestMatchers(HttpMethod.GET, PUBLIC_READ).permitAll()
                   .requestMatchers(HttpMethod.POST, "/api/v1/market/locate", "/api/v1/parts/*/share").permitAll()
                   .requestMatchers(HttpMethod.POST, ADMIN_AUTH).permitAll()
+                  // продавец добавляет недостающий контейнер в ряд — только с токеном (любой вошедший)
+                  .requestMatchers(HttpMethod.POST, "/api/v1/market/rows/*/containers").authenticated()
                   // только токен админки; конкретное право — @PreAuthorize на каждом эндпоинте
                   .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
                   .anyRequest().authenticated())

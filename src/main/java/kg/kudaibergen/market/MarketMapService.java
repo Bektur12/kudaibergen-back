@@ -4,15 +4,20 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.EnumSet;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import kg.kudaibergen.common.error.BadRequestException;
 import kg.kudaibergen.common.error.ConflictException;
 import kg.kudaibergen.common.error.NotFoundException;
 import kg.kudaibergen.market.dto.LocateDto;
@@ -24,6 +29,9 @@ import kg.kudaibergen.market.dto.QrResolveDto;
 import kg.kudaibergen.market.dto.RouteDto;
 import kg.kudaibergen.market.dto.RowDetailDto;
 import kg.kudaibergen.market.dto.RowDto;
+import kg.kudaibergen.market.entity.Container;
+import kg.kudaibergen.market.entity.MarketRow;
+import kg.kudaibergen.market.entity.RowType;
 import kg.kudaibergen.market.entity.Side;
 import kg.kudaibergen.market.geo.GeoCalibration;
 import kg.kudaibergen.market.geo.Point;
@@ -32,8 +40,11 @@ import kg.kudaibergen.market.route.RouteSteps;
 import kg.kudaibergen.market.route.Router;
 import kg.kudaibergen.user.entity.Lang;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * Карта рынка: схема, ряды и контейнеры, привязка GPS, QR, поиск и маршрут.
@@ -124,12 +135,91 @@ public class MarketMapService {
                   brandSellers[0]++;
                }
                return new RowDetailDto.ContainerSlotDto(c.container().getId(), c.container().getNumber(),
-                     tenant != null, shop == null ? RowDetailDto.ContainerState.NO_SELLER
+                     c.container().getSide(), tenant != null, shop == null ? RowDetailDto.ContainerState.NO_SELLER
                      : RowDetailDto.ContainerState.HAS_SELLER, sellsBrand, shop);
             })
             .toList())));
       return new RowDetailDto(view.row().getId(), view.row().getCode(), view.row().getLabel(), view.row().getType(),
             sides, brandId == null ? null : brandSellers[0]);
+   }
+
+   // ─────────────────────── продавец добавляет контейнер ───────────────────────
+
+   /**
+    * Продавец не нашёл свой контейнер в сетке ряда и добавляет его (номер 1..999). Сторона — см.
+    * {@link #resolveSide}. Такой же контейнер уже есть — 409 CONTAINER_EXISTS; был, но выключен — включается.
+    * Снимок перечитывается сразу, контейнер появляется в сетке и на карте.
+    */
+   @Transactional
+   public RowDetailDto.ContainerSlotDto addContainer(Long rowId, int number, Side requested) {
+      MarketRow row = rows.findById(rowId).filter(MarketRow::isActive)
+            .orElseThrow(() -> new NotFoundException("ROW_NOT_FOUND", "Ряд не найден"));
+      List<Container> existing = containers.findByRowId(rowId);
+      Set<Side> used = existing.stream().filter(Container::isActive).map(Container::getSide)
+            .collect(Collectors.toCollection(() -> EnumSet.noneOf(Side.class)));
+      Side side = resolveSide(row, used, requested);
+      Container container = existing.stream()
+            .filter(c -> c.getSide() == side && c.getNumber() == number)
+            .findFirst().orElse(null);
+      if (container != null) {
+         if (container.isActive()) {
+            throw containerExists(row, number);
+         }
+         container.setActive(true);
+      } else {
+         container = new Container(rowId, side, (short) number, UUID.randomUUID().toString().replace("-", ""));
+         try {
+            containers.saveAndFlush(container);
+         } catch (DataIntegrityViolationException race) {
+            throw containerExists(row, number);
+         }
+      }
+      reloadAfterCommit();
+      ContainerTenants.Tenant tenant = tenantsOf(List.of(container.getId())).get(container.getId());
+      ContainerTenants.Tenant shop = tenant == null || tenant.shopId() == null ? null : tenant;
+      return new RowDetailDto.ContainerSlotDto(container.getId(), container.getNumber(), container.getSide(),
+            tenant != null, shop == null ? RowDetailDto.ContainerState.NO_SELLER
+            : RowDetailDto.ContainerState.HAS_SELLER, null, shop);
+   }
+
+   /**
+    * Сторона нового контейнера: переданная (должна быть у ряда, иначе 400 WRONG_SIDE); без неё — единственная
+    * занятая сторона ряда; занято две — 400 SIDE_REQUIRED; контейнеров нет — NORTH (вертикальный ряд — EAST).
+    */
+   static Side resolveSide(MarketRow row, Set<Side> used, Side requested) {
+      List<Side> allowed = List.of(Side.of(row.getType()));
+      if (requested != null) {
+         if (!allowed.contains(requested)) {
+            throw new BadRequestException("WRONG_SIDE", "У ряда " + row.getLabel() + " стороны " + allowed);
+         }
+         return requested;
+      }
+      if (used.size() == 1) {
+         return used.iterator().next();
+      }
+      if (used.size() > 1) {
+         throw new BadRequestException("SIDE_REQUIRED", "У ряда " + row.getLabel()
+               + " контейнеры с двух сторон — выберите сторону");
+      }
+      return row.getType() == RowType.VROW ? Side.EAST : Side.NORTH;
+   }
+
+   private static ConflictException containerExists(MarketRow row, int number) {
+      return new ConflictException("CONTAINER_EXISTS", "В ряду " + row.getLabel() + " на этой стороне уже есть "
+            + "контейнер " + number);
+   }
+
+   /** Перечитать снимок сейчас и ещё раз после коммита — чтобы параллельный запрос не закэшировал старую схему. */
+   private void reloadAfterCommit() {
+      reload();
+      if (TransactionSynchronizationManager.isSynchronizationActive()) {
+         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+               reload();
+            }
+         });
+      }
    }
 
    /** Контейнер по id — для модулей shops и requests. */
@@ -167,11 +257,16 @@ public class MarketMapService {
       Optional<MarketSnapshot.ContainerView> container = snapshot.containerByToken(token);
       if (container.isPresent()) {
          MarketSnapshot.ContainerView view = container.get();
+         Point door = view.door();
          return new QrResolveDto(QrResolveDto.Type.CONTAINER, RowDto.of(view.row()), LocationDto.of(view),
-               round(view.door().x()), round(view.door().y()));
+               door == null ? null : round(door.x()), door == null ? null : round(door.y()));
       }
       MarketSnapshot.RowView row = snapshot.rowByToken(token)
             .orElseThrow(() -> new NotFoundException("QR_NOT_FOUND", "QR-код не относится к рынку"));
+      if (!row.onMap()) {
+         // ряда нет на схеме — точку «я здесь» не ставим
+         return new QrResolveDto(QrResolveDto.Type.ROW, RowDto.of(row), null, null, null);
+      }
       // табличка висит в начале ряда
       Point start = row.shape().axis().get(0);
       return new QrResolveDto(QrResolveDto.Type.ROW, RowDto.of(row), null, round(start.x()), round(start.y()));
@@ -214,7 +309,7 @@ public class MarketMapService {
     */
    public RouteDto route(Long containerId, Point from, Double lat, Double lon, Integer entrance, Lang lang) {
       MarketSnapshot snapshot = snapshot();
-      MarketSnapshot.ContainerView target = container(containerId);
+      MarketSnapshot.ContainerView target = requireOnMap(container(containerId));
       Start origin = start(from, lat, lon, entrance);
       Point start = origin.point();
       RouteDto.FromSource source = origin.source();
@@ -269,6 +364,7 @@ public class MarketMapService {
       MarketSnapshot snapshot = snapshot();
       return containerIds.stream().distinct()
             .map(snapshot::container).flatMap(Optional::stream)
+            .filter(MarketSnapshot.ContainerView::onMap)
             .sorted(Comparator.comparingDouble(view -> straight(from, view.door())))
             .limit(NEAREST_CANDIDATES)
             .map(view -> new Nearest(view, (int) Math.round(
@@ -288,7 +384,8 @@ public class MarketMapService {
    /** Длина пешего пути по проходам от точки до контейнера в метрах — для «ближайший ряд, 170 м». */
    public double walkingMeters(Point from, Long containerId) {
       MarketSnapshot snapshot = snapshot();
-      return snapshot.router().route(from, container(containerId).door()).length() * snapshot.metersPerPx();
+      return snapshot.router().route(from, requireOnMap(container(containerId)).door()).length()
+            * snapshot.metersPerPx();
    }
 
    /** Минуты пешком от главного входа: «Ряд 14 · конт. 12 · 2 мин» в ответах (05); пусто — места нет на схеме. */
@@ -298,11 +395,20 @@ public class MarketMapService {
          return Optional.empty();
       }
       Point entrance = snapshot.entrances().get(0).point();
-      return snapshot.container(containerId).map(view ->
+      return snapshot.container(containerId).filter(MarketSnapshot.ContainerView::onMap).map(view ->
             walkMinutes(snapshot.router().route(entrance, view.door()).length() * snapshot.metersPerPx()));
    }
 
    // ─────────────────────── внутреннее ───────────────────────
+
+   /** Маршрут и расстояние — только до контейнера, который нарисован на схеме. */
+   private static MarketSnapshot.ContainerView requireOnMap(MarketSnapshot.ContainerView view) {
+      if (!view.onMap()) {
+         throw new ConflictException("CONTAINER_NOT_ON_MAP", view.row().row().getLabel()
+               + " ещё не нарисован на схеме рынка — маршрут построить нельзя");
+      }
+      return view;
+   }
 
    private Map<Long, ContainerTenants.Tenant> tenantsOf(Collection<Long> containerIds) {
       ContainerTenants provider = tenants.getIfAvailable();
@@ -315,7 +421,8 @@ public class MarketMapService {
       json.get("passages").forEach(passage -> passages.add(new MapDto.PassageDto(
             RowShape.points(passage.get("points")).stream().map(Point::toArray).toList(),
             passage.get("width").asDouble())));
-      List<MapDto.MapRowDto> mapRows = snapshot.rows().stream().map(row -> {
+      // ряды без формы на схеме не рисуются: они есть только в списке рядов (GET /rows)
+      List<MapDto.MapRowDto> mapRows = snapshot.rows().stream().filter(MarketSnapshot.RowView::onMap).map(row -> {
          JsonNode geometry;
          try {
             geometry = mapper.readTree(row.row().getGeometry());

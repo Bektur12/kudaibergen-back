@@ -117,13 +117,32 @@ public class ShopService {
       return mine(access.requireMember(userId), lang);
    }
 
-   /** На рынке — в свободном контейнере; без контейнера — магазин вне рынка с адресом, точкой и названием. */
+   /**
+    * На рынке — в свободном контейнере; контейнера нет в списке — на рынке с местом текстом (manualPlace);
+    * иначе — магазин вне рынка с адресом, точкой и названием.
+    */
    Shop newShop(Long userId, ShopRequests.CreateShop request) {
       if (request.containerId() != null) {
          Long containerId = requireFreeContainer(request.containerId());
          String name = request.name() == null || request.name().isBlank() ? defaultName(containerId)
                : ShopNames.validate(request.name());
          return new Shop(userId, name, containerId);
+      }
+      if (request.manualPlace() != null && !request.manualPlace().isBlank()) {
+         if ((request.address() != null && !request.address().isBlank()) || request.lat() != null
+               || request.lng() != null) {
+            throw new BadRequestException("PLACE_CONFLICT",
+                  "Укажите либо место на рынке, либо адрес магазина вне рынка");
+         }
+         String place = ShopNames.validate(request.manualPlace());
+         if (place.length() < 2) {
+            throw new BadRequestException("MANUAL_PLACE_LENGTH", "Место — от 2 до 60 символов");
+         }
+         Shop shop = Shop.manualPlace(userId, place);
+         if (request.name() != null && !request.name().isBlank()) {
+            shop.setName(ShopNames.validate(request.name()));
+         }
+         return shop;
       }
       if (request.address() == null || request.address().isBlank()) {
          throw new BadRequestException("ADDRESS_REQUIRED", "Укажите адрес магазина или выберите контейнер на рынке");
@@ -175,7 +194,8 @@ public class ShopService {
       if (shop.isPhoneVisible() && shop.getPhone() == null) {
          throw new BadRequestException("PHONE_REQUIRED", "Укажите телефон, чтобы показывать его покупателям");
       }
-      if (!shop.isOnMarket() && shop.isRejected()) {
+      // без контейнера (вне рынка или место текстом) отклонённый магазин после правки снова на проверке
+      if (!shop.hasContainer() && shop.isRejected()) {
          shop.resubmit();
          if (!verificationRequired) {
             shop.verified();

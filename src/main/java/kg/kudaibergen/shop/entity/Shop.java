@@ -56,6 +56,13 @@ public class Shop {
 
    private Double lng;
 
+   /**
+    * Место на рынке текстом, когда контейнера нет в списке («Ряд К, конт. 5»): магазин на рынке, но без
+    * контейнера и точки на схеме. То же значение лежит в address — клиенты показывают его вместо места.
+    */
+   @Column(name = "manual_place", length = 60)
+   private String manualPlace;
+
    @Column(name = "pending_container_id")
    private Long pendingContainerId;
 
@@ -151,9 +158,35 @@ public class Shop {
       return shop;
    }
 
-   /** На рынке Кудайберген — есть контейнер. */
+   /** Магазин на рынке, место которого продавец написал сам: контейнера нет, проверять нечего. */
+   public static Shop manualPlace(Long ownerId, String place) {
+      Shop shop = new Shop(ownerId, place, null);
+      shop.manualPlace = place;
+      shop.address = place;
+      return shop;
+   }
+
+   /** На рынке Кудайберген — в контейнере или на месте, написанном вручную. */
    public boolean isOnMarket() {
+      return containerId != null || manualPlace != null;
+   }
+
+   /** Стоит в контейнере из списка (есть место на схеме). */
+   public boolean hasContainer() {
       return containerId != null;
+   }
+
+   public String getManualPlace() {
+      return manualPlace;
+   }
+
+   /** Встал в контейнер из списка — место текстом больше не нужно. */
+   private void placeInContainer(Long containerId) {
+      this.containerId = containerId;
+      if (manualPlace != null) {
+         manualPlace = null;
+         address = null;
+      }
    }
 
    /** Новый адрес и точка магазина вне рынка. */
@@ -190,7 +223,7 @@ public class Shop {
    /** Проверка пройдена: новый (или отклонённый) магазин становится действующим, при переезде — занимает новое место. */
    public void verified() {
       if (pendingContainerId != null) {
-         containerId = pendingContainerId;
+         placeInContainer(pendingContainerId);
          pendingContainerId = null;
       }
       if (status == ShopStatus.PENDING_VERIFICATION || status == ShopStatus.REJECTED) {
@@ -208,7 +241,7 @@ public class Shop {
       if (status != ShopStatus.PENDING_VERIFICATION && status != ShopStatus.REJECTED) {
          throw new IllegalStateException("Проверенный магазин переезжает через pendingContainerId");
       }
-      this.containerId = containerId;
+      placeInContainer(containerId);
       if (status == ShopStatus.REJECTED) {
          status = ShopStatus.PENDING_VERIFICATION;
          blockReason = null;
@@ -243,7 +276,7 @@ public class Shop {
 
    /** Контейнер, который сейчас надо подтвердить; null — подтверждать нечего. */
    public Long containerToVerify() {
-      if (!isOnMarket() && pendingContainerId == null) {
+      if (!hasContainer() && pendingContainerId == null) {
          return null;
       }
       if (pendingContainerId != null) {

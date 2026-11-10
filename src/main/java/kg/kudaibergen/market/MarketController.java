@@ -9,6 +9,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import kg.kudaibergen.common.error.BadRequestException;
 import kg.kudaibergen.common.i18n.Langs;
+import kg.kudaibergen.market.dto.AddContainerRequest;
 import kg.kudaibergen.market.dto.LocateDto;
 import kg.kudaibergen.market.dto.LocateRequest;
 import kg.kudaibergen.market.dto.MapDto;
@@ -29,9 +30,10 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-/** Карта рынка (экраны 10а, 15, 18). Всё открыто гостю. */
+/** Карта рынка (экраны 10а, 15, 18). Всё открыто гостю, кроме добавления контейнера продавцом. */
 @RestController
 @RequestMapping("/api/v1/market")
 @Tag(name = "Карта рынка")
@@ -56,7 +58,9 @@ public class MarketController {
    }
 
    @GetMapping("/rows")
-   @Operation(summary = "Ряды в порядке сетки (10а)")
+   @Operation(summary = "Ряды в порядке сетки (10а)", description = """
+         onMap = false — ряда ещё нет на схеме: его контейнеры выбираются в сетке, но на карте их нет
+         и маршрут к ним не строится (GET /route — 409 CONTAINER_NOT_ON_MAP).""")
    public List<RowDto> rows() {
       return market.rows();
    }
@@ -67,6 +71,21 @@ public class MarketController {
          в приложении». С brandId (экран 31): sellsBrand у каждого контейнера и brandSellers — «продают Toyota: 9».""")
    public RowDetailDto row(@PathVariable Long id, @RequestParam(required = false) Long brandId) {
       return market.row(id, brandId);
+   }
+
+   @PostMapping("/rows/{id}/containers")
+   @ResponseStatus(HttpStatus.CREATED)
+   @Operation(summary = "Добавить недостающий контейнер в ряд (10а)", description = """
+         Продавец не нашёл свой контейнер в сетке. Любой вошедший пользователь. side не передан: у ряда контейнеры
+         на одной стороне — она; на двух — 400 SIDE_REQUIRED; контейнеров нет — NORTH (вертикальный ряд — EAST).
+         Ответ — тот же контейнер, что в GET /rows/{id}/containers; он сразу есть в сетке и на карте.""")
+   @ApiResponse(responseCode = "201", description = "Контейнер создан (или включён снова, если был выключен)")
+   @ApiResponse(responseCode = "400", description = "SIDE_REQUIRED — у ряда две стороны; WRONG_SIDE — такой стороны нет")
+   @ApiResponse(responseCode = "404", description = "ROW_NOT_FOUND")
+   @ApiResponse(responseCode = "409", description = "CONTAINER_EXISTS — такой номер на этой стороне уже есть")
+   public RowDetailDto.ContainerSlotDto addContainer(@PathVariable Long id,
+                                                    @Valid @RequestBody AddContainerRequest request) {
+      return market.addContainer(id, request.number(), request.side());
    }
 
    @GetMapping("/search")
@@ -89,6 +108,7 @@ public class MarketController {
    }
 
    @GetMapping("/route")
+   @ApiResponse(responseCode = "409", description = "CONTAINER_NOT_ON_MAP — ряда контейнера ещё нет на схеме")
    @Operation(summary = "Как пройти к боксу (18)", description = """
          Откуда: fromX/fromY (точка схемы) → fromLat/fromLon (GPS) → fromEntrance (индекс входа).
          Без всего этого — от главного входа. При отклонении больше 20 м клиент просто запрашивает маршрут заново.

@@ -12,6 +12,8 @@ import org.springframework.lang.Nullable;
  * Вся схема рынка одним ответом (экраны 15, 18). Координаты — пиксели схемы, ось Y вниз.
  * Клиент хранит кэш и перекачивает карту, только если сменился version (ETag "map-v{version}").
  * geo — матрица GPS → x,y (null, пока админ не задал опорные точки): точку «я здесь» можно считать без сети.
+ * rows — только ряды, нарисованные на схеме: ряд без формы (geometry не задана) есть лишь в GET /rows
+ * (onMap = false) и в сетке контейнеров GET /rows/{id}/containers.
  */
 public record MapDto(int version, String coordinateSystem, JsonNode boundary, JsonNode blocks,
                      List<PassageDto> passages, JsonNode entrances, JsonNode pois, JsonNode streets, JsonNode labels,

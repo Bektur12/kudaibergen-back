@@ -15,12 +15,15 @@ import org.springframework.lang.Nullable;
  * «Мой бокс» (экраны 10, 21, 22). pendingLocation — новое место при переезде до проверки;
  * blockReason — почему магазин скрыт админом; myRole — что можно менять (ТЗ, раздел 2).
  * photos — фото места по порядку, первое — «Обложка» (22, «3 из 8»). onMarket / address / lat / lng — как в
- * ShopCardDto: магазин вне рынка без location, с адресом и точкой.
+ * ShopCardDto: магазин вне рынка без location, с адресом и точкой. manualPlace — место на рынке, написанное
+ * продавцом («Ряд К, конт. 5»), когда контейнера не было в списке: onMarket = true, location = null,
+ * address = manualPlace.
  */
 public record MyShopDto(Long id, String name, @Nullable String avatarUrl, ShopStatus status, @Nullable String blockReason,
                         MemberRole myRole, @Nullable LocationDto location, @Nullable LocationDto pendingLocation,
                         VerificationDto verification, OpenStateDto open, boolean isOpen, @Nullable String phone,
                         boolean phoneVisible, BigDecimal rating, int reviewsCount, List<BrandDto> brands,
                         List<CategoryDto> categories, int staffCount, List<PhotoDto> photos, boolean onMarket,
-                        @Nullable String address, @Nullable Double lat, @Nullable Double lng) {
+                        @Nullable String address, @Nullable Double lat, @Nullable Double lng,
+                        @Nullable String manualPlace) {
 }

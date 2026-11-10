@@ -30,8 +30,8 @@ public class MarketRow {
    @Column(nullable = false, length = 5)
    private RowType type;
 
+   /** null — ряда ещё нет на схеме: в списке рядов он есть, контейнеры выбираются, но без координат. */
    @JdbcTypeCode(SqlTypes.JSON)
-   @Column(nullable = false)
    private String geometry;
 
    @Column(name = "sort_order", nullable = false)
@@ -81,6 +81,11 @@ public class MarketRow {
 
    public String getGeometry() {
       return geometry;
+   }
+
+   /** Нарисован ли ряд на схеме. */
+   public boolean hasGeometry() {
+      return geometry != null;
    }
 
    public short getSortOrder() {

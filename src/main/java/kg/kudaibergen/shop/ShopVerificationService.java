@@ -201,8 +201,8 @@ public class ShopVerificationService {
    @Transactional
    public void adminApprove(Long shopId, Long adminId) {
       Shop shop = shop(shopId);
-      if (!shop.isOnMarket()) {
-         // вне рынка контейнера нет — подтверждается сам магазин
+      if (!shop.hasContainer() && shop.getPendingContainerId() == null) {
+         // контейнера нет (вне рынка или место текстом) — подтверждается сам магазин
          requireUnverified(shop);
          shop.verified();
          log.info("Админ {} подтвердил магазин {} вне рынка", adminId, shopId);
@@ -236,7 +236,7 @@ public class ShopVerificationService {
       if (shop.isRejected()) {
          throw new ConflictException("ALREADY_REJECTED", "Магазин уже отклонён");
       }
-      if (!shop.isOnMarket()) {
+      if (!shop.hasContainer() && shop.getPendingContainerId() == null) {
          requireUnverified(shop);
          shop.reject(reason);
          return;

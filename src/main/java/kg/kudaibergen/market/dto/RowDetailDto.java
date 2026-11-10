@@ -21,8 +21,9 @@ public record RowDetailDto(Long id, String code, String label, RowType type, Lis
    /**
     * state — есть ли в контейнере продавец в приложении; sellsBrand — продаёт ли он марку brandId
     * (null без brandId). Контейнер без марки выбрать можно — клиент показывает предупреждение.
+    * side — сторона ряда (та же, что у SideDto; нужна в ответе POST /rows/{id}/containers).
     */
-   public record ContainerSlotDto(Long id, int number, boolean occupied, ContainerState state, @Nullable Boolean sellsBrand,
+   public record ContainerSlotDto(Long id, int number, Side side, boolean occupied, ContainerState state, @Nullable Boolean sellsBrand,
                                   @Nullable ContainerTenants.Tenant shop) {
    }
 

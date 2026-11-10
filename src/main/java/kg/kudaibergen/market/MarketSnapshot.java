@@ -79,7 +79,8 @@ public final class MarketSnapshot {
          activeContainers.forEach(c -> containersByRow.computeIfAbsent(c.getRowId(), id -> new ArrayList<>()).add(c));
          this.rows = new ArrayList<>();
          for (MarketRow row : activeRows) {
-            RowShape shape = RowShape.parse(mapper.readTree(row.getGeometry()), row.getType());
+            // ряд ещё не нарисован на схеме — в списке он есть, контейнеры выбираются, но без координат
+            RowShape shape = row.hasGeometry() ? RowShape.parse(mapper.readTree(row.getGeometry()), row.getType()) : null;
             RowView view = new RowView(row, shape, new EnumMap<>(Side.class));
             for (Side side : Side.of(row.getType())) {
                List<Container> onSide = containersByRow.getOrDefault(row.getId(), List.of()).stream()
@@ -89,7 +90,9 @@ public final class MarketSnapshot {
                List<ContainerView> views = new ArrayList<>();
                for (int i = 0; i < onSide.size(); i++) {
                   Container container = onSide.get(i);
-                  ContainerView containerView = new ContainerView(container, view,
+                  ContainerView containerView = shape == null
+                        ? new ContainerView(container, view, null, null, 0, 0)
+                        : new ContainerView(container, view,
                         shape.containerCenter(side, i + 1, onSide.size()),
                         shape.containerDoor(side, i + 1, onSide.size()),
                         shape.angleAt(i + 1, onSide.size()), shape.cellLength(onSide.size()));
@@ -165,17 +168,31 @@ public final class MarketSnapshot {
       return Geometry.contains(boundary, point);
    }
 
-   /** Ряд со своей формой и активными контейнерами по сторонам (по порядку вдоль оси). */
+   /**
+    * Ряд со своей формой и активными контейнерами по сторонам (по порядку вдоль оси).
+    * shape = null — ряда нет на схеме (geometry не задана).
+    */
    public record RowView(MarketRow row, RowShape shape, Map<Side, List<ContainerView>> sides) {
 
       public List<ContainerView> all() {
          return sides.values().stream().flatMap(List::stream).toList();
       }
+
+      public boolean onMap() {
+         return shape != null;
+      }
    }
 
-   /** Контейнер с вычисленными координатами: центр ячейки, «дверь» у прохода, угол оси. */
+   /**
+    * Контейнер с вычисленными координатами: центр ячейки, «дверь» у прохода, угол оси.
+    * У контейнера ряда без формы center и door = null (angle и cellLength = 0): на карте его нет, маршрута тоже.
+    */
    public record ContainerView(Container container, RowView row, Point center, Point door, double angle,
                                double cellLength) {
+
+      public boolean onMap() {
+         return center != null;
+      }
    }
 
    public record Entrance(Point point, String label) {
