@@ -64,6 +64,8 @@ public class MarketMapService {
    private final ContainerRepository containers;
    private final ObjectMapper mapper;
    private final ObjectProvider<ContainerTenants> tenants;
+   private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(MarketMapService.class);
+
    private final AtomicReference<Cached> cache = new AtomicReference<>();
 
    public MarketMapService(MapVersionRepository versions, MarketRowRepository rows, ContainerRepository containers,
@@ -141,6 +143,65 @@ public class MarketMapService {
             .toList())));
       return new RowDetailDto(view.row().getId(), view.row().getCode(), view.row().getLabel(), view.row().getType(),
             sides, brandId == null ? null : brandSellers[0]);
+   }
+
+   // ─────────────────────── продавец добавляет ряд ───────────────────────
+
+   /** Ряд из ответа POST /rows: created = false — такой ряд уже был (или включён снова). */
+   public record RowResult(RowDto row, boolean created) {
+   }
+
+   private static final Map<Character, Character> LATIN_LOOKALIKES = Map.ofEntries(
+         Map.entry('A', 'А'), Map.entry('B', 'В'), Map.entry('C', 'С'), Map.entry('E', 'Е'), Map.entry('H', 'Н'),
+         Map.entry('K', 'К'), Map.entry('M', 'М'), Map.entry('O', 'О'), Map.entry('P', 'Р'), Map.entry('T', 'Т'),
+         Map.entry('X', 'Х'), Map.entry('Y', 'У'));
+   private static final java.util.regex.Pattern ROW_CODE =
+         java.util.regex.Pattern.compile("[\\p{IsCyrillic}\\p{IsLatin}0-9 -]{1,10}");
+
+   /**
+    * Код ряда, как его ввёл продавец → код в базе: без пробелов по краям и слова «ряд», заглавными,
+    * латинские двойники — кириллицей («k» → «К»). Буквы, цифры, пробел и дефис, 1–10 символов, иначе
+    * 400 BAD_ROW_CODE.
+    */
+   static String normalizeRowCode(String raw) {
+      String code = raw == null ? "" : raw.strip().replaceAll("\\s+", " ");
+      code = code.replaceFirst("(?iu)^ряд(\\s+|$)", "").strip().toUpperCase(Locale.ROOT);
+      StringBuilder mapped = new StringBuilder(code.length());
+      for (char ch : code.toCharArray()) {
+         mapped.append(LATIN_LOOKALIKES.getOrDefault(ch, ch));
+      }
+      code = mapped.toString();
+      if (!ROW_CODE.matcher(code).matches() || code.chars().noneMatch(Character::isLetterOrDigit)) {
+         throw new BadRequestException("BAD_ROW_CODE",
+               "Номер ряда — до 10 символов: буквы, цифры, пробел или дефис");
+      }
+      return code;
+   }
+
+   /**
+    * Продавец не нашёл ряд в списке и добавляет его: ряд без формы на схеме (onMap = false), контейнеры —
+    * через POST /rows/{id}/containers. Такой ряд уже есть — он и возвращается (выключенный включается).
+    */
+   @Transactional
+   public RowResult addRow(String rawCode, Long userId) {
+      String code = normalizeRowCode(rawCode);
+      MarketRow row = rows.findByCodeIgnoreCase(code).stream().findFirst().orElse(null);
+      boolean created = false;
+      if (row == null) {
+         Short max = rows.maxSortOrder();
+         row = rows.save(new MarketRow(code, "Ряд " + code, RowType.ROW, null, (short) ((max == null ? 0 : max) + 1),
+               UUID.randomUUID().toString().replace("-", "")));
+         created = true;
+         log.info("Пользователь {} добавил ряд «{}» (id {})", userId, code, row.getId());
+      } else if (!row.isActive()) {
+         row.setActive(true);
+         log.info("Пользователь {} снова включил ряд «{}» (id {})", userId, row.getCode(), row.getId());
+      }
+      // и найденный ряд мог быть в снимке выключенным — перечитываем всегда, это дёшево
+      reloadAfterCommit();
+      int count = (int) containers.findByRowId(row.getId()).stream().filter(Container::isActive).count();
+      return new RowResult(new RowDto(row.getId(), row.getCode(), row.getLabel(), row.getType(), count,
+            row.hasGeometry()), created);
    }
 
    // ─────────────────────── продавец добавляет контейнер ───────────────────────

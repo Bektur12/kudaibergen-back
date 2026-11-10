@@ -9,7 +9,9 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import kg.kudaibergen.common.error.BadRequestException;
 import kg.kudaibergen.common.i18n.Langs;
+import kg.kudaibergen.common.security.AuthPrincipal;
 import kg.kudaibergen.market.dto.AddContainerRequest;
+import kg.kudaibergen.market.dto.AddRowRequest;
 import kg.kudaibergen.market.dto.LocateDto;
 import kg.kudaibergen.market.dto.LocateRequest;
 import kg.kudaibergen.market.dto.MapDto;
@@ -23,6 +25,7 @@ import org.springframework.http.CacheControl;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -33,7 +36,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-/** Карта рынка (экраны 10а, 15, 18). Всё открыто гостю, кроме добавления контейнера продавцом. */
+/** Карта рынка (экраны 10а, 15, 18). Всё открыто гостю, кроме добавления ряда и контейнера продавцом. */
 @RestController
 @RequestMapping("/api/v1/market")
 @Tag(name = "Карта рынка")
@@ -71,6 +74,21 @@ public class MarketController {
          в приложении». С brandId (экран 31): sellsBrand у каждого контейнера и brandSellers — «продают Toyota: 9».""")
    public RowDetailDto row(@PathVariable Long id, @RequestParam(required = false) Long brandId) {
       return market.row(id, brandId);
+   }
+
+   @PostMapping("/rows")
+   @Operation(summary = "Добавить ряд, которого нет в списке (10а)", description = """
+         Любой вошедший пользователь. code — как ввёл продавец: «ф», «Ряд Ф», «k» → «Ф», «К» (без слова «ряд»,
+         заглавными, латинские двойники — кириллицей); 1–10 символов: буквы, цифры, пробел, дефис.
+         Ряд с таким кодом уже есть — 200 с ним (выключенный включается); новый — 201. Новый ряд без формы на схеме
+         (onMap = false): контейнеры — через POST /rows/{id}/containers.""")
+   @ApiResponse(responseCode = "200", description = "Ряд уже был — найден (или включён снова)")
+   @ApiResponse(responseCode = "201", description = "Ряд создан")
+   @ApiResponse(responseCode = "400", description = "BAD_ROW_CODE — недопустимый код ряда")
+   public ResponseEntity<RowDto> addRow(@Valid @RequestBody AddRowRequest request,
+                                        @Parameter(hidden = true) @AuthenticationPrincipal AuthPrincipal principal) {
+      MarketMapService.RowResult result = market.addRow(request.code(), principal == null ? null : principal.userId());
+      return ResponseEntity.status(result.created() ? HttpStatus.CREATED : HttpStatus.OK).body(result.row());
    }
 
    @PostMapping("/rows/{id}/containers")
