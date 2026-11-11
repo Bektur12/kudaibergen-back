@@ -32,6 +32,7 @@ public interface ServiceRequestRepository extends JpaRepository<ServiceRequest, 
    @Query("""
          select r from ServiceRequest r
          where r.buyerId = :buyerId
+           and r.hiddenAt is null
            and ((case when r.status = :active then 0 else 1 end) > :rank
              or ((case when r.status = :active then 0 else 1 end) = :rank and r.id < :beforeId))
          order by (case when r.status = :active then 0 else 1 end), r.id desc""")

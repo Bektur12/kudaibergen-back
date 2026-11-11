@@ -122,6 +122,10 @@ public class ServiceRequest {
    @Column(name = "closed_at")
    private Instant closedAt;
 
+   /** «Удалить» в «Моих запросах»: покупатель больше не видит, у исполнителей история остаётся. */
+   @Column(name = "hidden_at")
+   private Instant hiddenAt;
+
    @Column(name = "created_at", nullable = false, updatable = false)
    private Instant createdAt;
 
@@ -181,6 +185,14 @@ public class ServiceRequest {
    /** Машина на момент заявки: из гаража или введённая на шагах 2–3. */
    public record CarSnapshot(Long carId, Long brandId, Long modelId, Short year, BigDecimal engineVolume,
                              FuelType fuel, CarOrigin origin) {
+   }
+
+   /** Скрыть у покупателя. Открытый перед этим закрывается — исполнители перестают его видеть. */
+   public void hide(Instant now) {
+      if (status != RequestStatus.CLOSED) {
+         close(null, now);
+      }
+      hiddenAt = now;
    }
 
    public boolean isActive() {

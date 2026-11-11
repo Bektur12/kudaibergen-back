@@ -66,9 +66,13 @@ public record AppProperties(Jwt jwt, Otp otp, Sms sms, Fcm fcm, Market market, R
       }
    }
 
-   public record Sms(String provider, Nikita nikita) {
+   public record Sms(String provider, Nikita nikita, GreenApi greenApi) {
 
       public record Nikita(String url, String login, String password, String sender) {
+      }
+
+      /** Пока нет SMS — WhatsApp через Green-API (provider: whatsapp). */
+      public record GreenApi(String url, String idInstance, String token) {
       }
    }
 

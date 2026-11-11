@@ -13,12 +13,15 @@ import io.minio.http.Method;
 import kg.kudaibergen.common.config.AppProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 /**
  * Приватный бакет MinIO/S3: в базе ключ объекта, клиенту — presigned GET-ссылка. Ссылки кэшируются
- * на половину срока подписи, чтобы у клиента работал кэш картинок.
+ * на половину срока подписи, чтобы у клиента работал кэш картинок. Задан MEDIA_CDN_URL — ссылки идут через CDN
+ * (Cloudflare Worker читает бакет своими ключами): постоянный адрес «CDN/ключ», кэшируется на узлах рядом с
+ * пользователем. Ключи — случайные UUID, угадать чужой файл нельзя.
  */
 @Service
 @ConditionalOnProperty(name = "app.media.storage", havingValue = "s3")
@@ -30,12 +33,14 @@ public class S3MediaStorage implements MediaStorage {
    private final MinioClient client;
    private final AppProperties.Media.S3 s3;
    private final Map<String, SignedUrl> urlCache = new ConcurrentHashMap<>();
+   private final String cdnUrl;
 
    private record SignedUrl(String url, long refreshAtMillis) {
    }
 
-   public S3MediaStorage(AppProperties properties) {
+   public S3MediaStorage(AppProperties properties, @Value("${app.media.cdn-url:}") String cdnUrl) {
       this.s3 = properties.media().s3();
+      this.cdnUrl = cdnUrl == null ? "" : cdnUrl.strip().replaceAll("/+$", "");
       if (blank(s3.accessKey()) || blank(s3.secretKey())) {
          throw new IllegalStateException("MEDIA_STORAGE=s3, но не заданы S3_ACCESS_KEY и S3_SECRET_KEY. "
                + "Задайте ключи MinIO/S3 или храните файлы на диске: MEDIA_STORAGE=local");
@@ -75,6 +80,9 @@ public class S3MediaStorage implements MediaStorage {
    public String urlFor(String key) {
       if (key == null || key.isBlank()) {
          return null;
+      }
+      if (!cdnUrl.isEmpty()) {
+         return cdnUrl + "/" + key;
       }
       long now = System.currentTimeMillis();
       SignedUrl cached = urlCache.get(key);
@@ -126,7 +134,7 @@ public class S3MediaStorage implements MediaStorage {
                .object(key)
                .stream(content, size, -1)
                .contentType(contentType)
-               .headers(Map.of("Cache-Control", "private, max-age=31536000, immutable"))
+               .headers(Map.of("Cache-Control", "public, max-age=31536000, immutable"))
                .build());
       } catch (Exception e) {
          throw new IllegalStateException("Не удалось загрузить файл в хранилище", e);

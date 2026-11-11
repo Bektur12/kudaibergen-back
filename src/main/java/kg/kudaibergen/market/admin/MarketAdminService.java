@@ -245,7 +245,8 @@ public class MarketAdminService {
 
    /**
     * Новая версия схемы: сохраняется целиком, ряды сопоставляются по коду (контейнеры и магазины
-    * остаются на своих рядах), ряды, которых нет в новой схеме, выключаются. GPS-матрица переносится.
+    * остаются на своих рядах), ряды, которых нет в новой схеме, выключаются — кроме рядов без формы
+    * (geometry = NULL, их нет на схеме): они остаются в списке. GPS-матрица переносится.
     */
    @Transactional
    public PublishedMapDto publishMap(MapUploadRequest request) {
@@ -277,7 +278,8 @@ public class MarketAdminService {
       }
       int deactivated = 0;
       for (MarketRow row : rows.findAll()) {
-         if (row.isActive() && !codes.contains(row.getCode())) {
+         // ряд без формы (ещё не нарисован) в загрузке схемы и не может быть — его не выключаем
+         if (row.isActive() && row.hasGeometry() && !codes.contains(row.getCode())) {
             row.setActive(false);
             deactivated++;
          }
@@ -342,6 +344,7 @@ public class MarketAdminService {
       MapVersion current = currentVersion();
       List<RowUpload> rowUploads = rows.findAll().stream()
             .filter(MarketRow::isActive)
+            .filter(MarketRow::hasGeometry)
             .sorted(java.util.Comparator.comparing(MarketRow::getSortOrder).thenComparing(MarketRow::getCode))
             .map(row -> new RowUpload(row.getCode(), row.getLabel(), row.getType(), read(row.getGeometry()),
                   (int) row.getSortOrder()))

@@ -415,6 +415,18 @@ public class ServiceRequestService {
       return mapper.detail(request, seen(requestId), lang);
    }
 
+   /** «Удалить» в «Моих заявках»: пропадает у покупателя; открытая закрывается, мастера её больше не видят. */
+   @Transactional
+   public void hide(AuthPrincipal principal, Long requestId) {
+      ServiceRequest request = ownForUpdate(principal, requestId);
+      boolean wasOpen = request.isOpen();
+      request.hide(clock.instant());
+      if (wasOpen) {
+         events.publishEvent(new ServiceEvents.ServiceClosed(requestId, null, null));
+         events.publishEvent(new ServiceEvents.ServiceStatsChanged(requestId));
+      }
+   }
+
    // ─────────────────────── таймер ───────────────────────
 
    /** Время вышло — EXPIRED, мастерам без ответа — «Истёкшие», клиенту — пуш. Возвращает число заявок. */

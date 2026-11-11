@@ -102,6 +102,10 @@ public class PartRequest {
    @Column(name = "closed_at")
    private Instant closedAt;
 
+   /** «Удалить» в «Моих запросах»: покупатель больше не видит, у исполнителей история остаётся. */
+   @Column(name = "hidden_at")
+   private Instant hiddenAt;
+
    @Column(name = "recipients_count", nullable = false)
    private int recipientsCount;
 
@@ -148,6 +152,14 @@ public class PartRequest {
    }
 
    /** Продавцы видят запрос и могут ответить. */
+   /** Скрыть у покупателя. Открытый перед этим закрывается — исполнители перестают его видеть. */
+   public void hide(Instant now) {
+      if (status != RequestStatus.CLOSED) {
+         close(null, now);
+      }
+      hiddenAt = now;
+   }
+
    public boolean isActive() {
       return status == RequestStatus.ACTIVE;
    }

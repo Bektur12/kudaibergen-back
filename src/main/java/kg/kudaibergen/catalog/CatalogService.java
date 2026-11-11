@@ -193,6 +193,7 @@ public class CatalogService {
       Point origin = from;
       return shops.findByStatus(ShopStatus.ACTIVE).stream()
             .map(shop -> Map.entry(shop.getId(), snapshot.container(shop.getContainerId())
+                  .filter(MarketSnapshot.ContainerView::onMap)
                   .map(container -> distance(origin, container.center())).orElse(Double.MAX_VALUE)))
             .sorted(Map.Entry.comparingByValue(Comparator.naturalOrder()))
             .map(Map.Entry::getKey)

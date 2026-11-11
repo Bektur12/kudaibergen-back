@@ -21,6 +21,7 @@ import kg.kudaibergen.master.dto.ServiceStatsDto;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -128,6 +129,14 @@ public class ServiceRequestController {
                                         @Parameter(hidden = true) @RequestHeader(value = HttpHeaders.ACCEPT_LANGUAGE,
                                               required = false) String language) {
       return requests.widen(principal, id, Langs.fromHeader(language));
+   }
+
+   @DeleteMapping("/{id}")
+   @ResponseStatus(HttpStatus.NO_CONTENT)
+   @Operation(summary = "Удалить заявку из «Моих заявок»", description = """
+         Пропадает у покупателя. Открытая закрывается — мастера её больше не видят; их отклики и чаты остаются.""")
+   public void hide(@AuthenticationPrincipal AuthPrincipal principal, @PathVariable Long id) {
+      requests.hide(principal, id);
    }
 
    @PostMapping("/{id}/close")

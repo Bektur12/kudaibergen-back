@@ -1,0 +1,10 @@
+name = "kudaiberdi-cdn"
+main = "worker.js"
+compatibility_date = "2026-10-01"
+workers_dev = true
+
+[vars]
+S3_HOST = "t3.storageapi.dev"
+S3_REGION = "sjc"
+S3_BUCKET = "wrapped-saddlebag-mvdfgst"
+# S3_ACCESS_KEY и S3_SECRET_KEY — секреты: npx wrangler secret put S3_ACCESS_KEY

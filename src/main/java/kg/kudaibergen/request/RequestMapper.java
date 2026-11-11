@@ -72,10 +72,12 @@ public class RequestMapper {
       };
    }
 
-   public RequestSummaryDto summary(PartRequest request, Integer minPrice) {
+   public RequestSummaryDto summary(PartRequest request, Integer minPrice,
+                                    RequestRecipientRepository.Counts counts) {
       return new RequestSummaryDto(request.getId(), request.getText(), car(request).label(), request.getStatus(),
             state(request), request.getHaveCount(), minPrice, request.getCreatedAt(), request.getExpiresAt(),
-            firstThumb(request.getPhotoIds()));
+            firstThumb(request.getPhotoIds()), counts == null ? 0 : counts.getDelivered(),
+            counts == null ? 0 : counts.getSeen(), counts == null ? 0 : counts.getNotHave());
    }
 
    /** Плитка в «Моих запросах»: превью первого фото; без фото — null. */

@@ -414,12 +414,12 @@ public class ChatService {
          }
          Shop shop = shops.findById(chat.getShopId()).orElseThrow();
          payload = new LinkedHashMap<>();
-         if (shop.isOnMarket()) {
+         if (shop.hasContainer()) {
             payload.put("location", json.convertValue(shopMapper.location(shop.getContainerId()),
                   new TypeReference<Map<String, Object>>() {
                   }));
          } else {
-            // магазин вне рынка — маршрут в 2GIS по адресу и точке
+            // магазин вне рынка — маршрут в 2GIS по адресу и точке; место на рынке текстом — только адрес
             payload.put("address", shop.getAddress());
             payload.put("lat", shop.getLat());
             payload.put("lng", shop.getLng());

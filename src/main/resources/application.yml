@@ -77,12 +77,16 @@ app:
     review-phones: ${OTP_REVIEW_PHONES:}
     review-code: ${OTP_REVIEW_CODE:}
   sms:
-    provider: ${SMS_PROVIDER:log}       # log | nikita
+    provider: ${SMS_PROVIDER:log}       # log | nikita | whatsapp (Green-API, пока нет SMS)
     nikita:
       url: ${SMS_URL:https://smspro.nikita.kg/api/message}
       login: ${SMS_LOGIN:}
       password: ${SMS_PASSWORD:}
       sender: ${SMS_SENDER:Kudaibergen}
+    green-api:
+      url: ${GREEN_API_URL:https://api.green-api.com}
+      id-instance: ${GREEN_API_ID_INSTANCE:}
+      token: ${GREEN_API_TOKEN:}
   market:
     # ссылка в QR-наклейках рядов и контейнеров; приложение ловит её как deep link
     qr-base-url: ${QR_BASE_URL:https://kudaibergen.kg/qr/}
@@ -112,6 +116,8 @@ app:
     # для local: адрес сервера в ссылках на файлы. Пусто — адрес из запроса (как телефон обратился к серверу),
     # вне запроса — адрес компьютера в локальной сети. В проде — точный адрес (https://api.kudaibergen.kg)
     public-url: ${MEDIA_PUBLIC_URL:}
+    # для s3: адрес CDN перед бакетом (Cloudflare Worker, cdn/). Пусто — presigned-ссылки прямо в бакет
+    cdn-url: ${MEDIA_CDN_URL:}
     s3:
       endpoint: ${S3_ENDPOINT:http://localhost:9000}
       access-key: ${S3_ACCESS_KEY:}
