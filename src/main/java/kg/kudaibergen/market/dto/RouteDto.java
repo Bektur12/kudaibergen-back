@@ -6,7 +6,8 @@ import kg.kudaibergen.market.route.RouteSteps;
 
 /**
  * Маршрут до контейнера (экран 18): «1 мин · 50 м пешком», полилиния по проходам и шаги текстом.
- * fromSource — откуда построен: POINT (x,y с клиента), GPS, ENTRANCE (нет геолокации — от главного входа).
+ * fromSource — откуда построен: POINT (x,y с клиента), GPS (человек на рынке или рядом — линия от него, через ближайший
+ * по пути вход), ENTRANCE (нет геолокации или далеко — от входа).
  */
 public record RouteDto(LocationDto target, double[] containerPoint, double[] from, FromSource fromSource,
                        List<double[]> polyline, int distanceM, int minutes, List<RouteSteps.Step> steps) {

@@ -58,6 +58,8 @@ public class MarketMapService {
    /** Пешком по рынку, м/мин: с толкучкой медленнее, чем по улице. */
    static final double WALK_METERS_PER_MINUTE = 60;
    static final int NEAREST_CANDIDATES = 8;
+   /** Дальше этого от входа маршрут не тянем от человека: он едет, а не идёт — строим от входа. */
+   static final double MAX_APPROACH_M = 1500;
 
    private final MapVersionRepository versions;
    private final MarketRowRepository rows;
@@ -367,8 +369,9 @@ public class MarketMapService {
    // ─────────────────────── маршрут ───────────────────────
 
    /**
-    * Маршрут до контейнера. Откуда: точка схемы (from), иначе GPS (если карта откалибрована
-    * и точка на рынке), иначе вход fromEntrance (по умолчанию — главный).
+    * Маршрут до контейнера. Откуда: точка схемы (from), иначе GPS на рынке, иначе — человек рядом с рынком:
+    * через тот вход, откуда путь целиком (до входа по прямой + по проходам) короче, с отрезком «от вас до входа».
+    * Далеко от рынка (больше {@link #MAX_APPROACH_M}) или без геолокации — от входа fromEntrance (по умолчанию главного).
     */
    public RouteDto route(Long containerId, Point from, Double lat, Double lon, Integer entrance, Lang lang) {
       MarketSnapshot snapshot = snapshot();
@@ -377,14 +380,54 @@ public class MarketMapService {
       Point start = origin.point();
       RouteDto.FromSource source = origin.source();
 
-      Router.Path path = snapshot.router().route(start, target.door());
+      Point outside = source == RouteDto.FromSource.ENTRANCE && entrance == null ? gps(lat, lon).orElse(null) : null;
+      Router.Path path;
+      double approach = 0;
+      if (outside != null && !snapshot.entrances().isEmpty()) {
+         // вход, через который идти ближе всего именно до этого контейнера
+         Router.Path best = null;
+         double bestTotal = Double.MAX_VALUE;
+         for (MarketSnapshot.Entrance gate : snapshot.entrances()) {
+            Router.Path candidate = snapshot.router().route(gate.point(), target.door());
+            double total = outside.distance(gate.point()) + candidate.length();
+            if (total < bestTotal) {
+               bestTotal = total;
+               best = candidate;
+               start = gate.point();
+            }
+         }
+         path = best;
+         double toGate = outside.distance(start) * snapshot.metersPerPx();
+         if (toGate <= MAX_APPROACH_M) {
+            approach = toGate;
+            start = outside;
+            source = RouteDto.FromSource.GPS;
+         }
+      } else {
+         path = snapshot.router().route(start, target.door());
+      }
+
       List<RouteSteps.Step> steps = RouteSteps.build(path, snapshot.passageNames(), target.center(),
             target.container().getNumber(), snapshot.metersPerPx(), lang);
-      double meters = path.length() * snapshot.metersPerPx();
+      List<double[]> polyline = new ArrayList<>();
+      if (approach > 0) {
+         // от человека до входа — по прямой; дальше по проходам
+         polyline.add(start.toArray());
+      }
+      path.polyline().stream().map(Point::toArray).forEach(polyline::add);
+      double meters = path.length() * snapshot.metersPerPx() + approach;
       int distance = (int) Math.round(meters);
       int minutes = walkMinutes(meters);
       return new RouteDto(LocationDto.of(target), target.center().toArray(), start.toArray(), source,
-            path.polyline().stream().map(Point::toArray).toList(), distance, minutes, steps);
+            polyline, distance, minutes, steps);
+   }
+
+   /** GPS → точка схемы (если карта откалибрована), где бы человек ни был. */
+   private Optional<Point> gps(Double lat, Double lon) {
+      if (lat == null || lon == null) {
+         return Optional.empty();
+      }
+      return snapshot().calibration().map(c -> c.toMap(lat, lon));
    }
 
    /** Откуда идёт человек и как это определили. */
@@ -393,18 +436,22 @@ public class MarketMapService {
 
    /**
     * Точка старта: точка схемы (from), иначе GPS (если карта откалибрована и точка на рынке),
-    * иначе вход entrance (по умолчанию — главный).
+    * иначе вход entrance, иначе ближайший к GPS вход, иначе главный.
     */
    public Start start(Point from, Double lat, Double lon, Integer entrance) {
       if (from != null) {
          return new Start(from, RouteDto.FromSource.POINT);
       }
       MarketSnapshot snapshot = snapshot();
-      if (lat != null && lon != null) {
-         Optional<Point> gps = snapshot.calibration().map(c -> c.toMap(lat, lon)).filter(snapshot::inside);
-         if (gps.isPresent()) {
-            return new Start(gps.get(), RouteDto.FromSource.GPS);
-         }
+      Optional<Point> gps = gps(lat, lon);
+      if (gps.isPresent() && snapshot.inside(gps.get())) {
+         return new Start(gps.get(), RouteDto.FromSource.GPS);
+      }
+      if (entrance == null && gps.isPresent() && !snapshot.entrances().isEmpty()) {
+         // рядом с рынком — ближайший к человеку вход, а не всегда главный
+         Point near = gps.get();
+         return new Start(snapshot.entrances().stream().map(MarketSnapshot.Entrance::point)
+               .min(Comparator.comparingDouble(near::distance)).orElseThrow(), RouteDto.FromSource.ENTRANCE);
       }
       int index = entrance == null ? 0 : entrance;
       if (index < 0 || index >= snapshot.entrances().size()) {
