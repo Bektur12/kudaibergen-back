@@ -108,7 +108,9 @@ public class MarketMapService {
    // ─────────────────────── карта и ряды ───────────────────────
 
    public MapDto map() {
-      return cached().map;
+      MapDto map = cached().map;
+      List<Long> ids = map.rows().stream().flatMap(row -> row.containers().stream()).map(MapDto.MapContainerDto::id).toList();
+      return map.withShops(tenantsOf(ids));
    }
 
    public int currentVersion() {
@@ -493,7 +495,7 @@ public class MarketMapService {
          List<MapDto.MapContainerDto> cells = row.all().stream()
                .map(c -> new MapDto.MapContainerDto(c.container().getId(), c.container().getNumber(),
                      c.container().getSide(), round(c.center().x()), round(c.center().y()), c.angle(),
-                     round(c.cellLength())))
+                     round(c.cellLength()), null))
                .toList();
          return new MapDto.MapRowDto(row.row().getId(), row.row().getCode(), row.row().getLabel(),
                row.row().getType(), geometry, row.shape().center().toArray(),

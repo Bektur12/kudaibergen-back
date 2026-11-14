@@ -51,13 +51,15 @@ public class MarketController {
    @GetMapping("/map")
    @Operation(summary = "Схема рынка целиком (15, 18)", description = """
          Граница, улицы, ряды с контейнерами, проходы, входы, парковка, матрица GPS.
-         ETag "map-v{version}": с If-None-Match приходит 304, если схема не менялась.""")
+         ETag "map-v{version}-{магазины}": с If-None-Match приходит 304, если не менялись ни схема,
+         ни магазины в контейнерах.""")
    public ResponseEntity<MapDto> map(@RequestHeader(value = HttpHeaders.IF_NONE_MATCH, required = false) String etag) {
-      String current = "\"map-v" + market.currentVersion() + "\"";
+      MapDto map = market.map();
+      String current = "\"map-v" + map.version() + "-" + map.shopsTag() + "\"";
       if (current.equals(etag)) {
          return ResponseEntity.status(HttpStatus.NOT_MODIFIED).eTag(current).build();
       }
-      return ResponseEntity.ok().eTag(current).cacheControl(CacheControl.noCache()).body(market.map());
+      return ResponseEntity.ok().eTag(current).cacheControl(CacheControl.noCache()).body(map);
    }
 
    @GetMapping("/rows")

@@ -5,6 +5,7 @@ import java.util.List;
 import com.fasterxml.jackson.databind.JsonNode;
 import kg.kudaibergen.market.entity.RowType;
 import kg.kudaibergen.market.entity.Side;
+import kg.kudaibergen.market.ContainerTenants;
 import kg.kudaibergen.market.geo.GeoCalibration;
 import org.springframework.lang.Nullable;
 
@@ -27,7 +28,40 @@ public record MapDto(int version, String coordinateSystem, JsonNode boundary, Js
                            List<double[]> axis, double halfWidth, List<MapContainerDto> containers) {
    }
 
-   /** Контейнер: центр ячейки, угол оси ряда и длина ячейки — чтобы нарисовать прямоугольник с номером. */
-   public record MapContainerDto(Long id, int number, Side side, double x, double y, double angle, double length) {
+   /**
+    * Контейнер: центр ячейки, угол оси ряда и длина ячейки — чтобы нарисовать прямоугольник с номером.
+    * shop — магазин в контейнере (тап по контейнеру → профиль продавца); null — свободен или продавца нет в приложении.
+    */
+   public record MapContainerDto(Long id, int number, Side side, double x, double y, double angle, double length,
+                                 @Nullable ContainerTenants.Tenant shop) {
+
+      MapContainerDto withShop(@Nullable ContainerTenants.Tenant tenant) {
+         return new MapContainerDto(id, number, side, x, y, angle, length, tenant);
+      }
+   }
+
+   /** Отпечаток магазинов в контейнерах — часть ETag: новый продавец на карте без смены версии схемы. */
+   public String shopsTag() {
+      int hash = 1;
+      for (MapRowDto row : rows) {
+         for (MapContainerDto c : row.containers()) {
+            if (c.shop() != null) {
+               hash = 31 * hash + java.util.Objects.hash(c.id(), c.shop().shopId(), c.shop().name(), c.shop().avatarUrl());
+            }
+         }
+      }
+      return Integer.toHexString(hash);
+   }
+
+   /** Та же карта, но с магазинами в контейнерах (схема кэшируется, магазины — свежие на каждый запрос). */
+   public MapDto withShops(java.util.Map<Long, ContainerTenants.Tenant> tenants) {
+      if (tenants.isEmpty()) {
+         return this;
+      }
+      List<MapRowDto> withShops = rows.stream().map(row -> new MapRowDto(row.id(), row.code(), row.label(), row.type(),
+            row.geometry(), row.center(), row.axis(), row.halfWidth(),
+            row.containers().stream().map(c -> c.withShop(tenants.get(c.id()))).toList())).toList();
+      return new MapDto(version, coordinateSystem, boundary, blocks, passages, entrances, pois, streets, labels,
+            withShops, metersPerPx, geo);
    }
 }

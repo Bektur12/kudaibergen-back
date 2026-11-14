@@ -41,6 +41,11 @@ public class Container {
    @Column(name = "tenant_name", length = 120)
    private String tenantName;
 
+   /** Точное место на схеме; null — по порядку в ряду. */
+   private Double x;
+
+   private Double y;
+
    @Column(name = "is_active", nullable = false)
    private boolean active = true;
 
@@ -69,6 +74,14 @@ public class Container {
 
    public short getNumber() {
       return number;
+   }
+
+   public Double getX() {
+      return x;
+   }
+
+   public Double getY() {
+      return y;
    }
 
    public short getPosInRow() {

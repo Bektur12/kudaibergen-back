@@ -88,14 +88,23 @@ public final class MarketSnapshot {
                      .sorted(Comparator.comparingInt(Container::getPosInRow))
                      .toList();
                List<ContainerView> views = new ArrayList<>();
+               double placedCell = shape == null ? 0 : placedCellLength(onSide, shape.cellLength(onSide.size()));
                for (int i = 0; i < onSide.size(); i++) {
                   Container container = onSide.get(i);
-                  ContainerView containerView = shape == null
-                        ? new ContainerView(container, view, null, null, 0, 0)
-                        : new ContainerView(container, view,
-                        shape.containerCenter(side, i + 1, onSide.size()),
-                        shape.containerDoor(side, i + 1, onSide.size()),
-                        shape.angleAt(i + 1, onSide.size()), shape.cellLength(onSide.size()));
+                  ContainerView containerView;
+                  if (shape == null) {
+                     containerView = new ContainerView(container, view, null, null, 0, 0);
+                  } else if (container.getX() != null && container.getY() != null) {
+                     // точные координаты (разметка по карте): дверь — ближайшая точка прохода
+                     Point center = new Point(container.getX(), container.getY());
+                     containerView = new ContainerView(container, view, center, shape.nearestOnAxis(center),
+                           shape.angleNear(center), placedCell);
+                  } else {
+                     containerView = new ContainerView(container, view,
+                           shape.containerCenter(side, i + 1, onSide.size()),
+                           shape.containerDoor(side, i + 1, onSide.size()),
+                           shape.angleAt(i + 1, onSide.size()), shape.cellLength(onSide.size()));
+                  }
                   views.add(containerView);
                   containersById.put(container.getId(), containerView);
                   containersByToken.put(container.getQrToken(), containerView);
@@ -110,6 +119,27 @@ public final class MarketSnapshot {
          throw new IllegalStateException("Схема рынка v" + version.getVersion() + " повреждена", e);
       }
       this.metersPerPx = calibration != null ? calibration.metersPerPx() : version.getMetersPerPx().doubleValue();
+   }
+
+   /**
+    * Ширина ячейки для контейнеров с точными координатами — медиана расстояний между соседями по порядку,
+    * не больше равномерной ячейки (иначе прямоугольники налезут друг на друга).
+    */
+   static double placedCellLength(List<Container> onSide, double fallback) {
+      List<Double> gaps = new ArrayList<>();
+      for (int i = 1; i < onSide.size(); i++) {
+         Container a = onSide.get(i - 1);
+         Container b = onSide.get(i);
+         if (a.getX() != null && a.getY() != null && b.getX() != null && b.getY() != null) {
+            gaps.add(Math.hypot(b.getX() - a.getX(), b.getY() - a.getY()));
+         }
+      }
+      if (gaps.isEmpty()) {
+         return fallback;
+      }
+      gaps.sort(null);
+      double median = gaps.get(gaps.size() / 2);
+      return fallback > 0 ? Math.min(median, fallback) : median;
    }
 
    public int version() {

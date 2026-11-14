@@ -80,6 +80,31 @@ public final class RowShape {
       return Math.round(Math.toDegrees(Math.atan2(direction.y(), direction.x())) * 10) / 10.0;
    }
 
+   /** Ближайшая точка оси к p — «дверь» контейнера с точными координатами. */
+   public Point nearestOnAxis(Point p) {
+      return pointAt(alongOf(p));
+   }
+
+   /** Угол оси в градусах напротив точки p. */
+   public double angleNear(Point p) {
+      Point direction = directionAt(alongOf(p));
+      return Math.round(Math.toDegrees(Math.atan2(direction.y(), direction.x())) * 10) / 10.0;
+   }
+
+   /** Расстояние вдоль оси до проекции p. */
+   double alongOf(Point p) {
+      double best = Double.MAX_VALUE;
+      double along = 0;
+      for (int i = 0; i < axis.size() - 1; i++) {
+         Geometry.Projection projection = Geometry.project(axis.get(i), axis.get(i + 1), p);
+         if (projection.distance() < best) {
+            best = projection.distance();
+            along = cumulative[i] + projection.t() * (cumulative[i + 1] - cumulative[i]);
+         }
+      }
+      return along;
+   }
+
    /** Длина ячейки вдоль оси. */
    public double cellLength(int count) {
       return count == 0 ? 0 : length() / count;
