@@ -32,10 +32,12 @@ public class MapHighlightController {
 
    @GetMapping("/highlight")
    @Operation(summary = "Подсветка рядов по марке или категории (15)", description = """
-         kind=BRAND&id={brandId} или kind=CATEGORY&id={categoryId}. «Mercedes-Benz — в 6 рядах · 21 бокс ·
+         kind=BRAND&id={brandId} (и categoryId — марка в этой категории) или kind=CATEGORY&id={categoryId}. «Mercedes-Benz — в 6 рядах · 21 бокс ·
          ближайший ряд 14, 170 м»: rowIds, containerIds, shopsCount, rowsCount, openNowCount, nearest*.
          Откуда считать ближайший, как в /market/route: fromX/fromY → fromLat/fromLon → fromEntrance → главный вход.""")
    public MapHighlightDto highlight(@RequestParam MapFilterKind kind, @RequestParam Long id,
+                                    @Parameter(description = "Вместе с kind=BRAND: только магазины этой категории")
+                                    @RequestParam(required = false) Long categoryId,
                                     @RequestParam(required = false) Double fromX,
                                     @RequestParam(required = false) Double fromY,
                                     @RequestParam(required = false) Double fromLat,
@@ -47,7 +49,7 @@ public class MapHighlightController {
          throw new BadRequestException("BAD_REQUEST", "Передайте fromX и fromY вместе");
       }
       Point from = fromX == null ? null : new Point(fromX, fromY);
-      return highlight.highlight(kind, id, market.start(from, fromLat, fromLon, fromEntrance),
-            Langs.fromHeader(language));
+      return highlight.highlight(kind, id, kind == MapFilterKind.BRAND ? categoryId : null,
+            market.start(from, fromLat, fromLon, fromEntrance), Langs.fromHeader(language));
    }
 }

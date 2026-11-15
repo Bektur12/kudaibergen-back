@@ -46,13 +46,23 @@ public class MapHighlightService {
       this.categories = categories;
    }
 
+   /** categoryId вместе с маркой — «Toyota · Оптика»: магазины, у которых есть и марка, и категория. */
    @Transactional(readOnly = true)
-   public MapHighlightDto highlight(MapFilterKind kind, Long id, MarketMapService.Start from, Lang lang) {
+   public MapHighlightDto highlight(MapFilterKind kind, Long id, Long categoryId, MarketMapService.Start from,
+                                    Lang lang) {
       String name;
       List<Shop> found;
       if (kind == MapFilterKind.BRAND) {
          name = directory.brand(id).getName();
          found = shops.findByStatusAndBrand(ShopStatus.ACTIVE, id);
+         if (categoryId != null) {
+            Category category = Optional.ofNullable(categories.byId().get(categoryId))
+                  .orElseThrow(() -> new NotFoundException("CATEGORY_NOT_FOUND", "Категория не найдена"));
+            name = name + " · " + category.name(lang);
+            Set<Long> inCategory = shops.findByStatusAndCategory(ShopStatus.ACTIVE, categoryId).stream()
+                  .map(Shop::getId).collect(Collectors.toSet());
+            found = found.stream().filter(shop -> inCategory.contains(shop.getId())).toList();
+         }
       } else {
          Category category = Optional.ofNullable(categories.byId().get(id))
                .orElseThrow(() -> new NotFoundException("CATEGORY_NOT_FOUND", "Категория не найдена"));
