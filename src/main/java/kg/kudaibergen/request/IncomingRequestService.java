@@ -207,6 +207,7 @@ public class IncomingRequestService {
       Long chatId = null;
       if (reply.isHave()) {
          request.haveCountChanged(1);
+         shop.learnCategory(request.getCategoryId());
          // чат с карточкой ответа первым сообщением (ТЗ 10.2)
          chatId = chatService.openForReply(request, reply, userId);
          events.publishEvent(new RequestEvents.HaveReceived(requestId, reply.getId()));
@@ -241,6 +242,7 @@ public class IncomingRequestService {
       }
       events.publishEvent(new RequestEvents.StatsChanged(requestId));
       if (!wasHave && reply.isHave()) {
+         shop.learnCategory(request.getCategoryId());
          chatService.openForReply(request, reply, userId);
          events.publishEvent(new RequestEvents.HaveReceived(requestId, reply.getId()));
       }

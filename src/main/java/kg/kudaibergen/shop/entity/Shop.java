@@ -429,6 +429,16 @@ public class Shop {
       return brandIds;
    }
 
+   /**
+    * Продавец ответил «Есть» на запрос этой категории — значит, продаёт её. Категории копятся сами из ответов,
+    * анкету заполнять не нужно; у одного продавца их может быть сколько угодно.
+    */
+   public void learnCategory(Long categoryId) {
+      if (categoryId != null) {
+         categoryIds.add(categoryId);
+      }
+   }
+
    public Set<Long> getCategoryIds() {
       return categoryIds;
    }

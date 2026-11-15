@@ -89,6 +89,9 @@ class RequestsIT extends AbstractIntegrationTest {
             "{\"answer\":\"HAVE\",\"condition\":\"NEW\",\"message\":\"Есть KYB и оригинал\",\"price\":4500}"),
             sellerA), 201);
       assertThat(have.get("shop").get("name").asText()).isEqualTo("Субару Центр");
+      // «Есть» на запрос про ходовую — продавец сам получил категорию «Ходовая» (без анкеты)
+      assertThat(call(authed(get("/api/v1/my/shop"), sellerA), 200).get("categories").findValuesAsText("slug"))
+            .contains("suspension");
       JsonNode again = call(authed(jsonPost("/api/v1/requests/" + requestId + "/replies",
             "{\"answer\":\"NOT_HAVE\"}"), sellerA), 409);
       assertThat(again.get("code").asText()).isEqualTo("ALREADY_REPLIED");
