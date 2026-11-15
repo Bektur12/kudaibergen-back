@@ -16,12 +16,15 @@ public class DeviceService {
       this.devices = devices;
    }
 
-   /** Идемпотентно: повторная регистрация того же токена лишь обновляет владельца и время. */
+   /**
+    * Идемпотентно: повторная регистрация того же токена лишь обновляет владельца, время и умение кнопок.
+    * actions — приложение само рисует пуши с кнопками (новые версии); иначе на Android шлём обычный пуш.
+    */
    @Transactional
-   public void register(Long userId, String token, Platform platform) {
+   public void register(Long userId, String token, Platform platform, boolean actions) {
       devices.findByToken(token).ifPresentOrElse(
-            existing -> existing.reassign(userId, platform),
-            () -> devices.save(new DeviceToken(userId, token, platform)));
+            existing -> existing.reassign(userId, platform, actions),
+            () -> devices.save(new DeviceToken(userId, token, platform, actions)));
    }
 
    @Transactional

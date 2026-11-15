@@ -31,7 +31,7 @@ public class DeviceController {
    @Operation(summary = "Зарегистрировать FCM-токен", description = "Вызывать после входа и при обновлении токена")
    public void register(@AuthenticationPrincipal AuthPrincipal principal,
                         @Valid @RequestBody RegisterDeviceRequest request) {
-      deviceService.register(principal.userId(), request.token(), request.platform());
+      deviceService.register(principal.userId(), request.token(), request.platform(), Boolean.TRUE.equals(request.actions()));
    }
 
    @DeleteMapping("/{token}")

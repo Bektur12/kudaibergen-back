@@ -76,7 +76,17 @@ public class UserPushes {
          apns.get().send(byApple.get(true), message);
       }
       if (!byApple.get(false).isEmpty()) {
-         push.send(byApple.get(false), message);
+         // кнопки на Android рисует само приложение — только новым версиям; старым тот же пуш без кнопок
+         Map<Boolean, List<String>> byActions = userDevices.stream()
+               .filter(d -> !(apns.isPresent() && d.getPlatform() == Platform.IOS))
+               .collect(Collectors.partitioningBy(d -> d.getPlatform() != Platform.ANDROID || d.isPushActions(),
+                     Collectors.mapping(DeviceToken::getToken, Collectors.toList())));
+         if (!byActions.get(true).isEmpty()) {
+            push.send(byActions.get(true), message);
+         }
+         if (!byActions.get(false).isEmpty()) {
+            push.send(byActions.get(false), message.withoutActions());
+         }
       }
    }
 

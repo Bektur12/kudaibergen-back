@@ -36,6 +36,7 @@ import org.springframework.transaction.event.TransactionalEventListener;
 public class RequestNotifier {
 
    static final String NEW_REQUEST_CATEGORY = "NEW_REQUEST";
+   static final String REPLY_HAVE_CATEGORY = "REPLY_HAVE";
 
    private final PartRequestRepository requests;
    private final RequestReplyRepository replies;
@@ -102,12 +103,20 @@ public class RequestNotifier {
       RequestReply reply = replies.findById(event.replyId()).orElseThrow();
       Shop shop = shops.findById(reply.getShopId()).orElseThrow();
       String place = shopMapper.place(shop);
+      Map<String, String> data = new HashMap<>(Map.of("type", "REPLY_HAVE", "requestId", request.getId().toString(),
+            "replyId", reply.getId().toString(), "shopId", shop.getId().toString()));
+      if (shop.getContainerId() != null) {
+         // «Как пройти» прямо из пуша — к контейнеру продавца
+         data.put("containerId", shop.getContainerId().toString());
+         if (shop.getName() != null) {
+            data.put("shopName", shop.getName());
+         }
+      }
+      // кнопки «Написать» / «Как пройти» — чтобы покупатель сразу шёл к продавцу
       toBuyer(request, user -> new PushMessage(
             RequestTexts.haveTitle(shop.getName(), user.getLang()),
             RequestTexts.haveBody(place == null ? shop.getName() : place, reply.getPrice()),
-            Map.of("type", "REPLY_HAVE", "requestId", request.getId().toString(),
-                  "replyId", reply.getId().toString(), "shopId", shop.getId().toString()),
-            null, !quietHours.now()));
+            data, REPLY_HAVE_CATEGORY, !quietHours.now()));
    }
 
    /**

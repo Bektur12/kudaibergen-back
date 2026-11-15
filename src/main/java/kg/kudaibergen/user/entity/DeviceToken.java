@@ -30,22 +30,32 @@ public class DeviceToken {
    @Column(nullable = false, length = 8)
    private Platform platform;
 
+   /** Приложение рисует пуши с кнопками само (data-only на Android). Старые версии — false: им обычный пуш. */
+   @Column(name = "push_actions", nullable = false)
+   private boolean pushActions;
+
    @Column(name = "updated_at", nullable = false)
    private Instant updatedAt = Instant.now();
 
    protected DeviceToken() {
    }
 
-   public DeviceToken(Long userId, String token, Platform platform) {
+   public DeviceToken(Long userId, String token, Platform platform, boolean pushActions) {
       this.userId = userId;
       this.token = token;
       this.platform = platform;
+      this.pushActions = pushActions;
    }
 
-   public void reassign(Long userId, Platform platform) {
+   public void reassign(Long userId, Platform platform, boolean pushActions) {
       this.userId = userId;
       this.platform = platform;
+      this.pushActions = pushActions;
       this.updatedAt = Instant.now();
+   }
+
+   public boolean isPushActions() {
+      return pushActions;
    }
 
    public Long getId() {

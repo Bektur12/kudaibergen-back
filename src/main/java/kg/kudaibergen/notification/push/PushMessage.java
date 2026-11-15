@@ -11,4 +11,9 @@ public record PushMessage(String title, String body, Map<String, String> data, S
    public PushMessage(String title, String body, Map<String, String> data) {
       this(title, body, data, null, true);
    }
+
+   /** Тот же пуш без кнопок — для устройств со старой версией приложения. */
+   public PushMessage withoutActions() {
+      return category == null ? this : new PushMessage(title, body, data, null, sound);
+   }
 }
