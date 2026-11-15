@@ -371,7 +371,8 @@ public class MarketMapService {
    /**
     * Маршрут до контейнера. Откуда: точка схемы (from), иначе GPS на рынке, иначе — человек рядом с рынком:
     * через тот вход, откуда путь целиком (до входа по прямой + по проходам) короче, с отрезком «от вас до входа».
-    * Далеко от рынка (больше {@link #MAX_APPROACH_M}) или без геолокации — от входа fromEntrance (по умолчанию главного).
+    * Далеко от рынка (больше {@link #MAX_APPROACH_M}) — от входа, через который ему ближе; без геолокации — от входа,
+    * ближайшего к контейнеру. fromEntrance — от этого входа.
     */
    public RouteDto route(Long containerId, Point from, Double lat, Double lon, Integer entrance, Lang lang) {
       MarketSnapshot snapshot = snapshot();
@@ -380,10 +381,21 @@ public class MarketMapService {
       Point start = origin.point();
       RouteDto.FromSource source = origin.source();
 
-      Point outside = source == RouteDto.FromSource.ENTRANCE && entrance == null ? gps(lat, lon).orElse(null) : null;
+      boolean anyEntrance = source == RouteDto.FromSource.ENTRANCE && entrance == null;
+      Point outside = anyEntrance ? gps(lat, lon).orElse(null) : null;
       Router.Path path;
       double approach = 0;
-      if (outside != null && !snapshot.entrances().isEmpty()) {
+      if (anyEntrance && outside == null && !snapshot.entrances().isEmpty()) {
+         // где человек — не знаем: от того входа, откуда до контейнера ближе всего пешком
+         path = null;
+         for (MarketSnapshot.Entrance gate : snapshot.entrances()) {
+            Router.Path candidate = snapshot.router().route(gate.point(), target.door());
+            if (path == null || candidate.length() < path.length()) {
+               path = candidate;
+               start = gate.point();
+            }
+         }
+      } else if (outside != null && !snapshot.entrances().isEmpty()) {
          // вход, через который идти ближе всего именно до этого контейнера
          Router.Path best = null;
          double bestTotal = Double.MAX_VALUE;
@@ -498,15 +510,16 @@ public class MarketMapService {
             * snapshot.metersPerPx();
    }
 
-   /** Минуты пешком от главного входа: «Ряд 14 · конт. 12 · 2 мин» в ответах (05); пусто — места нет на схеме. */
+   /** Минуты пешком от ближайшего к контейнеру входа: «Ряд 14 · конт. 12 · 2 мин» в ответах (05); пусто — места нет на схеме. */
    public Optional<Integer> walkMinutesFromEntrance(Long containerId) {
       MarketSnapshot snapshot = snapshot();
       if (containerId == null || snapshot.entrances().isEmpty()) {
          return Optional.empty();
       }
-      Point entrance = snapshot.entrances().get(0).point();
       return snapshot.container(containerId).filter(MarketSnapshot.ContainerView::onMap).map(view ->
-            walkMinutes(snapshot.router().route(entrance, view.door()).length() * snapshot.metersPerPx()));
+            walkMinutes(snapshot.entrances().stream()
+                  .mapToDouble(gate -> snapshot.router().route(gate.point(), view.door()).length())
+                  .min().orElseThrow() * snapshot.metersPerPx()));
    }
 
    // ─────────────────────── внутреннее ───────────────────────

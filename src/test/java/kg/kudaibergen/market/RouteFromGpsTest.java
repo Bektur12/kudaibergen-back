@@ -87,9 +87,18 @@ class RouteFromGpsTest {
    }
 
    @Test
-   void безГеолокации_отГлавногоВхода() {
+   void безГеолокации_отБлижайшегоКонтейнеруВхода() {
+      // контейнер у восточного края — от восточного входа (25 м), а не от главного западного (225 м)
       RouteDto route = market.route(10L, null, null, null, null, Lang.RU);
       assertThat(route.fromSource()).isEqualTo(RouteDto.FromSource.ENTRANCE);
+      assertThat(route.from()[0]).isCloseTo(1000, within(0.5));
+      assertThat(route.distanceM()).isBetween(23, 27);
+      assertThat(market.walkMinutesFromEntrance(10L)).contains(1);
+   }
+
+   @Test
+   void выбранныйВход_отНего() {
+      RouteDto route = market.route(10L, null, null, null, 0, Lang.RU);
       assertThat(route.from()[0]).isCloseTo(0, within(0.5));
    }
 
