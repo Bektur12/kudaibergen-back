@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalTime;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
@@ -47,7 +48,8 @@ public class Master {
    @Column(name = "avatar_media_id")
    private Long avatarMediaId;
 
-   @Column(length = 16)
+   /** Обязателен: без интернета клиент звонит или пишет SMS. */
+   @Column(nullable = false, length = 16)
    private String phone;
 
    @Column(nullable = false, length = 160)
@@ -152,6 +154,12 @@ public class Master {
 
    /** Работает ли с машиной этой марки и страны. Страна «не знаю» подходит всем. */
    public boolean worksWith(Long brandId, CarOrigin origin) {
+      return worksWith(allBrands, brandIds, origins, brandId, origin);
+   }
+
+   /** То же по полям — для справочника «Кто рядом», собранного без сущностей. */
+   public static boolean worksWith(boolean allBrands, Collection<Long> brandIds, Collection<CarOrigin> origins,
+                                   Long brandId, CarOrigin origin) {
       boolean brand = allBrands || brandIds.contains(brandId);
       boolean country = origins.isEmpty() || origin == null || origin == CarOrigin.UNKNOWN || origins.contains(origin);
       return brand && country;

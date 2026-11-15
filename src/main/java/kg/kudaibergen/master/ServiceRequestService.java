@@ -65,6 +65,8 @@ public class ServiceRequestService {
 
    private static final Logger log = LoggerFactory.getLogger(ServiceRequestService.class);
    private static final Duration DAY = Duration.ofDays(1);
+   /** Точка снята раньше — заявку собрали без сети; мастеру показываем время точки. */
+   static final Duration STALE_LOCATION = Duration.ofMinutes(30);
    private static final int JOB_BATCH = 200;
    static final Set<Integer> EXTEND_MINUTES = Set.of(30, 60, 180);
    static final int DEFAULT_RADIUS_KM = 5;
@@ -154,7 +156,8 @@ public class ServiceRequestService {
             : ServiceDuration.ofMinutes(type.getDurationMin());
       ServiceRequest request = requests.save(new ServiceRequest(buyerId, type.getCode(), car,
             description, when, input.atTime(), where, input.lat(), input.lng(),
-            blankToNull(input.address()), radius, photoIds, voice == null ? null : voice.getId(), duration, now));
+            blankToNull(input.address()), radius, type.getMaxRadiusKm(), locatedAt(input.locatedAt(), now), photoIds,
+            voice == null ? null : voice.getId(), duration, now));
       dispatch(request, found, Set.of(), now);
       return mapper.detail(request, 0, lang);
    }
@@ -190,13 +193,13 @@ public class ServiceRequestService {
       };
    }
 
-   /** «Расширить радиус» (+5 км, до 50): новым мастерам — пуш, срок заново, истёкшая снова активна. */
+   /** «Расширить радиус» (+5 км до 50; эвакуатор, выездной — вдвое до 200): новым мастерам — пуш, срок заново, истёкшая снова активна. */
    @Transactional
    public ServiceRequestDetailDto widen(AuthPrincipal principal, Long requestId, Lang lang) {
       return widenRadius(ownForUpdate(principal, requestId), lang);
    }
 
-   /** Админка [A8]: «Расширить радиус» за клиента (+5 км, пуш новым мастерам). */
+   /** Админка [A8]: «Расширить радиус» за клиента (как у клиента, пуш новым мастерам). */
    @Transactional
    public ServiceRequestDetailDto adminWiden(Long requestId, Lang lang) {
       return widenRadius(requests.findForUpdate(requestId).filter(found -> !found.isHiddenByAdmin())
@@ -207,7 +210,7 @@ public class ServiceRequestService {
       Long requestId = request.getId();
       requireOpen(request);
       if (!request.canWiden()) {
-         throw new ConflictException("RADIUS_LIMIT", "Радиус уже максимальный — " + ServiceRequest.MAX_RADIUS_KM + " км");
+         throw new ConflictException("RADIUS_LIMIT", "Радиус уже максимальный — " + request.getMaxRadiusKm() + " км");
       }
       Instant now = clock.instant();
       reactivate(request);
@@ -284,9 +287,32 @@ public class ServiceRequestService {
             engineVolume, fuel, origin != null ? origin : CarOrigins.of(brand.getSlug()));
    }
 
-   /** Радиус заявки: выбранный клиентом, иначе — по умолчанию для услуги (справочник). */
-   private static int radius(Integer radiusKm, ServiceType type) {
-      return radiusKm == null ? type.getDefaultRadiusKm() : radiusKm;
+   /** Машина клиента для «Кто рядом»: из гаража или марка (+ страна). */
+   @Transactional(readOnly = true)
+   public ServiceRequest.CarSnapshot carFor(Long buyerId, Long carId, Long brandId, CarOrigin origin) {
+      return car(buyerId, carId, brandId, null, null, null, null, origin);
+   }
+
+   /** Радиус заявки: выбранный клиентом (до предела услуги), иначе — по умолчанию для услуги (справочник). */
+   static int radius(Integer radiusKm, ServiceType type) {
+      if (radiusKm == null) {
+         return Math.min(type.getDefaultRadiusKm(), type.getMaxRadiusKm());
+      }
+      if (radiusKm > type.getMaxRadiusKm()) {
+         throw new BadRequestException("RADIUS_TOO_LARGE", "Радиус для этой услуги — до " + type.getMaxRadiusKm() + " км");
+      }
+      return radiusKm;
+   }
+
+   /**
+    * Когда снята точка: только если заметно раньше отправки (заявка ждала связи). Из будущего (часы телефона
+    * спешат) или почти сейчас — не храним.
+    */
+   static Instant locatedAt(Instant locatedAt, Instant now) {
+      if (locatedAt == null || locatedAt.isAfter(now.minus(STALE_LOCATION))) {
+         return null;
+      }
+      return locatedAt;
    }
 
    /** Не больше активных заявок и новых за сутки, чем запросов на запчасти (app.requests). */

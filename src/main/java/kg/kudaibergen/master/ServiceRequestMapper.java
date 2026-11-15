@@ -114,7 +114,7 @@ public class ServiceRequestMapper {
             request.getStatus(), state(request), request.getDuration(), request.getExpiresAt(),
             request.getExtendedTimes(), request.canExtend(), request.canWiden(), request.getRecipientsCount(),
             seenCount, request.getCanHelpCount(), request.getClosedWithMasterId(), type.isUrgent(),
-            request.getCreatedAt(), request.getClosedAt());
+            request.getCreatedAt(), request.getClosedAt(), request.getLocatedAt());
    }
 
    public ServiceOfferDto offer(ServiceOffer offer, MasterCardDto master, int distanceM, Long chatId) {
@@ -132,7 +132,7 @@ public class ServiceRequestMapper {
             request.getWhen(), request.getAtTime(), request.getWhere(), request.getAddress(), request.getLat(), request.getLng(), recipient.getDistanceM(),
             buyerName, request.getStatus(), recipient.getMasterId().equals(request.getClosedWithMasterId()),
             type.isUrgent(), request.getCreatedAt(), recipient.getNotifiedAt(), request.getExpiresAt(),
-            recipient.getSeenAt() != null, myOffer);
+            recipient.getSeenAt() != null, myOffer, request.getLocatedAt());
    }
 
    private List<PhotoDto> photos(List<Long> ids) {

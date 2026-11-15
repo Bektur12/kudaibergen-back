@@ -24,14 +24,15 @@ import kg.kudaibergen.request.entity.RequestStatus;
 
 /**
  * Заявка на услугу (экраны 33–37): что нужно, какая машина (снимком), что случилось, когда и где.
- * Живёт до expiresAt, потом EXPIRED; продлевается до {@link #MAX_EXTENSIONS} раз, радиус расширяется.
+ * Живёт до expiresAt, потом EXPIRED; продлевается до {@link #MAX_EXTENSIONS} раз, радиус расширяется до maxRadiusKm
+ * (снимок услуги): обычные — по +5 км до 50, дальние (эвакуатор, выездной) — удвоением до 200.
  */
 @Entity
 @Table(name = "service_requests")
 public class ServiceRequest {
 
    public static final int MAX_EXTENSIONS = 3;
-   public static final int MAX_RADIUS_KM = 50;
+   public static final int DEFAULT_MAX_RADIUS_KM = 50;
    public static final int WIDEN_STEP_KM = 5;
 
    @Id
@@ -93,6 +94,13 @@ public class ServiceRequest {
    @Column(name = "radius_km", nullable = false)
    private short radiusKm;
 
+   @Column(name = "max_radius_km", nullable = false, updatable = false)
+   private short maxRadiusKm = DEFAULT_MAX_RADIUS_KM;
+
+   /** Когда снята точка: заявку собрали без сети и отправили позже — мастер видит «точка от 14:05». */
+   @Column(name = "located_at", updatable = false)
+   private Instant locatedAt;
+
    @Enumerated(EnumType.STRING)
    @Column(nullable = false, length = 7)
    private RequestStatus status = RequestStatus.ACTIVE;
@@ -152,7 +160,8 @@ public class ServiceRequest {
 
    public ServiceRequest(Long buyerId, String service, CarSnapshot car, String description, ServiceWhen when,
                          Instant atTime, ServiceWhere where, double lat, double lng, String address, int radiusKm,
-                         List<Long> photoIds, Long voiceMediaId, ServiceDuration duration, Instant now) {
+                         int maxRadiusKm, Instant locatedAt, List<Long> photoIds, Long voiceMediaId,
+                         ServiceDuration duration, Instant now) {
       this.buyerId = buyerId;
       this.service = service;
       this.carId = car.carId();
@@ -170,6 +179,8 @@ public class ServiceRequest {
       this.lng = lng;
       this.address = address;
       this.radiusKm = (short) radiusKm;
+      this.maxRadiusKm = (short) maxRadiusKm;
+      this.locatedAt = locatedAt;
       this.photoIds = new ArrayList<>(photoIds);
       this.voiceMediaId = voiceMediaId;
       this.duration = duration;
@@ -208,7 +219,13 @@ public class ServiceRequest {
    }
 
    public boolean canWiden() {
-      return isOpen() && radiusKm < MAX_RADIUS_KM;
+      return isOpen() && radiusKm < maxRadiusKm;
+   }
+
+   /** Следующий радиус: обычные услуги +5 км, дальние — вдвое (15 → 30 → 60 → 120 → 200), не больше предела. */
+   public static int nextRadius(int current, int max) {
+      int step = max > DEFAULT_MAX_RADIUS_KM ? Math.max(WIDEN_STEP_KM, current) : WIDEN_STEP_KM;
+      return Math.min(max, current + step);
    }
 
    public void dispatched(int added) {
@@ -219,9 +236,9 @@ public class ServiceRequest {
       canHelpCount = Math.max(0, canHelpCount + delta);
    }
 
-   /** «Расширить радиус» (+5 км, 37): срок заново, истёкшая заявка снова активна. */
+   /** «Расширить радиус» (37): срок заново, истёкшая заявка снова активна. */
    public void widen(Instant now) {
-      radiusKm = (short) Math.min(MAX_RADIUS_KM, radiusKm + WIDEN_STEP_KM);
+      radiusKm = (short) nextRadius(radiusKm, maxRadiusKm);
       restart(now, duration.expiresAt(now));
    }
 
@@ -323,6 +340,14 @@ public class ServiceRequest {
 
    public int getRadiusKm() {
       return radiusKm;
+   }
+
+   public int getMaxRadiusKm() {
+      return maxRadiusKm;
+   }
+
+   public Instant getLocatedAt() {
+      return locatedAt;
    }
 
    public RequestStatus getStatus() {

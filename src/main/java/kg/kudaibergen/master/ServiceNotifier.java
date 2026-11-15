@@ -76,7 +76,8 @@ public class ServiceNotifier {
          Long masterId = masterOfOwner.get(user.getId());
          String title = (type.isUrgent() ? "⚡ " : "") + (user.getLang() == Lang.KG ? "Жаңы заявка: " : "Новая заявка: ")
                + type.name(user.getLang());
-         String body = car + " · " + km(distance.getOrDefault(masterId, 0)) + " — " + shorten(request.getDescription());
+         String body = car + " · " + km(distance.getOrDefault(masterId, 0)) + located(request, user.getLang())
+               + " — " + shorten(request.getDescription());
          return new PushMessage(title, body, Map.of("type", "NEW_SERVICE_REQUEST", "requestId",
                request.getId().toString(), "masterId", masterId.toString()), NEW_SERVICE_REQUEST_CATEGORY,
                !quiet && settings.isNewRequestSound());
@@ -146,8 +147,23 @@ public class ServiceNotifier {
       return body.isEmpty() ? null : body.toString();
    }
 
+   /** 850 м, 1,2 км; от 10 км — целыми: 120 км (эвакуатор на трассе). */
    static String km(int meters) {
-      return meters < 1000 ? meters + " м" : String.format(Locale.ROOT, "%.1f км", meters / 1000.0).replace('.', ',');
+      if (meters < 1000) {
+         return meters + " м";
+      }
+      if (meters >= 10_000) {
+         return Math.round(meters / 1000.0) + " км";
+      }
+      return String.format(Locale.ROOT, "%.1f км", meters / 1000.0).replace('.', ',');
+   }
+
+   /** « · точка от 14:05» — клиент отправил заявку позже, чем снял точку (был без сети). */
+   static String located(ServiceRequest request, Lang lang) {
+      if (request.getLocatedAt() == null) {
+         return "";
+      }
+      return (lang == Lang.KG ? " · чекит " : " · точка от ") + request.getLocatedAt().atZone(ZONE).format(TIME);
    }
 
    /** 1 отклик, 2 отклика, 5 откликов. */

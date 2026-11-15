@@ -25,7 +25,8 @@ public final class MasterInputs {
 
    /**
     * «Стать мастером»: что делаю, с какими марками (allBrands — все), какие машины (origins пусто — любые),
-    * где (адрес и точка), в каком радиусе, выезжаю ли, часы работы.
+    * где (адрес и точка), в каком радиусе (до 30 км; с эвакуатором или выездом — до 200), выезжаю ли, часы работы.
+    * phone пусто — номер аккаунта: телефон обязателен, без сети клиент только звонит или пишет SMS.
     */
    public record CreateMaster(
          @NotBlank(message = "Укажите название") String name,
@@ -36,7 +37,7 @@ public final class MasterInputs {
          @NotBlank(message = "Укажите адрес") @Size(max = 160) String address,
          @NotNull(message = "Поставьте точку на карте") @DecimalMin("-90") @DecimalMax("90") Double lat,
          @NotNull(message = "Поставьте точку на карте") @DecimalMin("-180") @DecimalMax("180") Double lng,
-         @Min(value = 1, message = "Радиус — от 1 до 30 км") @Max(value = 30, message = "Радиус — от 1 до 30 км") Integer radiusKm,
+         @Min(value = 1, message = "Радиус — от 1 км") @Max(value = 200, message = "Радиус — не больше 200 км") Integer radiusKm,
          Boolean mobile,
          LocalTime openFrom,
          LocalTime openTo,
@@ -54,7 +55,7 @@ public final class MasterInputs {
          @Size(max = 160) String address,
          @DecimalMin("-90") @DecimalMax("90") Double lat,
          @DecimalMin("-180") @DecimalMax("180") Double lng,
-         @Min(value = 1, message = "Радиус — от 1 до 30 км") @Max(value = 30, message = "Радиус — от 1 до 30 км") Integer radiusKm,
+         @Min(value = 1, message = "Радиус — от 1 км") @Max(value = 200, message = "Радиус — не больше 200 км") Integer radiusKm,
          Boolean mobile,
          LocalTime openFrom,
          LocalTime openTo,

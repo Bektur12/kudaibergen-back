@@ -319,7 +319,7 @@ public class AdminDictionaryService {
 
    private static final String SERVICE_TYPES = """
          select t.code, t.name_ru, t.name_kg, t.icon, t.sort_order, t.needs_location, t.urgent, t.duration_min,
-                t.default_radius_km, t.is_active,
+                t.default_radius_km, t.max_radius_km, t.is_active,
                 (select count(*) from master_services ms where ms.service = t.code) as masters,
                 (select count(*) from service_requests r where r.service = t.code
                    and r.created_at > now() - interval '30 days') as requests
@@ -344,11 +344,14 @@ public class AdminDictionaryService {
 
    @Transactional
    public AdminServiceTypeDto createServiceType(CreateServiceTypeRequest request) {
+      int radius = request.defaultRadiusKm() == null ? 5 : request.defaultRadiusKm();
+      int maxRadius = request.maxRadiusKm() == null ? Math.max(50, radius) : request.maxRadiusKm();
+      requireRadii(radius, maxRadius);
       insert("""
             insert into service_types (code, name_ru, name_kg, icon, sort_order, needs_location, urgent, duration_min,
-                                       default_radius_km)
+                                       default_radius_km, max_radius_km)
             values (:code, :nameRu, :nameKg, :icon, (select coalesce(max(sort_order), 0) + 1 from service_types),
-                    :needsLocation, :urgent, :duration, :radius)
+                    :needsLocation, :urgent, :duration, :radius, :maxRadius)
             returning 0""", new MapSqlParameterSource()
             .addValue("code", request.code())
             .addValue("nameRu", request.nameRu().strip())
@@ -358,7 +361,8 @@ public class AdminDictionaryService {
             .addValue("urgent", request.urgent())
             .addValue("duration", minutes(request.defaultDuration() == null ? ServiceDuration.MIN_30
                   : request.defaultDuration()))
-            .addValue("radius", request.defaultRadiusKm() == null ? 5 : request.defaultRadiusKm()),
+            .addValue("radius", radius)
+            .addValue("maxRadius", maxRadius),
             "SERVICE_EXISTS", "Услуга с таким кодом уже есть");
       changes.changed();
       return serviceType(request.code());
@@ -366,7 +370,9 @@ public class AdminDictionaryService {
 
    @Transactional
    public AdminServiceTypeDto updateServiceType(String code, UpdateServiceTypeRequest request) {
-      serviceType(code);
+      AdminServiceTypeDto current = serviceType(code);
+      requireRadii(request.defaultRadiusKm() != null ? request.defaultRadiusKm() : current.defaultRadiusKm(),
+            request.maxRadiusKm() != null ? request.maxRadiusKm() : current.maxRadiusKm());
       List<String> sets = new ArrayList<>();
       MapSqlParameterSource params = new MapSqlParameterSource("code", code);
       addSet(sets, params, "name_ru", strip(request.nameRu()));
@@ -376,12 +382,20 @@ public class AdminDictionaryService {
       addSet(sets, params, "urgent", request.urgent());
       addSet(sets, params, "duration_min", request.defaultDuration() == null ? null : minutes(request.defaultDuration()));
       addSet(sets, params, "default_radius_km", request.defaultRadiusKm());
+      addSet(sets, params, "max_radius_km", request.maxRadiusKm());
       addSet(sets, params, "is_active", request.active());
       if (!sets.isEmpty()) {
          jdbc.update("update service_types set " + String.join(", ", sets) + " where code = :code", params);
          changes.changed();
       }
       return serviceType(code);
+   }
+
+   /** Радиус по умолчанию не больше предела — иначе заявка с радиусом по умолчанию не пройдёт проверку. */
+   private static void requireRadii(int defaultRadius, int maxRadius) {
+      if (defaultRadius > maxRadius) {
+         throw new BadRequestException("BAD_RADIUS", "Радиус по умолчанию больше предельного");
+      }
    }
 
    @Transactional
@@ -700,7 +714,7 @@ public class AdminDictionaryService {
       return new AdminServiceTypeDto(rs.getString("code"), rs.getString("name_ru"), rs.getString("name_kg"),
             rs.getString("icon"), rs.getInt("sort_order"), rs.getBoolean("needs_location"), rs.getBoolean("urgent"),
             ServiceDuration.ofMinutes(rs.getInt("duration_min")), rs.getInt("default_radius_km"),
-            rs.getBoolean("is_active"), rs.getLong("masters"), rs.getLong("requests"));
+            rs.getInt("max_radius_km"), rs.getBoolean("is_active"), rs.getLong("masters"), rs.getLong("requests"));
    }
 
    private static AdminHintDto hint(ResultSet rs, int n) throws SQLException {

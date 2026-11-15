@@ -402,7 +402,7 @@ enum QuickReply {                                                   // быст�
 Отдельный поток рядом с запросами на запчасти: клиент описывает проблему с машиной, заявку получают мастера нужной услуги, которые работают с этой маркой и страной машины и находятся рядом; они отвечают «Могу помочь» или «Не моё». Время, продление и статистика — как у запросов (раздел 7).
 
 #### 12.1 Справочник услуг — `GET /service-types`
-`[{code, name, icon, needsLocation, urgent, defaultDuration}]` в порядке плиток [33, 38]. `needsLocation` — заявке нужна точка на карте (эвакуатор, выездной мастер); `urgent` — «Срочно» (эвакуатор, 15 минут).
+`[{code, name, icon, needsLocation, urgent, defaultDuration, maxRadiusKm}]` в порядке плиток [33, 38]. `maxRadiusKm` — предел радиуса заявки и мастера (эвакуатор, выездной — 200 км; остальное — 50 для заявки, 30 для мастера). `needsLocation` — заявке нужна точка на карте (эвакуатор, выездной мастер); `urgent` — «Срочно» (эвакуатор, 15 минут).
 
 #### 12.2 Профиль мастера [38]
 - `POST /my/master` → стать мастером, пользователь переходит в режим `MASTER`:
@@ -411,7 +411,7 @@ enum QuickReply {                                                   // быст�
   "origins": ["JAPAN", "KOREA"], "address": "ул. Садыгалиева 41, бокс 3", "lat": 42.845, "lng": 74.625,
   "radiusKm": 5, "mobile": false, "openFrom": "09:00", "openTo": "19:00", "workDays": ["TUESDAY", "…"], "phone": "+996…" }
 ```
-  `origins` пусто — любые машины; `allBrands` — все марки; радиус 1–30 км (по умолчанию 5). Проверка мастера — как у магазинов: сейчас выключена, профиль сразу `ACTIVE`.
+  `origins` пусто — любые машины; `allBrands` — все марки; радиус 1–30 км (по умолчанию 5); с эвакуатором или выездом в услугах — до 200 км (иначе 400 `RADIUS_TOO_LARGE`). `phone` обязателен: пусто при регистрации — номер аккаунта, очистить через PATCH нельзя (400 `PHONE_REQUIRED`) — без сети клиент только звонит. Проверка мастера — как у магазинов: сейчас выключена, профиль сразу `ACTIVE`.
 - `GET /my/master` (нет — 404 `NO_MASTER` → вести на [38]), `PATCH /my/master` (null — не менять), `PATCH /my/master/accepting {accepting}` — «● Принимаю», `PUT/DELETE /my/master/avatar {mediaId}`, `PUT /my/master/photos {mediaIds}` (до 8, первое — обложка, `purpose=MASTER`).
 - Для клиента: `GET /masters/{id}` → `{id, publicId, name, avatarUrl?, rating, reviewsCount, services[], allBrands, brands[], origins[], address, lat, lng, radiusKm, mobile, open {openNow, …}, phone?, photos[]}`; `GET /masters/public/{publicId}` — ссылка «Поделиться»; `GET /masters/{id}/reviews`.
 - Один человек может быть и продавцом, и мастером. Вкладки мастера: Заявки · Чаты (`GET /chats?as=MASTER`) · Статистика · Профиль.
@@ -422,8 +422,9 @@ enum QuickReply {                                                   // быст�
 ```json
 { "service": "TOW_TRUCK", "carId": 12, "description": "Не заводится, стартер щёлкает",
   "mediaIds": [81], "when": "NOW", "atTime": null, "where": "PICKUP_POINT",
-  "lat": 42.851, "lng": 74.63, "address": "ул. Ахунбаева 98", "radiusKm": 5, "duration": null }
+  "lat": 42.851, "lng": 74.63, "address": "ул. Ахунбаева 98", "radiusKm": 5, "duration": null, "locatedAt": null }
 ```
+  `radiusKm` — до `service.maxRadiusKm` (400 `RADIUS_TOO_LARGE`). `locatedAt` — когда снята точка, если заявку собрали без сети и отправили позже (мастеру — «точка от 14:05», в ответах поле `locatedAt`; свежее 30 мин не хранится).
   Машина — `carId` из гаража или `brandId` + `modelId?` + `year?` + `engineVolume?` + `fuel?` + `origin?` (страна по умолчанию — по марке). Описание 10–500 символов, до 5 фото и видео вместе (`purpose=SERVICE`; видео до 30 с — `POST /media/videos`). `atTime` — только при `when = AT_TIME`. `lat/lng` обязательны всегда: от этой точки считается расстояние до мастеров. Некому отправить — 409 `NO_RECIPIENTS`.
 - **Кому уходит:** мастер `ACTIVE`, «Принимаю» включено, сейчас его рабочее время, услуга в его списке, марка — в его марках (или «Все марки»), страна — в его списке (или список пуст, или «не знаю»), расстояние от мастера до точки клиента ≤ меньшего из радиусов заявки и мастера.
 - Вложения заявки: `photos[]` — только фото (как раньше), `media[]` — всё по порядку, фото и видео: `MediaItemDto {id, kind: PHOTO|VIDEO, url, thumbUrl?, width?, height?, durationSec?}`. У видео без обложки `thumbUrl = null` — показывать первый кадр.
@@ -431,7 +432,12 @@ enum QuickReply {                                                   // быст�
 - `GET /service-requests/{id}` → `{…, service, car {brand, modelLabel?, year?, engineVolume?, fuel?, origin, label}, photos[], media[], when, atTime?, where, lat, lng, address?, radiusKm, status, state, duration, expiresAt, extendedTimes, canExtend, canWiden, recipientsCount, seenCount, canHelpCount, closedWithMasterId?, urgent}`.
 - `GET /service-requests/{id}/offers?afterId=` [37] — отклики «Могу помочь» по времени: `{id, master {id, name, avatarUrl?, rating, reviewsCount, address, mobile, isOpenNow, phone?}, priceFrom?, availableAt?, message?, distanceM, chatId}` — «★ 4.9 · 1,2 км · от 1 500 сом · сегодня 15:00», «Позвонить», «Написать».
 - `GET /service-requests/{id}/stats` → `{status, expiresAt, durationMin, remainingMin, canExtend, extendedTimes, radiusKm, counts {delivered, seen, canHelp, notMine, silent}}` — «Получили / Посмотрели / Могут / Не их профиль». Живое — `SERVICE_REQUEST_STATS` (раздел 11).
-- `POST /service-requests/{id}/extend {minutes: 30|60|180}` — до 3 раз; `POST /service-requests/{id}/widen` — радиус +5 км (до 50), новым мастерам пуш, срок заново; `POST /service-requests/{id}/close {masterId?, stars?, tags[]?}` — «Договорились» (оценка только откликнувшемуся мастеру).
+- `POST /service-requests/{id}/extend {minutes: 30|60|180}` — до 3 раз; `POST /service-requests/{id}/widen` — радиус +5 км до 50; эвакуатор и выездной — вдвое (15 → 30 → 60 → 120 → 200), новым мастерам пуш, срок заново; `POST /service-requests/{id}/close {masterId?, stars?, tags[]?}` — «Договорились» (оценка только откликнувшемуся мастеру).
+
+#### 12.5 Помощь на дороге
+«Кто рядом» без заявки (`GET /roadside/nearby`) и справочник мастеров на телефон для мест без интернета
+(`GET /roadside/offline-pack`, `/offline-pack/version`) — контракт в `BACKEND_SPEC.md` раздел 16, экраны и
+поведение без сети — в `docs/ROADSIDE_FRONTEND_PROMPT.md`.
 
 #### 12.4 Мастер [39]
 - `GET /my/master/requests?filter=NEW|ANSWERED|EXPIRED&cursor=` → `{id, service, car, description, photos[], media[], when, atTime?, where, address?, lat, lng, distanceM, buyerName?, status, dealHere, urgent, createdAt, notifiedAt, expiresAt, seen, myOffer?}` — «Шиномонтаж · Toyota Camry 50 · 1,2 км · осталось 12 мин».

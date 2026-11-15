@@ -13,9 +13,9 @@ import kg.kudaibergen.request.entity.RequestStatus;
 import org.springframework.lang.Nullable;
 
 /**
- * Заявка клиента (37). canWiden — можно расширить радиус (+5 км, до 50), canExtend — продлить (до 3 раз).
+ * Заявка клиента (37). canWiden — можно расширить радиус (до service.maxRadiusKm), canExtend — продлить (до 3 раз).
  * urgent — «Срочно» (эвакуатор). photos — только фото (как раньше); media — все вложения по порядку, фото и видео;
- * voice — голосовое клиента (16).
+ * voice — голосовое клиента (16). locatedAt — точка снята раньше отправки (заявка ждала связи), иначе null.
  */
 public record ServiceRequestDetailDto(Long id, ServiceTypeDto service, ServiceCarDto car, String description,
                                       List<PhotoDto> photos, List<MediaItemDto> media, @Nullable VoiceDto voice,
@@ -26,5 +26,5 @@ public record ServiceRequestDetailDto(Long id, ServiceTypeDto service, ServiceCa
                                       ServiceDuration duration, Instant expiresAt, int extendedTimes,
                                       boolean canExtend, boolean canWiden, int recipientsCount, long seenCount,
                                       int canHelpCount, @Nullable Long closedWithMasterId, boolean urgent,
-                                      Instant createdAt, @Nullable Instant closedAt) {
+                                      Instant createdAt, @Nullable Instant closedAt, @Nullable Instant locatedAt) {
 }

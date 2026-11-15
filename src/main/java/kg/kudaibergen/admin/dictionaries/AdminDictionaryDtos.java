@@ -123,11 +123,13 @@ public final class AdminDictionaryDtos {
 
    /**
     * Услуга [A9]: needsLocation — «точка на карте», defaultDuration — «ожидание» откликов по умолчанию,
-    * urgent — метка «Срочно», mastersCount — мастеров с этой услугой, requests30d — заявок за 30 дней.
+    * urgent — метка «Срочно», maxRadiusKm — до скольки км расширяется заявка и радиус мастера (эвакуатор — 200),
+    * mastersCount — мастеров с этой услугой, requests30d — заявок за 30 дней.
     */
    public record AdminServiceTypeDto(String code, String nameRu, String nameKg, String icon, int sortOrder,
                                      boolean needsLocation, boolean urgent, ServiceDuration defaultDuration,
-                                     int defaultRadiusKm, boolean active, long mastersCount, long requests30d) {
+                                     int defaultRadiusKm, int maxRadiusKm, boolean active, long mastersCount,
+                                     long requests30d) {
    }
 
    public record ServiceTypeCounts(long all, long active, long hidden) {
@@ -141,7 +143,8 @@ public final class AdminDictionaryDtos {
          boolean needsLocation,
          boolean urgent,
          ServiceDuration defaultDuration,
-         @Min(1) @Max(50) Integer defaultRadiusKm) {
+         @Min(1) @Max(200) Integer defaultRadiusKm,
+         @Min(1) @Max(200) Integer maxRadiusKm) {
    }
 
    public record UpdateServiceTypeRequest(
@@ -151,7 +154,8 @@ public final class AdminDictionaryDtos {
          Boolean needsLocation,
          Boolean urgent,
          ServiceDuration defaultDuration,
-         @Min(1) @Max(50) Integer defaultRadiusKm,
+         @Min(1) @Max(200) Integer defaultRadiusKm,
+         @Min(1) @Max(200) Integer maxRadiusKm,
          Boolean active) {
    }
 

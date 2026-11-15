@@ -42,6 +42,11 @@ server:
   forward-headers-strategy: native
   error:
     include-message: never
+  # справочник «Кто рядом» (/roadside/offline-pack) и списки: в горах связь слабая, gzip ужимает JSON в 4–5 раз
+  compression:
+    enabled: true
+    mime-types: application/json,application/problem+json
+    min-response-size: 2KB
 
 springdoc:
   swagger-ui:

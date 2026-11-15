@@ -15,6 +15,7 @@ import org.springframework.lang.Nullable;
  * Заявка в ленте мастера (39): услуга, машина, что случилось, когда и где, «1,2 км от вас», таймер.
  * Телефон клиента не показывается; buyerName = null — «Клиент». dealHere — клиент выбрал этого мастера.
  * photos — только фото (как раньше); media — все вложения по порядку, фото и видео; voice — голосовое клиента (18).
+ * locatedAt — клиент был без сети, точка снята в это время (он мог уйти или уехать дальше), иначе null.
  */
 public record MasterFeedItemDto(Long id, ServiceTypeDto service, ServiceCarDto car, String description,
                                 List<PhotoDto> photos, List<MediaItemDto> media, @Nullable VoiceDto voice,
@@ -22,5 +23,5 @@ public record MasterFeedItemDto(Long id, ServiceTypeDto service, ServiceCarDto c
                                 @Nullable String address, double lat, double lng, int distanceM,
                                 @Nullable String buyerName, RequestStatus status, boolean dealHere, boolean urgent,
                                 Instant createdAt, Instant notifiedAt, Instant expiresAt, boolean seen,
-                                @Nullable ServiceOfferDto myOffer) {
+                                @Nullable ServiceOfferDto myOffer, @Nullable Instant locatedAt) {
 }

@@ -123,7 +123,9 @@ public class ServiceRequestController {
    }
 
    @PostMapping("/{id}/widen")
-   @Operation(summary = "Расширить радиус (+5 км)", description = "До 50 км; новым мастерам — пуш, срок заново")
+   @Operation(summary = "Расширить радиус", description = """
+         Обычные услуги — +5 км до 50; эвакуатор и выездной мастер — вдвое (15 → 30 → 60 → 120 → 200), предел —
+         service.maxRadiusKm. Новым мастерам — пуш, срок заново.""")
    @ApiResponse(responseCode = "409", description = "RADIUS_LIMIT, REQUEST_CLOSED")
    public ServiceRequestDetailDto widen(@AuthenticationPrincipal AuthPrincipal principal, @PathVariable Long id,
                                         @Parameter(hidden = true) @RequestHeader(value = HttpHeaders.ACCEPT_LANGUAGE,

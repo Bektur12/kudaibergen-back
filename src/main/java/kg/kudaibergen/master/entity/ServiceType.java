@@ -46,6 +46,10 @@ public class ServiceType {
    @Column(name = "default_radius_km", nullable = false)
    private short defaultRadiusKm = 5;
 
+   /** До скольки км можно расширить заявку и поставить радиус мастеру: эвакуатор, выездной — 200 (трасса). */
+   @Column(name = "max_radius_km", nullable = false)
+   private short maxRadiusKm = 50;
+
    protected ServiceType() {
    }
 
@@ -79,6 +83,15 @@ public class ServiceType {
 
    public int getDefaultRadiusKm() {
       return defaultRadiusKm;
+   }
+
+   public int getMaxRadiusKm() {
+      return maxRadiusKm;
+   }
+
+   /** Дальняя услуга: едут за десятки км, радиус заявки растёт удвоением. */
+   public boolean isLongRange() {
+      return maxRadiusKm > ServiceRequest.DEFAULT_MAX_RADIUS_KM;
    }
 
    public boolean isUrgent() {

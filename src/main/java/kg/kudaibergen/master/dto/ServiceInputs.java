@@ -34,6 +34,8 @@ public final class ServiceInputs {
     * фото и видео (mediaIds) или голосовое (voiceMediaId, POST /media/voices purpose=SERVICE); хотя бы что-то одно.
     * when по умолчанию — «Сейчас», where — «Поеду сам» (эвакуатор — «Заберите отсюда», выездной мастер — «Приезжайте»).
     * lat/lng — где клиент («Рядом с рынком Кудайберген»). duration по умолчанию — из справочника услуги.
+    * radiusKm — до maxRadiusKm услуги (эвакуатор, выездной — 200, остальное — 50). locatedAt — когда снята точка:
+    * заявку собрали без сети и отправили, когда связь появилась (мастер увидит «точка от 14:05»).
     */
    public record CreateServiceRequest(
          @NotBlank(message = "Выберите услугу") String service,
@@ -54,8 +56,9 @@ public final class ServiceInputs {
          @NotNull(message = "Нужна точка на карте") @DecimalMin("-90") @DecimalMax("90") Double lat,
          @NotNull(message = "Нужна точка на карте") @DecimalMin("-180") @DecimalMax("180") Double lng,
          @Size(max = 160) String address,
-         @Min(value = 1, message = "Радиус — от 1 до 50 км") @Max(value = 50, message = "Радиус — от 1 до 50 км") Integer radiusKm,
-         ServiceDuration duration) {
+         @Min(value = 1, message = "Радиус — от 1 км") @Max(value = 200, message = "Радиус — не больше 200 км") Integer radiusKm,
+         ServiceDuration duration,
+         Instant locatedAt) {
    }
 
    /** «Продлить»: на 30, 60 или 180 минут, до 3 раз. */

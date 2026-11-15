@@ -1,7 +1,10 @@
 package kg.kudaibergen.master;
 
 import java.time.LocalTime;
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -15,6 +18,7 @@ import kg.kudaibergen.master.dto.MasterReviewDto;
 import kg.kudaibergen.master.dto.MyMasterDto;
 import kg.kudaibergen.master.entity.Master;
 import kg.kudaibergen.master.entity.MasterReview;
+import kg.kudaibergen.master.entity.ServiceType;
 import kg.kudaibergen.media.MediaPurpose;
 import kg.kudaibergen.media.MediaService;
 import kg.kudaibergen.request.dto.ReviewTagDto;
@@ -98,10 +102,11 @@ public class MasterService {
       master.replaceBrands(Boolean.TRUE.equals(input.allBrands()), requireBrands(input.allBrands(), input.brandIds()));
       master.replaceOrigins(input.origins() == null ? Set.of() : input.origins());
       master.setRadiusKm(input.radiusKm() == null ? 5 : input.radiusKm());
+      requireRadius(master);
       master.setMobile(Boolean.TRUE.equals(input.mobile()));
       applySchedule(master, input.openFrom(), input.openTo(), input.workDays());
       master.setPhone(input.phone() == null || input.phone().isBlank()
-            ? users.findById(userId).map(User::getPhone).orElse(null) : input.phone());
+            ? users.findById(userId).map(User::getPhone).orElseThrow(MasterService::phoneRequired) : input.phone());
       if (pending) {
          master.pending();
       }
@@ -143,9 +148,37 @@ public class MasterService {
                input.workDays() != null ? input.workDays() : WeekDays.fromMask(master.getWorkDays()));
       }
       if (input.phone() != null) {
-         master.setPhone(input.phone().isBlank() ? null : input.phone());
+         if (input.phone().isBlank()) {
+            throw phoneRequired();
+         }
+         master.setPhone(input.phone());
+      }
+      if (input.radiusKm() != null || input.services() != null) {
+         requireRadius(master);
       }
       return mapper.mine(master, lang);
+   }
+
+   /** Радиус мастера: до 30 км; эвакуатор и выездной мастер едут дальше — до предела услуги (200 км). */
+   static final int MAX_LOCAL_RADIUS_KM = 30;
+
+   static int maxRadiusKm(Collection<ServiceType> services) {
+      return services.stream().filter(ServiceType::isLongRange).mapToInt(ServiceType::getMaxRadiusKm)
+            .max().orElse(MAX_LOCAL_RADIUS_KM);
+   }
+
+   private void requireRadius(Master master) {
+      Map<String, ServiceType> known = catalog.byCode();
+      int max = maxRadiusKm(master.getServices().stream().map(known::get).filter(Objects::nonNull).toList());
+      if (master.getRadiusKm() > max) {
+         throw new BadRequestException("RADIUS_TOO_LARGE", max == MAX_LOCAL_RADIUS_KM
+               ? "Радиус — до " + max + " км. Дальше — только для эвакуатора и выездного мастера"
+               : "Радиус — до " + max + " км");
+      }
+   }
+
+   private static BadRequestException phoneRequired() {
+      return new BadRequestException("PHONE_REQUIRED", "Укажите телефон: без интернета клиент сможет только позвонить");
    }
 
    @Transactional

@@ -71,6 +71,6 @@ public class ServiceCatalog {
 
    public static ServiceTypeDto dto(ServiceType type, Lang lang) {
       return new ServiceTypeDto(type.getCode(), type.name(lang), type.getIcon(), type.isNeedsLocation(), type.isUrgent(),
-            ServiceDuration.ofMinutes(type.getDurationMin()));
+            ServiceDuration.ofMinutes(type.getDurationMin()), type.getMaxRadiusKm());
    }
 }
