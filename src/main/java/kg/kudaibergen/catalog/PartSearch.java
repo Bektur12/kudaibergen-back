@@ -32,6 +32,9 @@ import org.springframework.stereotype.Component;
 @Component
 public class PartSearch {
 
+   /** marketId = 0 в фильтре — магазины вне рынков (свой магазин, центр). */
+   public static final long NO_MARKET = 0L;
+
    private static final int MAX_TOKENS = 8;
    private static final int MAX_TOKEN_LENGTH = 30;
    /** Порог сходства слов для опечаток: «амартизатор» ≈ «амортизатор». */
@@ -52,12 +55,13 @@ public class PartSearch {
     */
    public record Query(String text, CarFilter car, Long categoryId, PartCondition condition, Integer priceMin,
                        Integer priceMax, boolean inStock, boolean openOnly, Long shopId, PartSort sort,
-                       List<Long> shopOrder, boolean withVideo) {
+                       List<Long> shopOrder, boolean withVideo, Long marketId) {
 
       public Query(String text, CarFilter car, Long categoryId, PartCondition condition, Integer priceMin,
                    Integer priceMax, boolean inStock, boolean openOnly, Long shopId, PartSort sort,
                    List<Long> shopOrder) {
-         this(text, car, categoryId, condition, priceMin, priceMax, inStock, openOnly, shopId, sort, shopOrder, false);
+         this(text, car, categoryId, condition, priceMin, priceMax, inStock, openOnly, shopId, sort, shopOrder, false,
+               null);
       }
    }
 
@@ -133,6 +137,15 @@ public class PartSearch {
          where.add("p.shop_id = :shopId");
          params.addValue("shopId", query.shopId());
       }
+      if (query.marketId() != null) {
+         // 0 — «Магазины и центры» вне рынков
+         if (query.marketId() == NO_MARKET) {
+            where.add("s.market_id is null");
+         } else {
+            where.add("s.market_id = :marketId");
+            params.addValue("marketId", query.marketId());
+         }
+      }
       if (query.categoryId() != null) {
          where.add("p.category_id = :categoryId");
          params.addValue("categoryId", query.categoryId());
@@ -153,8 +166,11 @@ public class PartSearch {
          where.add("p.quantity > 0");
       }
       if (query.openOnly()) {
-         // часов работы нет — открыт каждый действующий магазин
-         where.add("s.status = 'ACTIVE'");
+         // открыт сейчас по своим часам и дням (время Бишкека) — как ShopHours.openNow
+         where.add("""
+               (s.work_days & (1 << (extract(isodow from now() at time zone 'Asia/Bishkek')::int - 1))) <> 0
+               and (now() at time zone 'Asia/Bishkek')::time >= s.open_from
+               and (now() at time zone 'Asia/Bishkek')::time < s.open_to""");
       }
       if (query.withVideo()) {
          where.add("p.video_media_id is not null");

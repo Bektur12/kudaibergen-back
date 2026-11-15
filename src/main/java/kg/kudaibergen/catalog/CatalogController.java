@@ -51,9 +51,11 @@ public class CatalogController {
                                        @RequestParam(required = false) Long brandId,
                                        @RequestParam(required = false) Long modelId,
                                        @RequestParam(required = false) Integer year,
+                                       @Parameter(description = "Рынок (GET /market/markets); 0 — вне рынков")
+                                       @RequestParam(required = false) Long marketId,
                                        @RequestParam(required = false) String cursor,
                                        @RequestParam(required = false) Integer limit) {
-      return videos.feed(userId(principal), carId, brandId, modelId, year, cursor, limit);
+      return videos.feed(userId(principal), carId, brandId, modelId, year, marketId, cursor, limit);
    }
 
    @GetMapping("/parts/search")
@@ -78,10 +80,12 @@ public class CatalogController {
                                      @RequestParam(required = false) PartSort sort,
                                      @RequestParam(required = false) Double x,
                                      @RequestParam(required = false) Double y,
+                                     @Parameter(description = "Рынок (GET /market/markets); 0 — вне рынков")
+                                     @RequestParam(required = false) Long marketId,
                                      @RequestParam(required = false) String cursor,
                                      @RequestParam(required = false) Integer limit) {
       return catalog.search(userId(principal), new CatalogService.SearchParams(q, carId, brandId, modelId, year,
-            categoryId, condition, priceMin, priceMax, inStock, openOnly, sort, x, y, null), cursor, limit);
+            categoryId, condition, priceMin, priceMax, inStock, openOnly, sort, x, y, null, marketId), cursor, limit);
    }
 
    @GetMapping("/parts/search/count")
@@ -97,9 +101,10 @@ public class CatalogController {
                      @RequestParam(required = false) Integer priceMin,
                      @RequestParam(required = false) Integer priceMax,
                      @RequestParam(required = false) Boolean inStock,
-                     @RequestParam(required = false) Boolean openOnly) {
+                     @RequestParam(required = false) Boolean openOnly,
+                     @RequestParam(required = false) Long marketId) {
       return catalog.count(userId(principal), new CatalogService.SearchParams(q, carId, brandId, modelId, year,
-            categoryId, condition, priceMin, priceMax, inStock, openOnly, null, null, null, null));
+            categoryId, condition, priceMin, priceMax, inStock, openOnly, null, null, null, null, marketId));
    }
 
    @GetMapping("/shops/{shopId}/parts")
@@ -116,7 +121,7 @@ public class CatalogController {
                                         @RequestParam(required = false) String cursor,
                                         @RequestParam(required = false) Integer limit) {
       return catalog.search(userId(principal), new CatalogService.SearchParams(q, carId, brandId, modelId, year,
-            categoryId, null, null, null, false, null, sort, null, null, shopId), cursor, limit);
+            categoryId, null, null, null, false, null, sort, null, null, shopId, null), cursor, limit);
    }
 
    @GetMapping("/parts/{id}")

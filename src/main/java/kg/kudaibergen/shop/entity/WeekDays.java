@@ -8,6 +8,8 @@ import java.util.Set;
 public final class WeekDays {
 
    public static final short ALL = 127;
+   /** Рынки по понедельникам не работают: вт–вс. */
+   public static final short MARKET = (short) (ALL & ~1);
 
    private WeekDays() {
    }

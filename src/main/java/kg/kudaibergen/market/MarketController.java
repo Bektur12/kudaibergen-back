@@ -15,12 +15,14 @@ import kg.kudaibergen.market.dto.AddRowRequest;
 import kg.kudaibergen.market.dto.LocateDto;
 import kg.kudaibergen.market.dto.LocateRequest;
 import kg.kudaibergen.market.dto.MapDto;
+import kg.kudaibergen.market.dto.MarketDto;
 import kg.kudaibergen.market.dto.MarketSearchDto;
 import kg.kudaibergen.market.dto.QrResolveDto;
 import kg.kudaibergen.market.dto.RouteDto;
 import kg.kudaibergen.market.dto.RowDetailDto;
 import kg.kudaibergen.market.dto.RowDto;
 import kg.kudaibergen.market.geo.Point;
+import kg.kudaibergen.user.entity.Lang;
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -43,9 +45,22 @@ import org.springframework.web.bind.annotation.RestController;
 public class MarketController {
 
    private final MarketMapService market;
+   private final MarketRepository markets;
 
-   public MarketController(MarketMapService market) {
+   public MarketController(MarketMapService market, MarketRepository markets) {
       this.market = market;
+      this.markets = markets;
+   }
+
+   @GetMapping("/markets")
+   @Operation(summary = "Рынки: Кудайберген, Дордой Моторс, Дордой, Геология", description = """
+         Для выбора «Где вы торгуете» при регистрации продавца и фильтра «Рынок» у покупателя (marketId в
+         /parts/search, /shops, /catalog/videos). hasScheme — есть схема рядов (только Кудайберген): там контейнер
+         из списка; без схемы — место текстом (manualPlace). Название — по Accept-Language.""")
+   public List<MarketDto> markets(@Parameter(hidden = true)
+                                  @RequestHeader(value = HttpHeaders.ACCEPT_LANGUAGE, required = false) String language) {
+      Lang lang = Langs.fromHeader(language);
+      return markets.findByActiveTrueOrderBySortOrder().stream().map(m -> MarketDto.of(m, lang)).toList();
    }
 
    @GetMapping("/map")

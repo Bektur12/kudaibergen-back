@@ -43,10 +43,12 @@ public class ShopController {
    public CursorPage<ShopCardDto> search(@RequestParam(required = false) Long brandId,
                                          @RequestParam(required = false) Long categoryId,
                                          @RequestParam(required = false) Long rowId,
+                                         @Parameter(description = "Рынок (GET /market/markets); 0 — вне рынков")
+                                         @RequestParam(required = false) Long marketId,
                                          @RequestParam(required = false) String q,
                                          @RequestParam(required = false) String cursor,
                                          @RequestParam(required = false) Integer limit) {
-      return shops.search(brandId, categoryId, rowId, q, cursor, limit);
+      return shops.search(brandId, categoryId, rowId, marketId, q, cursor, limit);
    }
 
    @GetMapping("/shops/public/{publicId}")

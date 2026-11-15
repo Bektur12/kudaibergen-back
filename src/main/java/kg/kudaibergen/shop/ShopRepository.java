@@ -44,11 +44,12 @@ public interface ShopRepository extends JpaRepository<Shop, Long> {
            and (:brandId is null or :brandId member of s.brandIds)
            and (:categoryId is null or :categoryId member of s.categoryIds)
            and (:rowId is null or exists (select 1 from Container c where c.id = s.containerId and c.rowId = :rowId))
+           and (:marketId is null or (:marketId = 0 and s.marketId is null) or s.marketId = :marketId)
            and (:query is null or lower(s.name) like :query)
          order by s.id""")
    List<Shop> search(@Param("status") ShopStatus status, @Param("after") long after, @Param("brandId") Long brandId,
                      @Param("categoryId") Long categoryId, @Param("rowId") Long rowId, @Param("query") String query,
-                     Pageable page);
+                     @Param("marketId") Long marketId, Pageable page);
 
    /**
     * Кому может уйти запрос по марке: действующий магазин. Часы работы и ряд/бокс досматривает модуль requests.

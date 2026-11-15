@@ -6,6 +6,7 @@ import java.util.List;
 import kg.kudaibergen.category.CategoryDto;
 import kg.kudaibergen.garage.dto.BrandDto;
 import kg.kudaibergen.market.dto.LocationDto;
+import kg.kudaibergen.market.dto.MarketDto;
 import kg.kudaibergen.media.PhotoDto;
 import kg.kudaibergen.shop.entity.MemberRole;
 import kg.kudaibergen.shop.entity.ShopStatus;
@@ -17,7 +18,7 @@ import org.springframework.lang.Nullable;
  * photos — фото места по порядку, первое — «Обложка» (22, «3 из 8»). onMarket / address / lat / lng — как в
  * ShopCardDto: магазин вне рынка без location, с адресом и точкой. manualPlace — место на рынке, написанное
  * продавцом («Ряд К, конт. 5»), когда контейнера не было в списке: onMarket = true, location = null,
- * address = manualPlace.
+ * address = manualPlace (на рынке без схемы — «Дордой · Ряд 5, конт. 12»). market — рынок, вне рынка null.
  */
 public record MyShopDto(Long id, String name, @Nullable String avatarUrl, ShopStatus status, @Nullable String blockReason,
                         MemberRole myRole, @Nullable LocationDto location, @Nullable LocationDto pendingLocation,
@@ -25,5 +26,5 @@ public record MyShopDto(Long id, String name, @Nullable String avatarUrl, ShopSt
                         boolean phoneVisible, BigDecimal rating, int reviewsCount, List<BrandDto> brands,
                         List<CategoryDto> categories, int staffCount, List<PhotoDto> photos, boolean onMarket,
                         @Nullable String address, @Nullable Double lat, @Nullable Double lng,
-                        @Nullable String manualPlace) {
+                        @Nullable String manualPlace, @Nullable MarketDto market) {
 }

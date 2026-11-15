@@ -74,7 +74,7 @@ public class CatalogService {
    public record SearchParams(String q, Long carId, Long brandId, Long modelId, Integer year, Long categoryId,
                               PartCondition condition, Integer priceMin,
                               Integer priceMax, Boolean inStock, Boolean openOnly, PartSort sort, Double x, Double y,
-                              Long shopId) {
+                              Long shopId, Long marketId) {
    }
 
    @Transactional(readOnly = true)
@@ -173,7 +173,7 @@ public class CatalogService {
       List<Long> shopOrder = sort == PartSort.NEAREST ? nearestShops(params.x(), params.y()) : List.of();
       return new PartSearch.Query(params.q(), car, params.categoryId(), params.condition(), params.priceMin(),
             params.priceMax(), params.inStock() == null || params.inStock(), Boolean.TRUE.equals(params.openOnly()),
-            params.shopId(), sort, shopOrder);
+            params.shopId(), sort, shopOrder, false, params.marketId());
    }
 
    /**

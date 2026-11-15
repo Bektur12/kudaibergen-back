@@ -14,7 +14,9 @@ import kg.kudaibergen.common.error.NotFoundException;
 import kg.kudaibergen.common.web.CursorPage;
 import kg.kudaibergen.garage.VehicleDirectory;
 import kg.kudaibergen.market.MarketMapService;
+import kg.kudaibergen.market.MarketRepository;
 import kg.kudaibergen.market.dto.LocationDto;
+import kg.kudaibergen.market.entity.Bazaar;
 import kg.kudaibergen.shop.dto.MemberDto;
 import kg.kudaibergen.shop.dto.MyShopDto;
 import kg.kudaibergen.shop.dto.ShopCardDto;
@@ -56,6 +58,7 @@ public class ShopService {
    private final UserService userService;
    private final UserRepository users;
    private final SmsProvider sms;
+   private final MarketRepository markets;
 
    private final boolean verificationRequired;
 
@@ -63,7 +66,7 @@ public class ShopService {
                       ShopAccess access, ShopMapper mapper, ShopVerificationService verification,
                       MarketMapService market, VehicleDirectory directory, CategoryService categories,
                       UserService userService, UserRepository users, SmsProvider sms,
-                      ShopProperties properties) {
+                      ShopProperties properties, MarketRepository markets) {
       this.shops = shops;
       this.members = members;
       this.favorites = favorites;
@@ -76,6 +79,7 @@ public class ShopService {
       this.userService = userService;
       this.users = users;
       this.sms = sms;
+      this.markets = markets;
       this.verificationRequired = properties.verificationRequired();
    }
 
@@ -138,11 +142,16 @@ public class ShopService {
          if (place.length() < 2) {
             throw new BadRequestException("MANUAL_PLACE_LENGTH", "Место — от 2 до 60 символов");
          }
-         Shop shop = Shop.manualPlace(userId, place);
+         Shop shop = request.marketId() == null || request.marketId() == Bazaar.KUDAIBERGEN_ID
+               ? Shop.manualPlace(userId, place)
+               : Shop.manualPlace(userId, place, requireMarket(request.marketId()));
          if (request.name() != null && !request.name().isBlank()) {
             shop.setName(ShopNames.validate(request.name()));
          }
          return shop;
+      }
+      if (request.marketId() != null && request.marketId() != Bazaar.KUDAIBERGEN_ID) {
+         throw new BadRequestException("PLACE_REQUIRED", "Напишите, где вы на рынке: ряд, контейнер");
       }
       if (request.address() == null || request.address().isBlank()) {
          throw new BadRequestException("ADDRESS_REQUIRED", "Укажите адрес магазина или выберите контейнер на рынке");
@@ -155,6 +164,11 @@ public class ShopService {
       }
       return Shop.offMarket(userId, ShopNames.validate(request.name()), request.address().strip(), request.lat(),
             request.lng());
+   }
+
+   private Bazaar requireMarket(Long marketId) {
+      return markets.findById(marketId).filter(Bazaar::isActive)
+            .orElseThrow(() -> new BadRequestException("MARKET_NOT_FOUND", "Нет такого рынка"));
    }
 
    /** «Ряд 14, конт. 12» — пока продавец не назвал бокс. */
@@ -292,13 +306,13 @@ public class ShopService {
 
    /** Список действующих магазинов: «Списком» на карте (15), выбор «Боксу» в запросе (06). */
    @Transactional(readOnly = true)
-   public CursorPage<ShopCardDto> search(Long brandId, Long categoryId, Long rowId, String query, String cursor,
-                                         Integer limit) {
+   public CursorPage<ShopCardDto> search(Long brandId, Long categoryId, Long rowId, Long marketId, String query,
+                                         String cursor, Integer limit) {
       int size = CursorPage.limit(limit);
       String like = query == null || query.isBlank() ? null
             : "%" + query.trim().toLowerCase(Locale.ROOT).replace("%", "").replace("_", "") + "%";
       List<Shop> rows = shops.search(ShopStatus.ACTIVE, CursorPage.afterId(cursor), brandId, categoryId, rowId, like,
-            PageRequest.of(0, size + 1));
+            marketId, PageRequest.of(0, size + 1));
       return CursorPage.of(rows, size, shop -> String.valueOf(shop.getId()), mapper::card);
    }
 

@@ -14,6 +14,7 @@ import java.util.Set;
 import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
 import kg.kudaibergen.common.web.PublicIds;
+import kg.kudaibergen.market.entity.Bazaar;
 import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -63,6 +64,12 @@ public class Shop {
    @Column(name = "manual_place", length = 60)
    private String manualPlace;
 
+   /**
+    * Рынок (markets): в контейнере — Кудайберген; место текстом — выбранный рынок; вне рынка — null.
+    */
+   @Column(name = "market_id")
+   private Long marketId;
+
    @Column(name = "pending_container_id")
    private Long pendingContainerId;
 
@@ -77,7 +84,7 @@ public class Shop {
    private Instant verifiedAt;
 
    @Column(name = "open_from", nullable = false)
-   private LocalTime openFrom = LocalTime.of(8, 0);
+   private LocalTime openFrom = LocalTime.of(9, 0);
 
    @Column(name = "open_to", nullable = false)
    private LocalTime openTo = LocalTime.of(17, 0);
@@ -147,6 +154,10 @@ public class Shop {
       this.ownerId = ownerId;
       this.name = name;
       this.containerId = containerId;
+      this.marketId = containerId == null ? null : Bazaar.KUDAIBERGEN_ID;
+      if (containerId != null) {
+         this.workDays = WeekDays.MARKET;
+      }
    }
 
    /** Магазин вне рынка: контейнера нет, но сам магазин, как и рыночный, ждёт подтверждения администрации. */
@@ -163,6 +174,26 @@ public class Shop {
       Shop shop = new Shop(ownerId, place, null);
       shop.manualPlace = place;
       shop.address = place;
+      shop.marketId = Bazaar.KUDAIBERGEN_ID;
+      shop.workDays = WeekDays.MARKET;
+      return shop;
+   }
+
+   /**
+    * Место текстом на рынке без схемы (Дордой, Геология…): адрес — «Дордой Моторс · Ряд 5, конт. 12», чтобы
+    * пуши, лента и чаты, которые показывают address, называли рынок; точка магазина — точка рынка («Как пройти»).
+    */
+   public static Shop manualPlace(Long ownerId, String place, Bazaar market) {
+      if (market.getId() == Bazaar.KUDAIBERGEN_ID) {
+         return manualPlace(ownerId, place);
+      }
+      Shop shop = new Shop(ownerId, place, null);
+      shop.manualPlace = place;
+      shop.address = market.getNameRu() + " · " + place;
+      shop.marketId = market.getId();
+      shop.lat = market.getLat();
+      shop.lng = market.getLng();
+      shop.workDays = WeekDays.MARKET;
       return shop;
    }
 
@@ -180,12 +211,19 @@ public class Shop {
       return manualPlace;
    }
 
+   public Long getMarketId() {
+      return marketId;
+   }
+
    /** Встал в контейнер из списка — место текстом больше не нужно. */
    private void placeInContainer(Long containerId) {
       this.containerId = containerId;
+      this.marketId = Bazaar.KUDAIBERGEN_ID;
       if (manualPlace != null) {
          manualPlace = null;
          address = null;
+         lat = null;
+         lng = null;
       }
    }
 

@@ -25,7 +25,8 @@ public final class ShopRequests {
     * центр) — containerId не передают, нужны address, lat, lng. Плюс марки. Название по умолчанию — «Ряд 14,
     * конт. 12» (вне рынка — обязательно), категории — по желанию, телефон — номер владельца (для «Позвонить»).
     * Контейнера нет в списке — manualPlace («Ряд К, конт. 5», 2–60 символов) без containerId, address, lat, lng:
-    * магазин на рынке без контейнера, название по умолчанию — manualPlace.
+    * магазин на рынке без контейнера, название по умолчанию — manualPlace. marketId — на каком рынке это место
+    * (GET /market/markets): Дордой, Дордой Моторс, Геология — без схемы, только так; не передан — Кудайберген.
     */
    public record CreateShop(
          Long containerId,
@@ -38,7 +39,8 @@ public final class ShopRequests {
          LocalTime openFrom,
          LocalTime openTo,
          Set<DayOfWeek> workDays,
-         @Size(min = 2, max = 60, message = "Место — от 2 до 60 символов") String manualPlace) {
+         @Size(min = 2, max = 60, message = "Место — от 2 до 60 символов") String manualPlace,
+         Long marketId) {
    }
 
    /**

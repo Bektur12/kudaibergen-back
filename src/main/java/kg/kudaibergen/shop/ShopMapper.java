@@ -13,7 +13,9 @@ import kg.kudaibergen.garage.VehicleDirectory;
 import kg.kudaibergen.garage.dto.BrandDto;
 import kg.kudaibergen.garage.entity.Brand;
 import kg.kudaibergen.market.MarketMapService;
+import kg.kudaibergen.market.MarketRepository;
 import kg.kudaibergen.market.dto.LocationDto;
+import kg.kudaibergen.market.dto.MarketDto;
 import kg.kudaibergen.media.MediaService;
 import kg.kudaibergen.media.PhotoDto;
 import kg.kudaibergen.shop.dto.MyShopDto;
@@ -36,9 +38,12 @@ public class ShopMapper {
    private final MediaService media;
    private final PartRepository parts;
 
+   private final MarketRepository markets;
+
    public ShopMapper(MarketMapService market, VehicleDirectory directory, CategoryService categories,
-                     ShopHours hours, MediaService media, PartRepository parts) {
+                     ShopHours hours, MediaService media, PartRepository parts, MarketRepository markets) {
       this.market = market;
+      this.markets = markets;
       this.directory = directory;
       this.categories = categories;
       this.hours = hours;
@@ -82,7 +87,9 @@ public class ShopMapper {
             verification, hours.state(shop), shop.isOpen(), shop.getPhone(), shop.isPhoneVisible(), shop.getRating(),
             shop.getReviewsCount(), brands(shop), categories(shop, lang), staffCount,
             List.copyOf(media.photos(shop.getPhotoIds()).values()), shop.isOnMarket(), shop.getAddress(), shop.getLat(),
-            shop.getLng(), shop.getManualPlace());
+            shop.getLng(), shop.getManualPlace(),
+            shop.getMarketId() == null ? null : markets.findById(shop.getMarketId()).map(m -> MarketDto.of(m, lang))
+                  .orElse(null));
    }
 
    /** Аватар — превью 320 px; null — клиент рисует первую букву названия. */

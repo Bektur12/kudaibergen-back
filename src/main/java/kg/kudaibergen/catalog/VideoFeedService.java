@@ -78,12 +78,12 @@ public class VideoFeedService {
 
    @Transactional(readOnly = true)
    public VideoFeedItemDto.VideoFeedPageDto feed(Long viewerId, Long carId, Long brandId, Long modelId, Integer year,
-                                     String cursor, Integer limit) {
+                                     Long marketId, String cursor, Integer limit) {
       CarFilter car = carFilters.resolve(viewerId, carId, brandId, modelId, year);
       int size = limit == null ? DEFAULT_LIMIT : CursorPage.limit(limit);
       int offset = offset(cursor);
       PartSearch.Query query = new PartSearch.Query(null, car, null, null, null, null, true, false, null,
-            PartSort.NEWEST, List.of(), true);
+            PartSort.NEWEST, List.of(), true, marketId);
       List<PartSearch.Hit> hits = search.find(query, offset, size + 1);
       boolean more = hits.size() > size;
       List<Long> ids = (more ? hits.subList(0, size) : hits).stream().map(PartSearch.Hit::partId).toList();
