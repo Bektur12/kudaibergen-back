@@ -22,6 +22,8 @@ import kg.kudaibergen.shop.entity.ShopMember;
 import kg.kudaibergen.user.entity.User;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.event.TransactionalEventListener;
 
 /**
@@ -59,8 +61,11 @@ public class RequestNotifier {
       this.media = media;
    }
 
+   // своя транзакция: обработчик идёт после коммита в другом потоке — без неё фото запроса (ленивый список)
+   // не загрузить, и рассылка падала с LazyInitializationException (прод, 14.11)
    @Async("appTaskExecutor")
    @TransactionalEventListener
+   @Transactional(propagation = Propagation.REQUIRES_NEW)
    public void on(RequestEvents.Dispatched event) {
       if (event.shopIds().isEmpty()) {
          return;
