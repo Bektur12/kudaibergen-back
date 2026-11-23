@@ -18,11 +18,11 @@ import org.springframework.lang.Nullable;
  * part — приложенный товар из каталога продавца, photos — фото к ответу «Есть».
  * voice — голосовое продавца; original — «Оригинал» (true) / «Копия» (false) / не сказали (null), manufacturer —
  * «KYB» в чипе «Оригинал KYB», tags — остальные чипы. walkMinutes — пешком от главного входа («5 мин», «Ближе ко входу»),
- * null — места нет на схеме.
+ * null — места нет на схеме. priceNegotiable — «Договорная» (price = null).
  */
 public record ReplyDto(Long id, Long requestId, @Nullable ShopCardDto shop, ReplyAnswer answer, @Nullable PartCondition condition,
                        @Nullable String message, @Nullable Integer price, List<PhotoDto> photos, Instant createdAt, Instant updatedAt,
                        Instant editableUntil, @Nullable Long chatId, @Nullable PartCardDto part, @Nullable VoiceDto voice,
                        @Nullable Boolean original, @Nullable String manufacturer, List<String> tags,
-                       @Nullable Integer walkMinutes) {
+                       @Nullable Integer walkMinutes, boolean priceNegotiable) {
 }

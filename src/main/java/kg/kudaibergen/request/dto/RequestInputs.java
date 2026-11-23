@@ -71,7 +71,8 @@ public final class RequestInputs {
    }
 
    /**
-    * Ответ бокса (13, 14, кнопки пуша 12). Для «Есть» обязательна цена, остальное — по желанию.
+    * Ответ бокса (13, 14, кнопки пуша 12). Для «Есть» обязательна цена или priceNegotiable = true («Договорная»),
+    * остальное — по желанию.
     * voiceMediaId — голосовое продавца (POST /media/voices, purpose=REPLY); original, manufacturer и tags —
     * из его разбора (reply в ответе загрузки), «Новая / Б/у» и «Оригинал / Копия» продавец может поправить.
     * partId — своя опубликованная запчасть; mediaIds — фото к «Есть» (purpose=REPLY), до 3.
@@ -86,6 +87,11 @@ public final class RequestInputs {
          Long voiceMediaId,
          Boolean original,
          @Size(max = 40, message = "Производитель — до 40 символов") String manufacturer,
-         @Size(max = MAX_TAGS, message = "Не больше 5 чипов") List<@Size(max = 30) String> tags) {
+         @Size(max = MAX_TAGS, message = "Не больше 5 чипов") List<@Size(max = 30) String> tags,
+         Boolean priceNegotiable) {
+
+      public boolean negotiable() {
+         return Boolean.TRUE.equals(priceNegotiable);
+      }
    }
 }

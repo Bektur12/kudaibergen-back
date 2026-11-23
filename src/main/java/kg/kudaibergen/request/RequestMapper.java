@@ -108,7 +108,7 @@ public class RequestMapper {
             reply.getMessage(), reply.getPrice(), photos(reply.getPhotoIds()), reply.getCreatedAt(),
             reply.getUpdatedAt(), reply.getCreatedAt().plus(replyEditWindow), chatId, part,
             media.voice(reply.getVoiceMediaId()), reply.getOriginal(), reply.getManufacturer(), reply.getTags(),
-            walkMinutes);
+            walkMinutes, reply.isPriceNegotiable());
    }
 
    public IncomingRequestDto incoming(PartRequest request, RequestRecipient recipient, String buyerName,

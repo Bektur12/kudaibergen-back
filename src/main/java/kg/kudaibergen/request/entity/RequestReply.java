@@ -53,6 +53,10 @@ public class RequestReply {
 
    private Integer price;
 
+   /** «Договорная»: цены нет, покупатель спросит в чате. */
+   @Column(name = "price_negotiable", nullable = false)
+   private boolean priceNegotiable;
+
    @Column(name = "part_id")
    private Long partId;
 
@@ -103,13 +107,14 @@ public class RequestReply {
    }
 
    /** «Нет» — детали ответа не нужны. */
-   public void fill(ReplyAnswer answer, PartCondition condition, String message, Integer price, Long partId,
-                    List<Long> photoIds, Voice voice, Instant now) {
+   public void fill(ReplyAnswer answer, PartCondition condition, String message, Integer price, boolean negotiable,
+                    Long partId, List<Long> photoIds, Voice voice, Instant now) {
       this.answer = answer;
       boolean have = answer == ReplyAnswer.HAVE;
       this.condition = have ? condition : null;
       this.message = have ? message : null;
-      this.price = have ? price : null;
+      this.priceNegotiable = have && negotiable;
+      this.price = have && !negotiable ? price : null;
       this.partId = have ? partId : null;
       this.photoIds.clear();
       this.tags.clear();
@@ -153,6 +158,10 @@ public class RequestReply {
 
    public String getMessage() {
       return message;
+   }
+
+   public boolean isPriceNegotiable() {
+      return priceNegotiable;
    }
 
    public Integer getPrice() {

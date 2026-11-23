@@ -216,6 +216,7 @@ public class ChatService {
       card.put("replyId", reply.getId());
       card.put("condition", reply.getCondition() == null ? null : reply.getCondition().name());
       card.put("price", reply.getPrice());
+      card.put("priceNegotiable", reply.isPriceNegotiable());
       card.put("partId", reply.getPartId());
       card.put("original", reply.getOriginal());
       card.put("manufacturer", reply.getManufacturer());

@@ -196,7 +196,8 @@ public class IncomingRequestService {
 
       Instant now = clock.instant();
       RequestReply reply = new RequestReply(requestId, shop.getId(), userId, now);
-      reply.fill(input.answer(), input.condition(), trimToNull(input.message()), input.price(), input.partId(),
+      reply.fill(input.answer(), input.condition(), trimToNull(input.message()), input.price(), input.negotiable(),
+            input.partId(),
             photoIds, voice, now);
       try {
          replies.saveAndFlush(reply);
@@ -234,7 +235,8 @@ public class IncomingRequestService {
       List<Long> photoIds = photos(userId, input);
       RequestReply.Voice voice = voice(userId, input);
       boolean wasHave = reply.isHave();
-      reply.fill(input.answer(), input.condition(), trimToNull(input.message()), input.price(), input.partId(),
+      reply.fill(input.answer(), input.condition(), trimToNull(input.message()), input.price(), input.negotiable(),
+            input.partId(),
             photoIds, voice, now);
       if (wasHave != reply.isHave()) {
          request.haveCountChanged(reply.isHave() ? 1 : -1);
@@ -302,9 +304,9 @@ public class IncomingRequestService {
       return recipients.findByRequestIdAndShopId(requestId, shopId).orElseThrow(RequestService::notFound);
    }
 
-   /** Цена — в каждом ответе «Есть» (v23); состояние по желанию: из пуша приходит только цена. */
+   /** Цена или «Договорная» — в каждом ответе «Есть» (v23); состояние по желанию: из пуша приходит только цена. */
    private static void requirePrice(RequestInputs.Reply input) {
-      if (input.answer() == ReplyAnswer.HAVE && input.price() == null) {
+      if (input.answer() == ReplyAnswer.HAVE && input.price() == null && !input.negotiable()) {
          throw new BadRequestException("PRICE_REQUIRED", "Укажите цену");
       }
    }
