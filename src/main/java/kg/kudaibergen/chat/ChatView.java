@@ -211,7 +211,7 @@ public class ChatView {
             .flatMap(Collection::stream).distinct().toList()));
 
       List<Long> avatarIds = new ArrayList<>();
-      shopsById.values().forEach(shop -> avatarIds.add(shop.getAvatarMediaId()));
+      shopsById.values().forEach(shop -> avatarIds.add(shop.displayAvatarId()));
       mastersById.values().forEach(master -> avatarIds.add(master.getAvatarMediaId()));
       buyers.values().forEach(buyer -> avatarIds.add(buyer.getAvatarMediaId()));
       Map<Long, String> avatars = photos.thumbUrls(avatarIds);
@@ -237,7 +237,7 @@ public class ChatView {
                   : "Кудайберген · " + location.rowLabel() + " · Контейнер " + location.number();
             title = shop.getName();
             subtitle = topic == null ? place : topic + " · " + place;
-            avatarUrl = avatars.get(shop.getAvatarMediaId());
+            avatarUrl = avatars.get(shop.displayAvatarId());
          } else {
             User buyer = buyers.get(chat.getBuyerId());
             title = buyer == null || buyer.getName() == null ? ChatTexts.buyer(lang) : buyer.getName();

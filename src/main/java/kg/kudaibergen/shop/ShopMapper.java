@@ -58,7 +58,7 @@ public class ShopMapper {
    }
 
    public ShopPublicDto publicProfile(Shop shop, boolean favorite, Lang lang) {
-      List<PhotoDto> photos = List.copyOf(media.photos(shop.getPhotoIds()).values());
+      List<PhotoDto> photos = List.copyOf(media.photos(shop.displayPhotoIds()).values());
       return new ShopPublicDto(shop.getId(), shop.getPublicId(), shop.getName(), avatarUrl(shop), shop.getRating(),
             shop.getReviewsCount(), location(shop.getContainerId()), hours.state(shop), brands(shop),
             categories(shop, lang), shop.isPhoneVisible() ? shop.getPhone() : null, favorite, photos,
@@ -81,7 +81,8 @@ public class ShopMapper {
    }
 
    public MyShopDto mine(Shop shop, MemberRole role, VerificationDto verification, int staffCount, Lang lang) {
-      return new MyShopDto(shop.getId(), shop.getName(), avatarUrl(shop), shop.getStatus(), shop.getBlockReason(), role,
+      // свой профиль — как загружено, без подстановки баннера вместо аватарки
+      return new MyShopDto(shop.getId(), shop.getName(), media.thumbUrl(shop.getAvatarMediaId()), shop.getStatus(), shop.getBlockReason(), role,
             location(shop.getContainerId()),
             shop.getPendingContainerId() == null ? null : location(shop.getPendingContainerId()),
             verification, hours.state(shop), shop.isOpen(), shop.getPhone(), shop.isPhoneVisible(), shop.getRating(),
@@ -92,14 +93,14 @@ public class ShopMapper {
                   .orElse(null));
    }
 
-   /** Аватар — превью 320 px; null — клиент рисует первую букву названия. */
+   /** Аватар — превью 320 px; нет аватарки — баннер (первое фото места); null — клиент рисует первую букву. */
    public String avatarUrl(Shop shop) {
-      return media.thumbUrl(shop.getAvatarMediaId());
+      return media.thumbUrl(shop.displayAvatarId());
    }
 
    /** Первые фото места — блок продавца на карточке запчасти (29). */
    public List<PhotoDto> photos(Shop shop, int limit) {
-      return List.copyOf(media.photos(shop.getPhotoIds().stream().limit(limit).toList()).values());
+      return List.copyOf(media.photos(shop.displayPhotoIds().stream().limit(limit).toList()).values());
    }
 
    /** «Ряд 14 · конт. 12» — под видео, в заказе с доставкой и в заявке курьеру; null — места нет. */

@@ -32,12 +32,12 @@ public class ShopContainerTenants implements ContainerTenants {
    public Map<Long, Tenant> byContainers(Collection<Long> containerIds) {
       Map<Long, Tenant> result = new HashMap<>();
       List<Shop> occupying = shops.findOccupying(containerIds);
-      Map<Long, String> avatars = media.thumbUrls(occupying.stream().map(Shop::getAvatarMediaId).toList());
+      Map<Long, String> avatars = media.thumbUrls(occupying.stream().map(Shop::displayAvatarId).toList());
       for (Shop shop : occupying) {
          boolean visible = shop.isActive();
          if (shop.getContainerId() != null && containerIds.contains(shop.getContainerId())) {
             result.put(shop.getContainerId(), visible ? new Tenant(shop.getId(), shop.getName(),
-                  avatars.get(shop.getAvatarMediaId()), Set.copyOf(shop.getBrandIds())) : HIDDEN);
+                  avatars.get(shop.displayAvatarId()), Set.copyOf(shop.getBrandIds())) : HIDDEN);
          }
          if (shop.getPendingContainerId() != null && containerIds.contains(shop.getPendingContainerId())) {
             result.put(shop.getPendingContainerId(), HIDDEN);

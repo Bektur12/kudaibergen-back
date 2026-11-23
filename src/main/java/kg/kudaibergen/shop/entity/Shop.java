@@ -493,6 +493,16 @@ public class Shop {
       return photoIds;
    }
 
+   /** Покупателю: нет аватарки — первое фото места (баннер); null — клиент рисует букву. */
+   public Long displayAvatarId() {
+      return avatarMediaId != null ? avatarMediaId : photoIds.isEmpty() ? null : photoIds.get(0);
+   }
+
+   /** Покупателю: нет фото места (баннера) — аватарка вместо него. */
+   public List<Long> displayPhotoIds() {
+      return !photoIds.isEmpty() || avatarMediaId == null ? photoIds : List.of(avatarMediaId);
+   }
+
    public void replacePhotos(List<Long> ids) {
       photoIds.clear();
       photoIds.addAll(ids);
