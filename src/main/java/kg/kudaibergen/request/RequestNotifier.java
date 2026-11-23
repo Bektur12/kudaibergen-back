@@ -1,5 +1,6 @@
 package kg.kudaibergen.request;
 
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -96,6 +97,30 @@ public class RequestNotifier {
                personal, NEW_REQUEST_CATEGORY,
                !quiet && settings.isNewRequestSound());
       });
+   }
+
+   /**
+    * Нет ответа — напоминание боксу (attempt 1…3, раз в 10 минут): «Ответьте покупателю · Camry 50», что ищут,
+    * те же кнопки «Есть / Нет». Звук — как у нового запроса.
+    */
+   @Transactional(readOnly = true)
+   public void remind(Long requestId, Collection<Long> shopIds, int attempt) {
+      PartRequest request = requests.findById(requestId).orElse(null);
+      if (request == null || !request.isActive() || shopIds.isEmpty()) {
+         return;
+      }
+      String carLabel = mapper.car(request).label();
+      Map<Long, Long> shopOfUser = members.findByShopIdIn(shopIds).stream()
+            .collect(Collectors.toMap(ShopMember::getUserId, ShopMember::getShopId));
+      boolean quiet = quietHours.now();
+      boolean photo = !request.getPhotoIds().isEmpty();
+      boolean voice = request.getVoiceMediaId() != null;
+      pushes.send(shopOfUser.keySet(), (user, settings) -> new PushMessage(
+            RequestPushTexts.remindTitle(carLabel, attempt, user.getLang()),
+            RequestPushTexts.remindBody(request.getText(), photo, voice, attempt, user.getLang()),
+            Map.of("type", "NEW_REQUEST", "requestId", request.getId().toString(),
+                  "shopId", shopOfUser.get(user.getId()).toString(), "reminder", "true"),
+            NEW_REQUEST_CATEGORY, !quiet && settings.isNewRequestSound()));
    }
 
    @Async("appTaskExecutor")

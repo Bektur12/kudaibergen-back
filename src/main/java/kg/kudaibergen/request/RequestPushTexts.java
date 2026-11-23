@@ -30,4 +30,30 @@ final class RequestPushTexts {
       }
       return kg ? "Сатып алуучу запчасть издейт" : "Покупатель ищет запчасть";
    }
+
+   /**
+    * Напоминание «Ответьте» — разное в 1-й, 2-й и 3-й раз, чтобы не надоедало одним и тем же:
+    * «⏰ Ответьте покупателю · Camry 50» → «Покупатель ждёт ответа · Camry 50» → «Последнее напоминание · Camry 50».
+    */
+   static String remindTitle(String carLabel, int attempt, Lang lang) {
+      boolean kg = lang == Lang.KG;
+      String lead = switch (attempt) {
+         case 1 -> kg ? "⏰ Сатып алуучуга жооп бериңиз · " : "⏰ Ответьте покупателю · ";
+         case 2 -> kg ? "Сатып алуучу жоопту күтүп жатат · " : "Покупатель ждёт ответа · ";
+         default -> kg ? "Акыркы эскертүү · " : "Последнее напоминание · ";
+      };
+      return lead + carLabel;
+   }
+
+   /** Что ищут — и короткий призыв: «Есть» или «Нет» прямо из уведомления. */
+   static String remindBody(String text, boolean hasPhoto, boolean hasVoice, int attempt, Lang lang) {
+      boolean kg = lang == Lang.KG;
+      String what = newRequestBody(text, hasPhoto, hasVoice, lang);
+      String tail = switch (attempt) {
+         case 1 -> kg ? ". «Бар» же «Жок» басыңыз" : ". Нажмите «Есть» или «Нет»";
+         case 2 -> kg ? ". Сизде барбы?" : ". У вас есть?";
+         default -> kg ? ". Жооп бериңиз — сатып алуучу башкага кетпесин" : ". Ответьте, пока покупатель не ушёл к другим";
+      };
+      return what + tail;
+   }
 }

@@ -3,6 +3,7 @@ package kg.kudaibergen.master;
 import java.text.NumberFormat;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -21,6 +22,7 @@ import kg.kudaibergen.user.entity.Lang;
 import kg.kudaibergen.user.entity.User;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.event.TransactionalEventListener;
 
 /**
@@ -82,6 +84,38 @@ public class ServiceNotifier {
                request.getId().toString(), "masterId", masterId.toString()), NEW_SERVICE_REQUEST_CATEGORY,
                !quiet && settings.isNewRequestSound());
       });
+   }
+
+   /**
+    * Нет отклика — напоминание мастеру (attempt 1…3, раз в 10 минут): «Ответьте клиенту: Эвакуатор», машина и что
+    * случилось; третье — «Последнее напоминание».
+    */
+   @Transactional(readOnly = true)
+   public void remind(Long requestId, Collection<Long> masterIds, int attempt) {
+      ServiceRequest request = requests.findById(requestId).orElse(null);
+      if (request == null || !request.isActive() || masterIds.isEmpty()) {
+         return;
+      }
+      ServiceType type = catalog.require(request.getService());
+      String car = mapper.car(request).label();
+      Map<Long, Long> masterOfOwner = masters.findAllById(masterIds).stream()
+            .collect(Collectors.toMap(Master::getOwnerId, Master::getId));
+      boolean quiet = quietHours.now();
+      pushes.send(masterOfOwner.keySet(), (user, settings) -> new PushMessage(
+            (type.isUrgent() ? "⚡ " : "") + remindLead(attempt, user.getLang()) + type.name(user.getLang()),
+            car + " — " + shorten(request.getDescription()),
+            Map.of("type", "NEW_SERVICE_REQUEST", "requestId", request.getId().toString(),
+                  "masterId", masterOfOwner.get(user.getId()).toString(), "reminder", "true"),
+            NEW_SERVICE_REQUEST_CATEGORY, !quiet && settings.isNewRequestSound()));
+   }
+
+   private static String remindLead(int attempt, Lang lang) {
+      boolean kg = lang == Lang.KG;
+      return switch (attempt) {
+         case 1 -> kg ? "Кардарга жооп бериңиз: " : "Ответьте клиенту: ";
+         case 2 -> kg ? "Кардар жоопту күтүп жатат: " : "Клиент ждёт ответа: ";
+         default -> kg ? "Акыркы эскертүү: " : "Последнее напоминание: ";
+      };
    }
 
    @Async("appTaskExecutor")
