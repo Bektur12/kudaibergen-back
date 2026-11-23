@@ -87,11 +87,13 @@ public class RequestNotifier {
       Map<Long, Long> shopOfUser = staff.stream()
             .collect(Collectors.toMap(ShopMember::getUserId, ShopMember::getShopId));
       boolean quiet = quietHours.now();
-      // пуш как на экране 12: машина заголовком, что нужно — текстом, фото и длина голосового — в data
+      // «Новый запрос · Camry 50» и «Покупатель ищет: …» — сразу ясно, что это заявка; фото и голосовое — в data
       pushes.send(shopOfUser.keySet(), (user, settings) -> {
          Map<String, String> personal = new HashMap<>(data);
          personal.put("shopId", shopOfUser.get(user.getId()).toString());
-         return new PushMessage(carLabel, request.getText(), personal, NEW_REQUEST_CATEGORY,
+         return new PushMessage(RequestPushTexts.newRequestTitle(carLabel, user.getLang()),
+               RequestPushTexts.newRequestBody(request.getText(), photo != null, voice != null, user.getLang()),
+               personal, NEW_REQUEST_CATEGORY,
                !quiet && settings.isNewRequestSound());
       });
    }
