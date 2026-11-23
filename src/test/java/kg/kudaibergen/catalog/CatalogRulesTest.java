@@ -89,6 +89,19 @@ class CatalogRulesTest {
    }
 
    @Test
+   void договорнаяЦенаПубликуетсяБезЦены() {
+      Part part = new Part(1L);
+      part.setTitle("Стойка передняя KYB");
+      part.setCategoryId(1L);
+      part.setCondition(PartCondition.USED);
+      part.replacePhotos(List.of(10L));
+      part.replaceFitments(List.of(new Fitment(TOYOTA, CAMRY_50, 2011, 2017)));
+      assertThat(MyPartsService.missing(part)).containsExactly("price");
+      part.setPriceNegotiable(true);
+      assertThat(MyPartsService.missing(part)).isEmpty();
+   }
+
+   @Test
    void безОбязательныхПолейНеПубликуется() {
       Part part = new Part(1L);
       assertThat(MyPartsService.missing(part))

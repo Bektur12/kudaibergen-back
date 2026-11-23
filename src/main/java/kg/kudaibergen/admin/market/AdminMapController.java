@@ -1,5 +1,6 @@
 package kg.kudaibergen.admin.market;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -14,6 +15,8 @@ import kg.kudaibergen.admin.market.AdminMapDtos.AdminRowDto;
 import kg.kudaibergen.admin.market.AdminMapDtos.GeoAnchorsDto;
 import kg.kudaibergen.admin.market.AdminMapDtos.RowCounts;
 import kg.kudaibergen.common.security.AuthPrincipal;
+import kg.kudaibergen.market.MarketPlanService;
+import kg.kudaibergen.market.dto.MapDto;
 import kg.kudaibergen.market.admin.AdminMarketDtos.AdminContainerDto;
 import kg.kudaibergen.market.admin.AdminMarketDtos.CreateContainerRequest;
 import kg.kudaibergen.market.admin.AdminMarketDtos.MapUploadRequest;
@@ -44,10 +47,12 @@ public class AdminMapController {
 
    private final AdminMapService maps;
    private final MarketAdminService market;
+   private final MarketPlanService plans;
 
-   public AdminMapController(AdminMapService maps, MarketAdminService market) {
+   public AdminMapController(AdminMapService maps, MarketAdminService market, MarketPlanService plans) {
       this.maps = maps;
       this.market = market;
+      this.plans = plans;
    }
 
    @GetMapping("/map")
@@ -132,6 +137,22 @@ public class AdminMapController {
       market.deleteContainer(id);
    }
 
+   @PutMapping("/markets/{id}/map")
+   @PreAuthorize("hasAuthority('MARKET_MAP_PUBLISH')")
+   @Audited(action = "MARKET_PLAN_SAVE", entity = "MARKET", id = "#id")
+   @Operation(summary = "Загрузить карту рынка без контейнеров", description = "Геология, Дордой Моторс, Дордой: "
+         + "схема в формате снятия со спутника (boundary, rows, passages, entrances, blocks, pois, streets, labels, "
+         + "anchors — минимум 3 опорные GPS-точки). Сразу видна в приложениях (GET /market/markets/{id}/map), "
+         + "версия растёт. Кудайберген — через черновик и публикацию")
+   @ApiResponse(responseCode = "400", description = "BAD_MAP — схема не в том формате или опорные точки не сходятся")
+   @ApiResponse(responseCode = "404", description = "MARKET_NOT_FOUND")
+   public MapDto saveMarketPlan(@PathVariable Long id, @RequestBody JsonNode data,
+                                @AuthenticationPrincipal AuthPrincipal admin) {
+      MapDto saved = plans.save(id, data, admin.userId());
+      AuditTrail.after(new PlanSummary(saved.version(), saved.rows().size(), saved.metersPerPx()));
+      return saved;
+   }
+
    @GetMapping("/geo-anchors")
    @PreAuthorize("hasAuthority('MARKET_VIEW')")
    @Operation(summary = "Опорные GPS-точки", description = "Заменить набор — PUT /admin/market/geo-anchors")
@@ -140,6 +161,9 @@ public class AdminMapController {
    }
 
    /** В журнал — итог, а не вся схема. */
+   record PlanSummary(int version, int rows, double metersPerPx) {
+   }
+
    record DraftSummary(int basedOnVersion, boolean valid, String error, int rows) {
    }
 }

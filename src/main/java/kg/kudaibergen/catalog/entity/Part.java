@@ -48,6 +48,10 @@ public class Part {
 
    private Integer price;
 
+   /** «Договорная»: цены нет (price = null), покупатель договаривается с продавцом. */
+   @Column(name = "price_negotiable", nullable = false)
+   private boolean priceNegotiable;
+
    @Column(nullable = false)
    private int quantity = 1;
 
@@ -211,6 +215,14 @@ public class Part {
 
    public void setPrice(Integer price) {
       this.price = price;
+   }
+
+   public boolean isPriceNegotiable() {
+      return priceNegotiable;
+   }
+
+   public void setPriceNegotiable(boolean priceNegotiable) {
+      this.priceNegotiable = priceNegotiable;
    }
 
    public int getQuantity() {

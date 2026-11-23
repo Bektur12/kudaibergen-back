@@ -164,7 +164,7 @@ public class MyPartsService {
       if (part.isActive()) {
          requireComplete(part);
          // пуши тем, у кого в избранном (ТЗ 5.5) — после коммита
-         if (oldPrice != null && part.getPrice() < oldPrice) {
+         if (oldPrice != null && part.getPrice() != null && part.getPrice() < oldPrice) {
             events.publishEvent(new PartEvents.PriceDropped(part.getId(), oldPrice, part.getPrice()));
          }
          if (wasInStock && !part.inStock()) {
@@ -270,7 +270,12 @@ public class MyPartsService {
       if (input.condition() != null) {
          part.setCondition(input.condition());
       }
-      if (input.price() != null) {
+      if (input.priceNegotiable() != null) {
+         part.setPriceNegotiable(input.priceNegotiable());
+      }
+      if (part.isPriceNegotiable()) {
+         part.setPrice(null);
+      } else if (input.price() != null) {
          part.setPrice(input.price());
       }
       if (input.quantity() != null) {
@@ -414,7 +419,7 @@ public class MyPartsService {
       if (part.getCondition() == null) {
          missing.add("condition");
       }
-      if (part.getPrice() == null) {
+      if (part.getPrice() == null && !part.isPriceNegotiable()) {
          missing.add("price");
       }
       if (part.getPhotoIds().isEmpty() && !part.hasVideo()) {

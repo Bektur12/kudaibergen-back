@@ -18,6 +18,7 @@ import kg.kudaibergen.request.entity.PartCondition;
  * состояние, цену, 1–20 машин и 1–6 фото или видео; категорию — если нет видео. В PATCH null — «не менять»,
  * для списков [] — очистить. mediaIds — по порядку, первое — главное фото. videoMediaId — id из
  * POST /media/videos/part, removeVideo = true — убрать видео. shipsToRegions — «Отправлю в регионы».
+ * priceNegotiable = true — «Договорная»: цена стирается и не нужна для публикации; false — снова с ценой.
  */
 public record PartInput(
       @Size(max = 120, message = "Название — до 120 символов") String title,
@@ -33,7 +34,8 @@ public record PartInput(
       @Size(max = 20, message = "Не больше 20 машин") List<@Valid FitmentInput> fitments,
       Long videoMediaId,
       Boolean removeVideo,
-      Boolean shipsToRegions) {
+      Boolean shipsToRegions,
+      Boolean priceNegotiable) {
 
    /** «+ Машина»: марка → модель (или «Все модели») → годы от–до. */
    public record FitmentInput(

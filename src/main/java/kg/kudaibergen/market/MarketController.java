@@ -8,6 +8,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import kg.kudaibergen.common.error.BadRequestException;
+import kg.kudaibergen.common.error.NotFoundException;
 import kg.kudaibergen.common.i18n.Langs;
 import kg.kudaibergen.common.security.AuthPrincipal;
 import kg.kudaibergen.market.dto.AddContainerRequest;
@@ -21,6 +22,7 @@ import kg.kudaibergen.market.dto.QrResolveDto;
 import kg.kudaibergen.market.dto.RouteDto;
 import kg.kudaibergen.market.dto.RowDetailDto;
 import kg.kudaibergen.market.dto.RowDto;
+import kg.kudaibergen.market.entity.Bazaar;
 import kg.kudaibergen.market.geo.Point;
 import kg.kudaibergen.user.entity.Lang;
 import org.springframework.http.CacheControl;
@@ -46,10 +48,12 @@ public class MarketController {
 
    private final MarketMapService market;
    private final MarketRepository markets;
+   private final MarketPlanService plans;
 
-   public MarketController(MarketMapService market, MarketRepository markets) {
+   public MarketController(MarketMapService market, MarketRepository markets, MarketPlanService plans) {
       this.market = market;
       this.markets = markets;
+      this.plans = plans;
    }
 
    @GetMapping("/markets")
@@ -61,6 +65,25 @@ public class MarketController {
                                   @RequestHeader(value = HttpHeaders.ACCEPT_LANGUAGE, required = false) String language) {
       Lang lang = Langs.fromHeader(language);
       return markets.findByActiveTrueOrderBySortOrder().stream().map(m -> MarketDto.of(m, lang)).toList();
+   }
+
+   @GetMapping("/markets/{id}/map")
+   @Operation(summary = "Карта рынка по id", description = """
+         Тот же формат, что GET /map. Кудайберген (id 1) — его схема с контейнерами. Остальные рынки (hasMap) —
+         ряды, проходы, входы и корпуса для ориентира: контейнеров нет (containers пустые), id рядов отрицательные,
+         маршрута и поиска по рынку нет. ETag — 304 с If-None-Match, если карта не менялась.""")
+   @ApiResponse(responseCode = "404", description = "MAP_NOT_FOUND — у рынка нет карты")
+   public ResponseEntity<MapDto> marketMap(@PathVariable Long id,
+                                           @RequestHeader(value = HttpHeaders.IF_NONE_MATCH, required = false) String etag) {
+      if (id == Bazaar.KUDAIBERGEN_ID) {
+         return map(etag);
+      }
+      MapDto map = plans.plan(id).orElseThrow(() -> new NotFoundException("MAP_NOT_FOUND", "У рынка пока нет карты"));
+      String current = "\"plan-" + id + "-v" + map.version() + "\"";
+      if (current.equals(etag)) {
+         return ResponseEntity.status(HttpStatus.NOT_MODIFIED).eTag(current).build();
+      }
+      return ResponseEntity.ok().eTag(current).cacheControl(CacheControl.noCache()).body(map);
    }
 
    @GetMapping("/map")

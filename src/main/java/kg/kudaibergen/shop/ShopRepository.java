@@ -52,14 +52,15 @@ public interface ShopRepository extends JpaRepository<Shop, Long> {
                      @Param("marketId") Long marketId, Pageable page);
 
    /**
-    * Кому может уйти запрос по марке: действующий магазин. Часы работы и ряд/бокс досматривает модуль requests.
+    * Кому может уйти запрос по марке: действующий магазин. Ряд досматривает модуль requests;
+    * часы работы не важны — запрос приходит и в нерабочее время.
     */
    @Query("select s from Shop s where s.status = :status and :brandId member of s.brandIds")
    List<Shop> findReceiving(@Param("status") ShopStatus status, @Param("brandId") Long brandId);
 
    /**
     * Кому может уйти запрос «Контейнерам» (31): покупатель выбрал боксы сам, поэтому без фильтра по марке.
-    * Часы работы досматривает модуль requests.
+    * Часы работы не важны — запрос приходит и в нерабочее время.
     */
    @Query("select s from Shop s where s.status = :status and s.containerId in :containerIds")
    List<Shop> findReceivingIn(@Param("status") ShopStatus status,

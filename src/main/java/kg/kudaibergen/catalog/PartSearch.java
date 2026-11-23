@@ -266,11 +266,11 @@ public class PartSearch {
 
    private static String orderBy(Query query) {
       return switch (query.sort()) {
-         case PRICE_ASC -> "p.price asc, p.id asc";
-         case PRICE_DESC -> "p.price desc, p.id desc";
+         case PRICE_ASC -> "p.price asc nulls last, p.id asc";
+         case PRICE_DESC -> "p.price desc nulls last, p.id desc";
          case NEWEST -> "p.published_at desc nulls last, p.id desc";
-         case NEAREST -> query.shopOrder().isEmpty() ? "p.price asc, p.id asc"
-               : "d.rank asc nulls last, p.price asc, p.id asc";
+         case NEAREST -> query.shopOrder().isEmpty() ? "p.price asc nulls last, p.id asc"
+               : "d.rank asc nulls last, p.price asc nulls last, p.id asc";
       };
    }
 

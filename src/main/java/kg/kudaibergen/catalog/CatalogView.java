@@ -91,7 +91,7 @@ public class CatalogView {
             shopMapper.photos(shop, 3),
             part.getPublishedAt(), part.getUpdatedAt(),
             part.hasVideo() ? media.videos(List.of(part.getVideoMediaId())).get(part.getVideoMediaId()) : null,
-            part.isShipsToRegions());
+            part.isShipsToRegions(), part.isPriceNegotiable());
    }
 
    public List<MyPartItemDto> myItems(List<Part> page, Lang lang) {

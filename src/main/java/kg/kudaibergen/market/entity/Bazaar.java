@@ -36,6 +36,9 @@ public class Bazaar {
    @Column(name = "has_scheme", nullable = false)
    private boolean hasScheme;
 
+   @Column(name = "has_map", nullable = false)
+   private boolean hasMap;
+
    @Column(name = "sort_order", nullable = false)
    private short sortOrder;
 
@@ -81,6 +84,11 @@ public class Bazaar {
 
    public boolean hasScheme() {
       return hasScheme;
+   }
+
+   /** Есть карта: схема с контейнерами (Кудайберген) или схема для ориентира (market_plans). */
+   public boolean hasMap() {
+      return hasMap || hasScheme;
    }
 
    public short getSortOrder() {

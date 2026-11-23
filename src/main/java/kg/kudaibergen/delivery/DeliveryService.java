@@ -72,7 +72,8 @@ public class DeliveryService {
    @Transactional
    public DeliveryOrderDto create(Long buyerId, DeliveryInputs.CreateOrder input) {
       Part part = parts.findById(input.partId())
-            .filter(found -> found.isActive() && found.inStock() && found.isShipsToRegions())
+            .filter(found -> found.isActive() && found.inStock() && found.isShipsToRegions()
+                  && found.getPrice() != null)
             .orElseThrow(() -> new BadRequestException("DELIVERY_NOT_AVAILABLE",
                   "Этот товар продавец не отправляет — позвоните или напишите ему"));
       Shop shop = shops.findById(part.getShopId()).filter(Shop::isActive)
