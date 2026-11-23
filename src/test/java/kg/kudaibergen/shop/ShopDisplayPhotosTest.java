@@ -7,7 +7,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** Покупателю: нет аватарки — баннер (первое фото места) вместо неё, нет баннера — аватарка. */
+/** Покупателю картинка продавца — баннер (первое фото места); нет баннера — старая аватарка, и она же вместо баннера. */
 class ShopDisplayPhotosTest {
 
    private static Shop shop(Long avatar, List<Long> photos) {
@@ -24,8 +24,8 @@ class ShopDisplayPhotosTest {
    }
 
    @Test
-   void естьОба_илиНиЧего_безПодмены() {
-      assertThat(shop(9L, List.of(5L)).displayAvatarId()).isEqualTo(9L);
+   void естьОба_баннерВместоАватарки() {
+      assertThat(shop(9L, List.of(5L)).displayAvatarId()).isEqualTo(5L);
       assertThat(shop(9L, List.of(5L)).displayPhotoIds()).containsExactly(5L);
       assertThat(shop(null, List.of()).displayAvatarId()).isNull();
       assertThat(shop(null, List.of()).displayPhotoIds()).isEmpty();

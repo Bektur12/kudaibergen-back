@@ -93,7 +93,7 @@ public class ShopMapper {
                   .orElse(null));
    }
 
-   /** Аватар — превью 320 px; нет аватарки — баннер (первое фото места); null — клиент рисует первую букву. */
+   /** Картинка продавца — превью 320 px баннера (нет его — старой аватарки); null — клиент рисует первую букву. */
    public String avatarUrl(Shop shop) {
       return media.thumbUrl(shop.displayAvatarId());
    }

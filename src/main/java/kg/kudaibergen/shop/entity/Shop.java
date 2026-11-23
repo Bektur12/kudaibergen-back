@@ -493,9 +493,12 @@ public class Shop {
       return photoIds;
    }
 
-   /** Покупателю: нет аватарки — первое фото места (баннер); null — клиент рисует букву. */
+   /**
+    * Картинка продавца в карточках, чатах и на карте — баннер (первое фото места): у продавца больше нет отдельной
+    * аватарки. Баннера нет — старая аватарка; нет и её — null, клиент рисует букву.
+    */
    public Long displayAvatarId() {
-      return avatarMediaId != null ? avatarMediaId : photoIds.isEmpty() ? null : photoIds.get(0);
+      return !photoIds.isEmpty() ? photoIds.get(0) : avatarMediaId;
    }
 
    /** Покупателю: нет фото места (баннера) — аватарка вместо него. */
