@@ -60,13 +60,13 @@ public class ShopService {
    private final SmsProvider sms;
    private final MarketRepository markets;
 
-   private final boolean verificationRequired;
+   private final ApprovalSettings approvals;
 
    public ShopService(ShopRepository shops, ShopMemberRepository members, FavoriteShopRepository favorites,
                       ShopAccess access, ShopMapper mapper, ShopVerificationService verification,
                       MarketMapService market, VehicleDirectory directory, CategoryService categories,
                       UserService userService, UserRepository users, SmsProvider sms,
-                      ShopProperties properties, MarketRepository markets) {
+                      ApprovalSettings approvals, MarketRepository markets) {
       this.shops = shops;
       this.members = members;
       this.favorites = favorites;
@@ -80,14 +80,14 @@ public class ShopService {
       this.users = users;
       this.sms = sms;
       this.markets = markets;
-      this.verificationRequired = properties.verificationRequired();
+      this.approvals = approvals;
    }
 
    // ─────────────────────── регистрация и профиль ───────────────────────
 
    /**
     * «Сохранить» на экране 10: пользователь переходит в режим продавца. Магазин «На проверке», если проверка
-    * места включена (app.shops.verification-required), иначе действует сразу.
+    * места включена (флажок админки «Авто-активация продавцов» выключен), иначе действует сразу.
     */
    @Transactional
    public MyShopDto register(Long userId, ShopRequests.CreateShop request, Lang lang) {
@@ -104,7 +104,7 @@ public class ShopService {
          shop.setPhoneVisible(true);
       });
       // и на рынке, и вне его магазин ждёт администрацию, если проверка включена
-      if (!verificationRequired) {
+      if (approvals.sellersAutoApprove()) {
          shop.verified();
       }
       shop.setSchedule(request.openFrom(), request.openTo(), request.workDays());
@@ -211,7 +211,7 @@ public class ShopService {
       // без контейнера (вне рынка или место текстом) отклонённый магазин после правки снова на проверке
       if (!shop.hasContainer() && shop.isRejected()) {
          shop.resubmit();
-         if (!verificationRequired) {
+         if (approvals.sellersAutoApprove()) {
             shop.verified();
          }
       }

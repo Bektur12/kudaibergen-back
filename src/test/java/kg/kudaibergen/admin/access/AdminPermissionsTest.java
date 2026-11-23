@@ -16,12 +16,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 class AdminPermissionsTest {
 
    @Test
-   void суперадминИмеетВсёАдминРынкаВсёКромеСотрудников() {
+   void суперадминИмеетВсёАдминРынкаВсёКромеСотрудниковИУдаления() {
       assertThat(AdminPermissions.defaults(AdminRole.SUPER_ADMIN)).containsExactlyInAnyOrder(AdminPermission.values());
       assertThat(AdminPermissions.defaults(AdminRole.MARKET_ADMIN))
-            .doesNotContain(AdminPermission.STAFF_MANAGE)
+            .doesNotContain(AdminPermission.STAFF_MANAGE, AdminPermission.USERS_DELETE)
             .contains(AdminPermission.AUDIT_VIEW, AdminPermission.PII_VIEW)
-            .hasSize(AdminPermission.values().length - 1);
+            .hasSize(AdminPermission.values().length - 2);
    }
 
    @Test

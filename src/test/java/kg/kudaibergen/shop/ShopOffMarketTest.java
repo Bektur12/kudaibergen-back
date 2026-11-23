@@ -25,7 +25,7 @@ class ShopOffMarketTest {
 
    private final MarketRepository markets = mock(MarketRepository.class);
    private final ShopService service = new ShopService(null, null, null, null, null, null, null, null, null, null,
-         null, null, new ShopProperties(true), markets);
+         null, null, ApprovalSettings.constant(false), markets);
 
    {
       when(markets.findById(2L)).thenReturn(Optional.of(DORDOI_MOTORS));

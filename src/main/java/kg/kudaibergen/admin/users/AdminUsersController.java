@@ -15,14 +15,17 @@ import kg.kudaibergen.admin.users.AdminUserDtos.UserFilter;
 import kg.kudaibergen.admin.users.AdminUserDtos.UserMessageRequest;
 import kg.kudaibergen.admin.users.AdminUserDtos.UserReasonRequest;
 import kg.kudaibergen.common.security.AuthPrincipal;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 /** Пользователи. */
@@ -77,6 +80,18 @@ public class AdminUsersController {
       AuditTrail.before(users.detail(id));
       users.unblock(id, admin.userId());
       return users.detail(id);
+   }
+
+   @DeleteMapping("/{id}")
+   @PreAuthorize("hasAuthority('USERS_DELETE')")
+   @ResponseStatus(HttpStatus.NO_CONTENT)
+   @Audited(action = "USER_DELETE", entity = "USER", id = "#id")
+   @Operation(summary = "Удалить пользователя", description = "Сразу и насовсем: гараж, запросы, чаты, его магазин "
+         + "и профиль мастера удаляются вместе с ним")
+   @ApiResponse(responseCode = "409", description = "SELF_DELETE, STAFF_DELETE — активный сотрудник админки")
+   public void delete(@PathVariable Long id, @AuthenticationPrincipal AuthPrincipal admin) {
+      AuditTrail.before(users.detail(id));
+      users.delete(id, admin.userId());
    }
 
    @PostMapping("/{id}/message")

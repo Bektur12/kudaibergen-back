@@ -23,7 +23,7 @@ import kg.kudaibergen.media.MediaPurpose;
 import kg.kudaibergen.media.MediaService;
 import kg.kudaibergen.request.dto.ReviewTagDto;
 import kg.kudaibergen.shop.ShopNames;
-import kg.kudaibergen.shop.ShopProperties;
+import kg.kudaibergen.shop.ApprovalSettings;
 import kg.kudaibergen.shop.entity.WeekDays;
 import kg.kudaibergen.user.UserRepository;
 import kg.kudaibergen.user.UserService;
@@ -36,7 +36,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Профиль мастера / СТО (38): регистрация, правка, «Принимаю», аватар и фото; профиль для клиента и отзывы.
- * Проверка мастера — как у магазинов: пока app.shops.verification-required выключено, профиль действует сразу.
+ * Проверка мастера — как у магазинов: пока в админке включена авто-активация мастеров, профиль действует сразу.
  */
 @Service
 public class MasterService {
@@ -51,11 +51,11 @@ public class MasterService {
    private final MediaService media;
    private final UserService userService;
    private final UserRepository users;
-   private final boolean verificationRequired;
+   private final ApprovalSettings approvals;
 
    public MasterService(MasterRepository masters, MasterReviewRepository reviews, MasterMapper mapper,
                         ServiceCatalog catalog, VehicleDirectory directory, MediaService media, UserService userService,
-                        UserRepository users, ShopProperties shopProperties) {
+                        UserRepository users, ApprovalSettings approvals) {
       this.masters = masters;
       this.reviews = reviews;
       this.mapper = mapper;
@@ -64,7 +64,7 @@ public class MasterService {
       this.media = media;
       this.userService = userService;
       this.users = users;
-      this.verificationRequired = shopProperties.verificationRequired();
+      this.approvals = approvals;
    }
 
    /** Свой профиль; нет — 404 NO_MASTER, клиент ведёт на регистрацию (38). */
@@ -82,7 +82,7 @@ public class MasterService {
    /** «Стать мастером» (38): пользователь переходит в режим мастера. */
    @Transactional
    public MyMasterDto create(Long userId, MasterInputs.CreateMaster input, Lang lang) {
-      Master master = register(userId, input, verificationRequired);
+      Master master = register(userId, input, !approvals.mastersAutoApprove());
       userService.changeRole(userId, UserRole.MASTER);
       return mapper.mine(master, lang);
    }

@@ -41,7 +41,7 @@ public class AdminPermissions {
    public static Set<AdminPermission> defaults(AdminRole role) {
       return switch (role) {
          case SUPER_ADMIN -> EnumSet.allOf(AdminPermission.class);
-         case MARKET_ADMIN -> EnumSet.complementOf(EnumSet.of(AdminPermission.STAFF_MANAGE));
+         case MARKET_ADMIN -> EnumSet.complementOf(EnumSet.of(AdminPermission.STAFF_MANAGE, AdminPermission.USERS_DELETE));
       };
    }
 }

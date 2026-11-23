@@ -22,6 +22,7 @@ import kg.kudaibergen.admin.users.AdminUserDtos.UserFilter;
 import kg.kudaibergen.admin.users.AdminUserDtos.UserMasterDto;
 import kg.kudaibergen.admin.users.AdminUserDtos.UserRequestDto;
 import kg.kudaibergen.admin.users.AdminUserDtos.UserShopDto;
+import kg.kudaibergen.common.error.ConflictException;
 import kg.kudaibergen.common.error.NotFoundException;
 import kg.kudaibergen.common.web.CursorPage;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
@@ -29,7 +30,7 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** Пользователи: список, карточка, блокировка (вместе с боксом и профилем мастера), «Написать». */
+/** Пользователи: список, карточка, блокировка (вместе с боксом и профилем мастера), удаление, «Написать». */
 @Service
 public class AdminUsersService {
 
@@ -111,6 +112,26 @@ public class AdminUsersService {
    @Transactional
    public void unblock(Long userId, Long adminId) {
       blocking.unblock(userId, adminId);
+   }
+
+   /**
+    * Удалить насовсем, сразу (не через 30 дней, как «Удалить аккаунт» в приложении): гараж, запросы, чаты, его
+    * магазин и профиль мастера уходят каскадом; отзывы и сообщения в чужих чатах остаются без автора.
+    */
+   @Transactional
+   public void delete(Long userId, Long adminId) {
+      detail(userId);
+      if (userId.equals(adminId)) {
+         throw new ConflictException("SELF_DELETE", "Нельзя удалить себя");
+      }
+      Boolean staff = jdbc.queryForObject(
+            "select exists (select 1 from admin_members where user_id = :user and is_active)",
+            Map.of("user", userId), Boolean.class);
+      if (Boolean.TRUE.equals(staff)) {
+         throw new ConflictException("STAFF_DELETE",
+               "Это сотрудник админки — сначала отключите его в разделе «Сотрудники»");
+      }
+      jdbc.update("delete from users where id = :user", Map.of("user", userId));
    }
 
    @Transactional(readOnly = true)

@@ -16,6 +16,8 @@ public enum AdminPermission {
    BROADCASTS_VIEW, BROADCASTS_SEND,
    /** Без PII_VIEW телефоны в ответах админки маскируются: +996 *** ** 34 56. */
    USERS_VIEW, USERS_BLOCK, PII_VIEW,
+   /** Удалить пользователя насовсем — по умолчанию только суперадмин. */
+   USERS_DELETE,
    /** Кнопка «Написать»: пуш пользователю от администрации. */
    MESSAGE_USERS,
    AUDIT_VIEW, STAFF_MANAGE
