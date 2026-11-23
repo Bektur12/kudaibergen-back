@@ -33,27 +33,32 @@ final class RequestPushTexts {
 
    /**
     * Напоминание «Ответьте» — разное в 1-й, 2-й и 3-й раз, чтобы не надоедало одним и тем же:
-    * «⏰ Ответьте покупателю · Camry 50» → «Покупатель ждёт ответа · Camry 50» → «Последнее напоминание · Camry 50».
+    * «⏰ Покупатель ждёт ответа · Camry 50» → «🔔 Вы ещё не ответили · Camry 50» → «Успейте ответить первым · Camry 50».
     */
    static String remindTitle(String carLabel, int attempt, Lang lang) {
       boolean kg = lang == Lang.KG;
       String lead = switch (attempt) {
-         case 1 -> kg ? "⏰ Сатып алуучуга жооп бериңиз · " : "⏰ Ответьте покупателю · ";
-         case 2 -> kg ? "Сатып алуучу жоопту күтүп жатат · " : "Покупатель ждёт ответа · ";
-         default -> kg ? "Акыркы эскертүү · " : "Последнее напоминание · ";
+         case 1 -> kg ? "⏰ Сатып алуучу жоопту күтүп жатат · " : "⏰ Покупатель ждёт ответа · ";
+         case 2 -> kg ? "🔔 Сиз али жооп бере элексиз · " : "🔔 Вы ещё не ответили · ";
+         default -> kg ? "Биринчи болуп жооп бериңиз · " : "Успейте ответить первым · ";
       };
       return lead + carLabel;
    }
 
-   /** Что ищут — и короткий призыв: «Есть» или «Нет» прямо из уведомления. */
+   /**
+    * Что ищут — и короткий призыв, каждый раз свой:
+    * «Покупатель ищет: фара. Есть у вас?» → «…«Есть» или «Нет» — одно нажатие» → «Всё ещё ищут: фара. Ответ займёт секунду».
+    */
    static String remindBody(String text, boolean hasPhoto, boolean hasVoice, int attempt, Lang lang) {
       boolean kg = lang == Lang.KG;
-      String what = newRequestBody(text, hasPhoto, hasVoice, lang);
-      String tail = switch (attempt) {
-         case 1 -> kg ? ". «Бар» же «Жок» басыңыз" : ". Нажмите «Есть» или «Нет»";
-         case 2 -> kg ? ". Сизде барбы?" : ". У вас есть?";
-         default -> kg ? ". Жооп бериңиз — сатып алуучу башкага кетпесин" : ". Ответьте, пока покупатель не ушёл к другим";
-      };
-      return what + tail;
+      boolean hasText = text != null && !text.isBlank();
+      if (attempt >= 3) {
+         String what = hasText ? (kg ? "Дагы эле издеп жатышат: " : "Всё ещё ищут: ") + text.strip()
+               : newRequestBody(text, hasPhoto, hasVoice, lang);
+         return what + (kg ? ". Жооп бир секунд алат" : ". Ответ займёт секунду");
+      }
+      String tail = attempt == 1 ? (kg ? ". Сизде барбы?" : ". Есть у вас?")
+            : (kg ? ". «Бар» же «Жок» — бир басуу" : ". «Есть» или «Нет» — одно нажатие");
+      return newRequestBody(text, hasPhoto, hasVoice, lang) + tail;
    }
 }

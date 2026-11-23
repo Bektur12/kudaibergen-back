@@ -3,13 +3,13 @@ package kg.kudaibergen.notification;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 import kg.kudaibergen.master.ServiceNotifier;
-import kg.kudaibergen.notification.push.QuietHours;
 import kg.kudaibergen.request.RequestNotifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -20,7 +20,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * Раз в минуту: бокс или мастер не ответил на запрос — напоминание «Ответьте покупателю», не чаще раза в 10 минут
- * и не больше {@link #MAX} раз на запрос (через 10, 20 и 30 минут). Ночью (тихие часы) не напоминаем.
+ * и не больше {@link #MAX} раз на запрос (через 10, 20 и 30 минут). С полуночи до 7 утра не напоминаем.
  * Счётчик растёт тем же UPDATE, так что лишнего (и с двух инстансов) не придёт. Окно — запросы за последний час:
  * после выкладки не будим старые.
  */
@@ -31,25 +31,25 @@ public class ReplyReminderJob {
    static final Duration EVERY = Duration.ofMinutes(10);
    static final Duration WINDOW = Duration.ofHours(1);
    static final int MAX = 3;
+   /** С 00:00 до 7:00 продавцов не будим. */
+   static final LocalTime NIGHT_END = LocalTime.of(7, 0);
 
    private final NamedParameterJdbcTemplate jdbc;
    private final RequestNotifier requestNotifier;
    private final ServiceNotifier serviceNotifier;
-   private final QuietHours quietHours;
    private final Clock clock;
 
    public ReplyReminderJob(NamedParameterJdbcTemplate jdbc, RequestNotifier requestNotifier,
-                           ServiceNotifier serviceNotifier, QuietHours quietHours, Clock clock) {
+                           ServiceNotifier serviceNotifier, Clock clock) {
       this.jdbc = jdbc;
       this.requestNotifier = requestNotifier;
       this.serviceNotifier = serviceNotifier;
-      this.quietHours = quietHours;
       this.clock = clock;
    }
 
    @Scheduled(fixedDelayString = "PT1M", initialDelayString = "PT1M")
    public void run() {
-      if (quietHours.now()) {
+      if (LocalTime.now(clock).isBefore(NIGHT_END)) {
          return;
       }
       Instant now = clock.instant();

@@ -88,7 +88,7 @@ public class ServiceNotifier {
 
    /**
     * Нет отклика — напоминание мастеру (attempt 1…3, раз в 10 минут): «Ответьте клиенту: Эвакуатор», машина и что
-    * случилось; третье — «Последнее напоминание».
+    * случилось; третье — «Успейте ответить первым».
     */
    @Transactional(readOnly = true)
    public void remind(Long requestId, Collection<Long> masterIds, int attempt) {
@@ -112,9 +112,9 @@ public class ServiceNotifier {
    private static String remindLead(int attempt, Lang lang) {
       boolean kg = lang == Lang.KG;
       return switch (attempt) {
-         case 1 -> kg ? "Кардарга жооп бериңиз: " : "Ответьте клиенту: ";
-         case 2 -> kg ? "Кардар жоопту күтүп жатат: " : "Клиент ждёт ответа: ";
-         default -> kg ? "Акыркы эскертүү: " : "Последнее напоминание: ";
+         case 1 -> kg ? "Кардар жоопту күтүп жатат: " : "Клиент ждёт ответа: ";
+         case 2 -> kg ? "Сиз али жооп бере элексиз: " : "Вы ещё не ответили: ";
+         default -> kg ? "Биринчи болуп жооп бериңиз: " : "Успейте ответить первым: ";
       };
    }
 

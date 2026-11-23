@@ -17,11 +17,12 @@ class RequestPushTextsTest {
    }
 
    @Test
-   void напоминанияРазныеИТретьеПоследнее() {
-      assertThat(RequestPushTexts.remindTitle("Camry 50", 1, Lang.RU)).isEqualTo("⏰ Ответьте покупателю · Camry 50");
-      assertThat(RequestPushTexts.remindTitle("Camry 50", 2, Lang.RU)).isEqualTo("Покупатель ждёт ответа · Camry 50");
-      assertThat(RequestPushTexts.remindTitle("Camry 50", 3, Lang.RU)).isEqualTo("Последнее напоминание · Camry 50");
-      assertThat(RequestPushTexts.remindBody("фара", false, false, 1, Lang.RU))
-            .isEqualTo("Покупатель ищет: фара. Нажмите «Есть» или «Нет»");
+   void напоминанияРазныеБезЗанудства() {
+      assertThat(RequestPushTexts.remindTitle("Camry 50", 1, Lang.RU)).isEqualTo("⏰ Покупатель ждёт ответа · Camry 50");
+      assertThat(RequestPushTexts.remindTitle("Camry 50", 2, Lang.RU)).isEqualTo("🔔 Вы ещё не ответили · Camry 50");
+      assertThat(RequestPushTexts.remindTitle("Camry 50", 3, Lang.RU)).isEqualTo("Успейте ответить первым · Camry 50");
+      assertThat(RequestPushTexts.remindBody("фара", false, false, 1, Lang.RU)).isEqualTo("Покупатель ищет: фара. Есть у вас?");
+      assertThat(RequestPushTexts.remindBody("фара", false, false, 3, Lang.RU))
+            .isEqualTo("Всё ещё ищут: фара. Ответ займёт секунду");
    }
 }
