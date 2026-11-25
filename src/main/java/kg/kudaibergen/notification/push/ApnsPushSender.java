@@ -57,16 +57,28 @@ public class ApnsPushSender {
    }
 
    public void send(List<String> deviceTokens, PushMessage message) {
-      String body = payload(message);
+      deliver(deviceTokens, payload(message), config.bundleId(), "alert", message.sound() ? "10" : "5");
+   }
+
+   /**
+    * Запуск карточки Live Activity по push-to-start токену (iOS 17.2+): приложение может быть закрыто — iOS
+    * сама покажет карточку со звуком и баннером из alert. Тема — bundleId + «.push-type.liveactivity».
+    */
+   public void startLiveActivity(List<String> startTokens, PushMessage message) {
+      deliver(startTokens, liveActivityPayload(message), config.bundleId() + ".push-type.liveactivity", "liveactivity",
+            "10");
+   }
+
+   private void deliver(List<String> deviceTokens, String body, String topic, String pushType, String priority) {
       String host = config.production() ? "https://api.push.apple.com" : "https://api.sandbox.push.apple.com";
       int failed = 0;
       for (String token : deviceTokens) {
          HttpRequest request = HttpRequest.newBuilder(URI.create(host + "/3/device/" + token))
                .timeout(Duration.ofSeconds(10))
                .header("authorization", "bearer " + jwt())
-               .header("apns-topic", config.bundleId())
-               .header("apns-push-type", "alert")
-               .header("apns-priority", message.sound() ? "10" : "5")
+               .header("apns-topic", topic)
+               .header("apns-push-type", pushType)
+               .header("apns-priority", priority)
                .POST(HttpRequest.BodyPublishers.ofString(body))
                .build();
          try {
@@ -106,6 +118,32 @@ public class ApnsPushSender {
       payload.put("body", message.data());
       try {
          return json.writeValueAsString(payload);
+      } catch (JsonProcessingException ex) {
+         throw new IllegalStateException(ex);
+      }
+   }
+
+   /** aps для запуска Live Activity: event=start, attributes-type, attributes, content-state, alert, stale-date. */
+   String liveActivityPayload(PushMessage message) {
+      PushMessage.LiveActivity activity = message.liveActivity();
+      Map<String, Object> alert = new LinkedHashMap<>();
+      alert.put("title", message.title());
+      alert.put("body", message.body());
+      if (message.sound()) {
+         alert.put("sound", "default");
+      }
+      Map<String, Object> aps = new LinkedHashMap<>();
+      aps.put("timestamp", clock.instant().getEpochSecond());
+      aps.put("event", "start");
+      aps.put("attributes-type", activity.type());
+      aps.put("attributes", activity.attributes());
+      aps.put("content-state", activity.state());
+      aps.put("alert", alert);
+      if (activity.staleAt() != null) {
+         aps.put("stale-date", activity.staleAt().getEpochSecond());
+      }
+      try {
+         return json.writeValueAsString(Map.of("aps", aps));
       } catch (JsonProcessingException ex) {
          throw new IllegalStateException(ex);
       }

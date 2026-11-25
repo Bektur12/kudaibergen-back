@@ -148,8 +148,9 @@ public class RoadsideService {
       return new OfflinePackDto(version(types, list), clock.instant(), types, EMERGENCY, list);
    }
 
-   public void countDownload(Long userId) {
-      rateLimiter.hit("roadside-pack:" + userId, PACK_DAILY_LIMIT, Duration.ofDays(1), "PACK_RATE_LIMITED",
+   /** who — «user:42» или «ip:…» у гостя. */
+   public void countDownload(String who) {
+      rateLimiter.hit("roadside-pack:" + who, PACK_DAILY_LIMIT, Duration.ofDays(1), "PACK_RATE_LIMITED",
             "Справочник уже скачан много раз за сутки — попробуйте завтра");
    }
 

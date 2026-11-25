@@ -34,6 +34,10 @@ public class DeviceToken {
    @Column(name = "push_actions", nullable = false)
    private boolean pushActions;
 
+   /** Push-to-start токен Live Activity (iPhone, iOS 17.2+); null — карточки запроса нет, обычный пуш. */
+   @Column(name = "live_activity_token", length = 255)
+   private String liveActivityToken;
+
    @Column(name = "updated_at", nullable = false)
    private Instant updatedAt = Instant.now();
 
@@ -52,6 +56,18 @@ public class DeviceToken {
       this.platform = platform;
       this.pushActions = pushActions;
       this.updatedAt = Instant.now();
+   }
+
+   /** Токен Live Activity приходит от iOS отдельно и может смениться; null — не трогаем прежний. */
+   public void liveActivityToken(String token) {
+      if (token != null && !token.isBlank()) {
+         this.liveActivityToken = token;
+         this.updatedAt = Instant.now();
+      }
+   }
+
+   public String getLiveActivityToken() {
+      return liveActivityToken;
    }
 
    public boolean isPushActions() {

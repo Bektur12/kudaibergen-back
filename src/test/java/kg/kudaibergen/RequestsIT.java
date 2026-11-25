@@ -265,13 +265,14 @@ class RequestsIT extends AbstractIntegrationTest {
             + ",\"text\":\"Бампер передний\",\"target\":\"CONTAINERS\",\"targetContainerIds\":["
             + containerOf("+996700500542") + "]}"), seller), 201);
       assertThat(sentToContainer.get("recipientsCount").asInt()).isEqualTo(chosen.get("recipients").asInt());
-      // всему рынку Ford продаёт только свой бокс — отправлять некому: 409, а не «пустой» запрос
+      // всему рынку Ford продаёт только свой бокс — продавцов марки нет: не тупик, а весь рынок (Опель получит)
       JsonNode marketEstimate = call(authed(get("/api/v1/requests/estimate").param("carId", String.valueOf(carId))
             .param("target", "MARKET"), seller), 200);
-      assertThat(marketEstimate.get("recipients").asInt()).isZero();
-      JsonNode nobody = call(authed(jsonPost("/api/v1/requests", "{\"carId\":" + carId
-            + ",\"text\":\"Бампер задний\",\"target\":\"MARKET\"}"), seller), 409);
-      assertThat(nobody.get("code").asText()).isEqualTo("NO_RECIPIENTS");
+      assertThat(marketEstimate.get("anyBrand").asBoolean()).isTrue();
+      assertThat(marketEstimate.get("recipients").asInt()).isPositive();
+      JsonNode toEveryone = call(authed(jsonPost("/api/v1/requests", "{\"carId\":" + carId
+            + ",\"text\":\"Бампер задний\",\"target\":\"MARKET\"}"), seller), 201);
+      assertThat(toEveryone.get("recipientsCount").asInt()).isEqualTo(marketEstimate.get("recipients").asInt());
 
       // экран 31: у контейнеров ряда — есть ли продавец и продаёт ли он марку
       JsonNode grid = call(authed(get("/api/v1/market/rows/" + rowId("16") + "/containers")

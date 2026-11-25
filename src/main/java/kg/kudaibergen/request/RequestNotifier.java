@@ -20,6 +20,7 @@ import kg.kudaibergen.shop.ShopMemberRepository;
 import kg.kudaibergen.shop.ShopRepository;
 import kg.kudaibergen.shop.entity.Shop;
 import kg.kudaibergen.shop.entity.ShopMember;
+import kg.kudaibergen.user.entity.Lang;
 import kg.kudaibergen.user.entity.User;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
@@ -48,10 +49,13 @@ public class RequestNotifier {
    private final UserPushes pushes;
    private final QuietHours quietHours;
    private final MediaService media;
+   private final QuickReplyTokens quickReplies;
 
    public RequestNotifier(PartRequestRepository requests, RequestReplyRepository replies, ShopRepository shops,
                           ShopMemberRepository members, ShopMapper shopMapper, RequestMapper mapper,
-                          UserPushes pushes, QuietHours quietHours, MediaService media) {
+                          UserPushes pushes, QuietHours quietHours, MediaService media,
+                          QuickReplyTokens quickReplies) {
+      this.quickReplies = quickReplies;
       this.requests = requests;
       this.replies = replies;
       this.shops = shops;
@@ -90,13 +94,41 @@ public class RequestNotifier {
       boolean quiet = quietHours.now();
       // «Новый запрос · Camry 50» и «Покупатель ищет: …» — сразу ясно, что это заявка; фото и голосовое — в data
       pushes.send(shopOfUser.keySet(), (user, settings) -> {
+         Long shopId = shopOfUser.get(user.getId());
          Map<String, String> personal = new HashMap<>(data);
-         personal.put("shopId", shopOfUser.get(user.getId()).toString());
+         personal.put("shopId", shopId.toString());
          return new PushMessage(RequestPushTexts.newRequestTitle(carLabel, user.getLang()),
                RequestPushTexts.newRequestBody(request.getText(), photo != null, voice != null, user.getLang()),
                personal, NEW_REQUEST_CATEGORY,
-               !quiet && settings.isNewRequestSound());
+               !quiet && settings.isNewRequestSound())
+               // iPhone с Live Activity — карточка на экране блокировки: «Есть» / «Нет» / ▶ сразу, таймер до конца
+               .withLiveActivity(liveActivity(request, carLabel, photo, voice, shopId, user));
       });
+   }
+
+   /** Поля карточки Live Activity — как в RequestActivityAttributes приложения. */
+   private PushMessage.LiveActivity liveActivity(PartRequest request, String carLabel, String photo, VoiceDto voice,
+                                                 Long shopId, User user) {
+      boolean kg = user.getLang() == Lang.KG;
+      Map<String, Object> attributes = new HashMap<>();
+      attributes.put("requestId", request.getId());
+      attributes.put("shopId", shopId);
+      attributes.put("carLabel", carLabel);
+      attributes.put("text", request.getText());
+      attributes.put("expiresAt", request.getExpiresAt().getEpochSecond());
+      attributes.put("quickToken", quickReplies.issue(request.getId(), shopId, user.getId(), request.getExpiresAt()));
+      attributes.put("haveLabel", kg ? "Бар" : "Есть");
+      attributes.put("noLabel", kg ? "Жок" : "Нет");
+      attributes.put("expiredLabel", kg ? "Убакыт бүттү" : "Время вышло");
+      if (photo != null) {
+         attributes.put("photoUrl", photo);
+      }
+      if (voice != null) {
+         attributes.put("voiceUrl", voice.url());
+         attributes.put("voiceSeconds", voice.durationSec());
+      }
+      return new PushMessage.LiveActivity("RequestActivityAttributes", attributes, Map.of("status", "WAITING"),
+            request.getExpiresAt());
    }
 
    /**

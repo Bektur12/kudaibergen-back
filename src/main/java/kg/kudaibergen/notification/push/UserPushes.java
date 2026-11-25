@@ -69,6 +69,19 @@ public class UserPushes {
    }
 
    private void send(List<DeviceToken> userDevices, PushMessage message) {
+      // iPhone с Live Activity: вместо пуша — карточка на экране блокировки с кнопками (она же звучит и всплывает)
+      if (message.liveActivity() != null && apns.isPresent()) {
+         Map<Boolean, List<DeviceToken>> byLive = userDevices.stream()
+               .collect(Collectors.partitioningBy(d -> d.getPlatform() == Platform.IOS && d.getLiveActivityToken() != null));
+         if (!byLive.get(true).isEmpty()) {
+            apns.get().startLiveActivity(byLive.get(true).stream().map(DeviceToken::getLiveActivityToken).toList(),
+                  message);
+            userDevices = byLive.get(false);
+            if (userDevices.isEmpty()) {
+               return;
+            }
+         }
+      }
       Map<Boolean, List<String>> byApple = userDevices.stream()
             .collect(Collectors.partitioningBy(d -> apns.isPresent() && d.getPlatform() == Platform.IOS,
                   Collectors.mapping(DeviceToken::getToken, Collectors.toList())));

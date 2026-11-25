@@ -229,7 +229,7 @@ enum QuickReply {                                                   // быст�
 ## 7. Запросы [05–07, 06б, 09, 11, 12, 20, 31, 32]
 
 ### 7.1 Отправка [06, 06б, 31]
-- Живой счётчик: `GET /requests/estimate?carId=|brandId=&target=&rowIds=&containerIds=` → `{recipients: 18, brand: "Toyota"}` — «Запрос получат 18 продавцов…». Считается тем же правилом, что и рассылка.
+- Живой счётчик: `GET /requests/estimate?carId=|brandId=&target=&rowIds=&containerIds=` → `{recipients: 18, brand: "Toyota", anyBrand: false}` — «Запрос получат 18 продавцов…». Считается тем же правилом, что и рассылка. `anyBrand: true` — продавцов марки на рынке нет, и запрос «всему рынку» получат все продавцы рынка: «Продавцов Tank пока нет — спросим всех продавцов рынка». `409 NO_RECIPIENTS` для «всего рынка» — только когда в приложении нет ни одного продавца.
 - Контейнеры ряда для экрана 31: `GET /market/rows/{id}/containers?brandId=` → у контейнера `state: HAS_SELLER|NO_SELLER`, `sellsBrand`; у ряда `brandSellers` — «продают Toyota: 9».
 - `POST /requests` (Idempotency-Key):
 ```json
@@ -539,3 +539,10 @@ multipart: `file` (аудио до 60 с и 15 МБ), `durationSec` (у M4A се
   `openNow=false` и `opensAt`. Умолчание: рынки вт–вс 9:00–17:00 (в понедельник рынки не работают), вне рынка —
   каждый день 9:00–17:00; V42 перевела на него всех, кто не менял старое 08:00–17:00. Запросы приходят и в закрытое
   время. `openOnly` в поиске — по тем же часам.
+
+
+## Live Activity на iPhone (карточка запроса на экране блокировки)
+
+- `POST /devices` принимает необязательный `liveActivityToken` — push-to-start токен ActivityKit (iOS 17.2+). Присылать при каждом его изменении (`Activity<RequestActivityAttributes>.pushToStartTokenUpdates`).
+- Новый запрос продавцу на iPhone с таким токеном приходит не обычным пушем, а запуском Live Activity (`apns-push-type: liveactivity`, тема `<bundleId>.push-type.liveactivity`, `attributes-type: RequestActivityAttributes`). Поля `attributes`: `requestId`, `shopId`, `carLabel`, `text`, `expiresAt` (секунды epoch), `quickToken`, `haveLabel`, `noLabel`, `expiredLabel`, по желанию `photoUrl`, `voiceUrl`, `voiceSeconds`. `content-state`: `{status: "WAITING"}`. `stale-date` — конец запроса.
+- `POST /requests/{id}/quick-reply` `{token}` — «Нет» с карточки без входа; `token` = `attributes.quickToken`. 204; 403 `QUICK_REPLY_TOKEN` — ключ чужой, подделан или истёк; 409 как у обычного ответа. «Есть» открывает приложение на экране ответа.

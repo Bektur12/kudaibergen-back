@@ -10,8 +10,10 @@ import org.springframework.lang.Nullable;
  * phone — для «Позвонить» (null — продавец скрыл номер). onMarket — бокс на рынке Кудайберген (location — ряд и
  * контейнер); вне рынка (свой магазин, центр) location = null, address, lat, lng — адрес и точка. Место на рынке,
  * написанное продавцом («Ряд К, конт. 5»): onMarket = true, location = null, address — это место, lat/lng = null.
+ * replyMinutes — «Отвечает за ~5 мин»: медиана ответа на запросы за 30 дней; null — ответов меньше трёх.
  */
 public record ShopCardDto(Long id, String name, @Nullable String avatarUrl, BigDecimal rating, int reviewsCount,
                           @Nullable LocationDto location, OpenStateDto open, @Nullable String phone, boolean onMarket,
-                          @Nullable String address, @Nullable Double lat, @Nullable Double lng) {
+                          @Nullable String address, @Nullable Double lat, @Nullable Double lng,
+                          @Nullable Integer replyMinutes) {
 }

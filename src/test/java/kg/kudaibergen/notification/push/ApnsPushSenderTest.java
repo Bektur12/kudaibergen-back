@@ -44,6 +44,25 @@ class ApnsPushSenderTest {
    }
 
    @Test
+   void liveActivityStartCarriesAttributesStateAndStaleDate() throws Exception {
+      PushMessage message = new PushMessage("Новый запрос · Camry 50", "Покупатель ищет: фара", Map.of(), "NEW_REQUEST",
+            true).withLiveActivity(new PushMessage.LiveActivity("RequestActivityAttributes",
+            Map.of("requestId", 7L, "carLabel", "Camry 50"), Map.of("status", "WAITING"),
+            Instant.ofEpochSecond(1_800_000_000L)));
+
+      JsonNode payload = json.readTree(sender(newKey()).liveActivityPayload(message));
+
+      assertThat(payload.at("/aps/event").asText()).isEqualTo("start");
+      assertThat(payload.at("/aps/attributes-type").asText()).isEqualTo("RequestActivityAttributes");
+      assertThat(payload.at("/aps/attributes/requestId").asLong()).isEqualTo(7L);
+      assertThat(payload.at("/aps/content-state/status").asText()).isEqualTo("WAITING");
+      assertThat(payload.at("/aps/stale-date").asLong()).isEqualTo(1_800_000_000L);
+      assertThat(payload.at("/aps/alert/title").asText()).isEqualTo("Новый запрос · Camry 50");
+      assertThat(payload.at("/aps/alert/sound").asText()).isEqualTo("default");
+      assertThat(payload.at("/aps/timestamp").isNumber()).isTrue();
+   }
+
+   @Test
    void jwtIsSignedWithKeyIdAndTeam() throws Exception {
       KeyPair key = newKey();
 

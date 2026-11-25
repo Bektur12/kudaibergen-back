@@ -22,9 +22,17 @@ public class DeviceService {
     */
    @Transactional
    public void register(Long userId, String token, Platform platform, boolean actions) {
-      devices.findByToken(token).ifPresentOrElse(
-            existing -> existing.reassign(userId, platform, actions),
-            () -> devices.save(new DeviceToken(userId, token, platform, actions)));
+      register(userId, token, platform, actions, null);
+   }
+
+   /** liveActivityToken — push-to-start токен Live Activity (iPhone); null — прежний остаётся. */
+   @Transactional
+   public void register(Long userId, String token, Platform platform, boolean actions, String liveActivityToken) {
+      DeviceToken device = devices.findByToken(token).map(existing -> {
+         existing.reassign(userId, platform, actions);
+         return existing;
+      }).orElseGet(() -> devices.save(new DeviceToken(userId, token, platform, actions)));
+      device.liveActivityToken(liveActivityToken);
    }
 
    @Transactional

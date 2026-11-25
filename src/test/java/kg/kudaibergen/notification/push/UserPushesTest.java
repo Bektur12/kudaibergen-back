@@ -46,4 +46,33 @@ class UserPushesTest {
       verify(push).send(List.of("android-new", "iphone"), withButtons);
       verify(push).send(List.of("android-old"), withButtons.withoutActions());
    }
+
+   @Test
+   void iPhoneСLiveActivityПолучаетКарточкуОстальныеОбычныйПуш() {
+      DeviceTokenRepository devices = mock(DeviceTokenRepository.class);
+      UserRepository users = mock(UserRepository.class);
+      UserSettingsRepository settings = mock(UserSettingsRepository.class);
+      PushSender push = mock(PushSender.class);
+      ApnsPushSender apns = mock(ApnsPushSender.class);
+      User user = new User("+996700000001", Lang.RU);
+      ReflectionTestUtils.setField(user, "id", 1L);
+      DeviceToken live = new DeviceToken(1L, "iphone-new", Platform.IOS, true);
+      live.liveActivityToken("start-token");
+      when(devices.findByUserIdIn(any())).thenReturn(List.of(
+            live,
+            new DeviceToken(1L, "iphone-old", Platform.IOS, true),
+            new DeviceToken(1L, "android", Platform.ANDROID, true)));
+      when(users.findAllById(anyCollection())).thenReturn(List.of(user));
+      when(settings.findAllById(anyCollection())).thenReturn(List.of());
+
+      PushMessage message = new PushMessage("Новый запрос", "Фара", Map.of("type", "NEW_REQUEST"), "NEW_REQUEST", true)
+            .withLiveActivity(new PushMessage.LiveActivity("RequestActivityAttributes", Map.of("requestId", 7L),
+                  Map.of("status", "WAITING"), null));
+      new UserPushes(devices, users, settings, push, Optional.of(apns)).send(Set.of(1L), (u, s) -> message);
+
+      // карточка — только iPhone с токеном Live Activity; второму iPhone — обычный пуш через APNs, Android — через FCM
+      verify(apns).startLiveActivity(List.of("start-token"), message);
+      verify(apns).send(List.of("iphone-old"), message);
+      verify(push).send(List.of("android"), message);
+   }
 }

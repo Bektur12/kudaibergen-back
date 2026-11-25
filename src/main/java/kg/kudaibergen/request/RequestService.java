@@ -161,8 +161,9 @@ public class RequestService {
       }
       String brandName = directory.brand(brand).getName();
       Targets targets = targets(target, rowIds, containerIds);
-      int count = finder.find(buyerId, brand, targets.target(), targets.rowIds(), targets.containerIds()).size();
-      return new RecipientsEstimateDto(count, brandName);
+      RecipientFinder.Recipients found = finder.resolve(buyerId, brand, targets.target(), targets.rowIds(),
+            targets.containerIds());
+      return new RecipientsEstimateDto(found.shops().size(), brandName, found.anyBrand());
    }
 
    /**
@@ -189,8 +190,9 @@ public class RequestService {
       String text = requestText(input.text(), voice, !photoIds.isEmpty(), lang);
       Instant now = clock.instant();
       checkLimits(buyerId, now);
-      List<Shop> found = finder.find(buyerId, car.brandId(), targets.target(), targets.rowIds(),
-            targets.containerIds());
+      // нет продавцов марки — «всему рынку» уходит всем продавцам рынка (RecipientFinder.resolve), а не в тупик
+      List<Shop> found = finder.resolve(buyerId, car.brandId(), targets.target(), targets.rowIds(),
+            targets.containerIds()).shops();
       if (found.isEmpty()) {
          // запрос, который никто не увидит, только занимает лимит и ждёт впустую — клиент предлагает другой выбор
          throw new ConflictException("NO_RECIPIENTS", noRecipientsMessage(targets.target()));
@@ -245,7 +247,7 @@ public class RequestService {
    /** Почему запрос некому отправить — текст для показа. */
    private static String noRecipientsMessage(RequestTarget target) {
       return switch (target) {
-         case MARKET -> "На рынке пока нет продавцов с вашей маркой";
+         case MARKET -> "На рынке пока нет продавцов в приложении";
          case ROWS -> "В выбранных рядах нет продавцов с вашей маркой — выберите другие ряды или весь рынок";
          case CONTAINERS -> "В выбранных контейнерах нет продавцов в приложении — выберите другие или отправьте всему рынку";
       };
@@ -277,8 +279,8 @@ public class RequestService {
       reactivate(request, now);
       Set<Long> already = recipients.findShopIds(requestId);
       request.widenToMarket(now);
-      int added = dispatch(request, finder.find(request.getBuyerId(), request.getBrandId(), RequestTarget.MARKET,
-            List.of(), List.of()), already, now);
+      int added = dispatch(request, finder.resolve(request.getBuyerId(), request.getBrandId(), RequestTarget.MARKET,
+            List.of(), List.of()).shops(), already, now);
       return new WidenResultDto(added, request.getRecipientsCount(), request.getExpiresAt());
    }
 

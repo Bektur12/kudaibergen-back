@@ -43,6 +43,10 @@ public class SecurityConfig {
          "/api/v1/reviews/tags",
          // лента видео и тарифы доставки — гостю тоже
          "/api/v1/catalog/videos",
+         // «Помощь на дороге»: кто рядом и справочник мастеров — позвонить, WhatsApp, маршрут без входа
+         "/api/v1/roadside/**",
+         // «Обновите приложение» — до входа тоже
+         "/api/v1/app/release",
          "/api/v1/delivery/tariffs"
    };
 
@@ -86,6 +90,8 @@ public class SecurityConfig {
                   // Токен, если он есть, всё равно разбирается — например, для признака «Подходит».
                   .requestMatchers(HttpMethod.GET, PUBLIC_READ).permitAll()
                   .requestMatchers(HttpMethod.POST, "/api/v1/market/locate", "/api/v1/parts/*/share").permitAll()
+                  // «Нет» с экрана блокировки (Live Activity): без сессии, по подписанному ключу ответа
+                  .requestMatchers(HttpMethod.POST, "/api/v1/requests/*/quick-reply").permitAll()
                   .requestMatchers(HttpMethod.POST, ADMIN_AUTH).permitAll()
                   // продавец добавляет недостающий ряд или контейнер — только с токеном (любой вошедший)
                   .requestMatchers(HttpMethod.POST, "/api/v1/market/rows", "/api/v1/market/rows/*/containers")

@@ -11,6 +11,7 @@ import kg.kudaibergen.master.dto.NearbyMasterDto;
 import kg.kudaibergen.master.dto.OfflinePackDto;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -46,7 +47,9 @@ public class RoadsideController {
                                        @RequestParam(required = false) Long brandId,
                                        @RequestParam(required = false) CarOrigin origin,
                                        @RequestParam(required = false) Integer limit) {
-      return roadside.nearby(principal.userId(), lat, lng, service, carId, brandId, origin, limit);
+      // гость: без гаража (carId), машину можно передать маркой и происхождением
+      Long userId = principal == null ? null : principal.userId();
+      return roadside.nearby(userId, lat, lng, service, userId == null ? null : carId, brandId, origin, limit);
    }
 
    @GetMapping("/offline-pack")
@@ -57,12 +60,13 @@ public class RoadsideController {
          Обновлять после входа и раз в сутки с If-None-Match: без изменений — 304 без тела (не тратит лимит).""")
    @ApiResponse(responseCode = "304", description = "Справочник не менялся — оставить сохранённый")
    @ApiResponse(responseCode = "429", description = "PACK_RATE_LIMITED — больше 20 скачиваний за сутки")
-   public ResponseEntity<OfflinePackDto> pack(@AuthenticationPrincipal AuthPrincipal principal, WebRequest request) {
+   public ResponseEntity<OfflinePackDto> pack(@AuthenticationPrincipal AuthPrincipal principal, WebRequest request,
+                                              HttpServletRequest http) {
       OfflinePackDto pack = roadside.pack();
       if (request.checkNotModified(etag(pack.version()))) {
          return null;
       }
-      roadside.countDownload(principal.userId());
+      roadside.countDownload(principal != null ? "user:" + principal.userId() : "ip:" + clientIp(http));
       return ResponseEntity.ok().eTag(etag(pack.version())).cacheControl(CacheControl.noCache().cachePrivate())
             .body(pack);
    }
@@ -72,6 +76,12 @@ public class RoadsideController {
          Короткая проверка при запуске: version не совпала с сохранённой — скачать /roadside/offline-pack.""")
    public OfflinePackDto.Version version() {
       return roadside.version();
+   }
+
+   /** За прокси Railway getRemoteAddr — адрес прокси; настоящий клиент — первый в X-Forwarded-For. */
+   private static String clientIp(HttpServletRequest http) {
+      String forwarded = http.getHeader("X-Forwarded-For");
+      return forwarded == null || forwarded.isBlank() ? http.getRemoteAddr() : forwarded.split(",")[0].strip();
    }
 
    private static String etag(String version) {

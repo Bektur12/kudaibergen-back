@@ -54,7 +54,7 @@ public class ShopMapper {
    public ShopCardDto card(Shop shop) {
       return new ShopCardDto(shop.getId(), shop.getName(), avatarUrl(shop), shop.getRating(), shop.getReviewsCount(),
             location(shop.getContainerId()), hours.state(shop), shop.isPhoneVisible() ? shop.getPhone() : null,
-            shop.isOnMarket(), shop.getAddress(), shop.getLat(), shop.getLng());
+            shop.isOnMarket(), shop.getAddress(), shop.getLat(), shop.getLng(), shop.getReplyMinutes());
    }
 
    public ShopPublicDto publicProfile(Shop shop, boolean favorite, Lang lang) {
@@ -64,7 +64,7 @@ public class ShopMapper {
             categories(shop, lang), shop.isPhoneVisible() ? shop.getPhone() : null, favorite, photos,
             new ShopPublicDto.ShopCounts(parts.countByShopIdAndStatus(shop.getId(), PartStatus.ACTIVE), photos.size(),
                   shop.getReviewsCount()), shop.isOnMarket(), shop.getAddress(), shop.getLat(), shop.getLng(),
-            partCategories(shop, lang));
+            partCategories(shop, lang), shop.getReplyMinutes());
    }
 
    private List<ShopPublicDto.ShopPartCategory> partCategories(Shop shop, Lang lang) {

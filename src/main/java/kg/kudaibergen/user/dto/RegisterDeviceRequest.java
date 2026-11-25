@@ -10,5 +10,7 @@ public record RegisterDeviceRequest(
       @NotBlank(message = "Укажите FCM-токен") @Size(max = 255) String token,
       @NotNull(message = "Укажите платформу") Platform platform,
       @Schema(description = "Приложение само рисует пуши с кнопками («Есть / Нет»). Старые версии не присылают — им на Android обычный пуш")
-      Boolean actions) {
+      Boolean actions,
+      @Schema(description = "iPhone, iOS 17.2+: push-to-start токен Live Activity — карточка запроса на экране блокировки")
+      @Size(max = 255) String liveActivityToken) {
 }

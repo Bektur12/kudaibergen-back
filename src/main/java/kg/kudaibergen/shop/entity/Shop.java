@@ -117,6 +117,10 @@ public class Shop {
    @Column(name = "reviews_count", nullable = false)
    private int reviewsCount;
 
+   /** Медиана ответа на запросы, минут (ShopReplySpeedJob); только чтение — пишет сам job. */
+   @Column(name = "reply_minutes", insertable = false, updatable = false)
+   private Integer replyMinutes;
+
    @ElementCollection
    @CollectionTable(name = "shop_brands", joinColumns = @JoinColumn(name = "shop_id"))
    @Column(name = "brand_id")
@@ -457,6 +461,10 @@ public class Shop {
 
    public BigDecimal getRating() {
       return rating;
+   }
+
+   public Integer getReplyMinutes() {
+      return replyMinutes;
    }
 
    public int getReviewsCount() {

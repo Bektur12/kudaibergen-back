@@ -68,6 +68,7 @@ public abstract class AbstractIntegrationTest {
       registry.add("app.centrifugo.api-url", CENTRIFUGO::apiUrl);
       // тесты проверяют и проверку места (QR, SMS, админ), и то, что непроверенный магазин не получает запросы
       registry.add("app.shops.verification-required", () -> "true");
+      registry.add("app.releases.app-store-lookup", () -> "false");
    }
 
    // ─────────────────────── хелперы ───────────────────────

@@ -24,6 +24,8 @@ import org.springframework.transaction.annotation.Transactional;
  * «Всему рынку» и «Рядам» — только магазины с маркой машины (для рядов — ещё и в выбранных рядах);
  * «Контейнерам» — выбранные боксы без фильтра по марке: покупатель выбрал их сам.
  * Свой бокс покупателю не шлём. Магазинов на рынке — до 2 000, поэтому ряд проверяется в памяти.
+ * «Всему рынку», а продавцов марки нет (редкая марка: Tank, Haval…) — запрос уходит всем продавцам рынка
+ * ({@link #resolve}): иначе покупатель упирается в тупик, а продавец без марки в списке часто держит деталь.
  */
 @Component
 public class RecipientFinder {
@@ -41,14 +43,35 @@ public class RecipientFinder {
       this.clock = clock;
    }
 
+   /** Кому уйдёт запрос; {@code anyBrand} — продавцов марки не нашлось, и запрос получит весь рынок. */
+   public record Recipients(List<Shop> shops, boolean anyBrand) {
+   }
+
+   /** {@link #find} с запасным вариантом: «всему рынку» без продавцов марки — всем продавцам рынка. */
+   @Transactional(readOnly = true)
+   public Recipients resolve(Long buyerId, Long brandId, RequestTarget target, Collection<Long> rowIds,
+                             Collection<Long> containerIds) {
+      List<Shop> found = find(buyerId, brandId, target, rowIds, containerIds);
+      if (!found.isEmpty() || target != RequestTarget.MARKET) {
+         return new Recipients(found, false);
+      }
+      List<Shop> everyone = filter(buyerId, shops.findByStatus(ShopStatus.ACTIVE), target, rowIds);
+      return new Recipients(everyone, !everyone.isEmpty());
+   }
+
    @Transactional(readOnly = true)
    public List<Shop> find(Long buyerId, Long brandId, RequestTarget target, Collection<Long> rowIds,
                           Collection<Long> containerIds) {
-      Long ownShopId = buyerId == null ? null
-            : access.membership(buyerId).map(membership -> membership.shop().getId()).orElse(null);
       List<Shop> candidates = target == RequestTarget.CONTAINERS
             ? shops.findReceivingIn(ShopStatus.ACTIVE, containerIds)
             : shops.findReceiving(ShopStatus.ACTIVE, brandId);
+      return filter(buyerId, candidates, target, rowIds);
+   }
+
+   /** Не на паузе, не свой бокс, для «Рядов» — в выбранных рядах. */
+   private List<Shop> filter(Long buyerId, List<Shop> candidates, RequestTarget target, Collection<Long> rowIds) {
+      Long ownShopId = buyerId == null ? null
+            : access.membership(buyerId).map(membership -> membership.shop().getId()).orElse(null);
       Set<Long> rows = target == RequestTarget.ROWS ? Set.copyOf(rowIds) : Set.of();
       MarketSnapshot snapshot = market.snapshot();
       Instant now = clock.instant();

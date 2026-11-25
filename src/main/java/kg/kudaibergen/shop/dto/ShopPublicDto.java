@@ -20,7 +20,8 @@ public record ShopPublicDto(Long id, String publicId, String name, @Nullable Str
                             @Nullable LocationDto location, OpenStateDto open, List<BrandDto> brands,
                             List<CategoryDto> categories, @Nullable String phone, boolean isFavorite, List<PhotoDto> photos,
                             ShopCounts counts, boolean onMarket, @Nullable String address, @Nullable Double lat,
-                            @Nullable Double lng, List<ShopPartCategory> partCategories) {
+                            @Nullable Double lng, List<ShopPartCategory> partCategories,
+                            @Nullable Integer replyMinutes) {
 
    public record ShopCounts(long parts, int photos, int reviews) {
    }
