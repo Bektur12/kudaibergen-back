@@ -8,6 +8,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import kg.kudaibergen.common.i18n.Langs;
 import kg.kudaibergen.common.security.AuthPrincipal;
+import kg.kudaibergen.request.dto.PartHintDto;
 import kg.kudaibergen.shop.stock.dto.StockDtos.AddStockItem;
 import kg.kudaibergen.shop.stock.dto.StockDtos.SetStock;
 import kg.kudaibergen.shop.stock.dto.StockDtos.StockItemDto;
@@ -86,6 +87,15 @@ public class ShopStockController {
                                                      value = HttpHeaders.ACCEPT_LANGUAGE, required = false)
                                                String language) {
       return stock.suggestions(principal.userId(), Langs.fromHeader(language));
+   }
+
+   @GetMapping("/shops/stock-hints")
+   @Operation(summary = "Все детали справочника", description = """
+         Для выбора «всегда есть» и чтобы узнать деталь в тексте покупателя. Самые частые сверху; id — hintId
+         в /my/shop/stock, /shops/stocking и в запросе.""")
+   public List<PartHintDto> hints(@Parameter(hidden = true) @RequestHeader(value = HttpHeaders.ACCEPT_LANGUAGE,
+         required = false) String language) {
+      return stock.allHints(Langs.fromHeader(language));
    }
 
    @GetMapping("/shops/stocking")

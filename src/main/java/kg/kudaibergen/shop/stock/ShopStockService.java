@@ -2,6 +2,7 @@ package kg.kudaibergen.shop.stock;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -16,6 +17,7 @@ import kg.kudaibergen.common.error.NotFoundException;
 import kg.kudaibergen.garage.VehicleDirectory;
 import kg.kudaibergen.garage.entity.CarModel;
 import kg.kudaibergen.request.PartHintRepository;
+import kg.kudaibergen.request.dto.PartHintDto;
 import kg.kudaibergen.request.entity.PartHint;
 import kg.kudaibergen.shop.ShopAccess;
 import kg.kudaibergen.shop.ShopMapper;
@@ -163,6 +165,19 @@ public class ShopStockService {
    }
 
    // ─────────────────────── покупатель ───────────────────────
+
+   /**
+    * Весь справочник деталей (не скрытые), самые частые сверху: выбор «всегда есть» у продавца и узнавание детали
+    * в тексте покупателя («колодки на камри» → «Колодки»).
+    */
+   @Transactional(readOnly = true)
+   public List<PartHintDto> allHints(Lang lang) {
+      return hints.findAll().stream()
+            .filter(PartHint::isActive)
+            .sorted(Comparator.comparingInt(PartHint::getPopularity).reversed().thenComparing(PartHint::getId))
+            .map(hint -> new PartHintDto(hint.getId(), hint.text(lang), hint.getCategoryId()))
+            .toList();
+   }
 
    /**
     * «Обычно есть у N магазинов» по детали и машине. brandId / modelId null — без машины.
