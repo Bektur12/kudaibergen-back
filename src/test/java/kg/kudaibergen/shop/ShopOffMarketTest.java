@@ -25,7 +25,7 @@ class ShopOffMarketTest {
 
    private final MarketRepository markets = mock(MarketRepository.class);
    private final ShopService service = new ShopService(null, null, null, null, null, null, null, null, null, null,
-         null, null, ApprovalSettings.constant(false), markets);
+         null, null, ApprovalSettings.constant(false), markets, null);
 
    {
       when(markets.findById(2L)).thenReturn(Optional.of(DORDOI_MOTORS));
@@ -35,7 +35,7 @@ class ShopOffMarketTest {
 
    private static ShopRequests.CreateShop onMarket(String place, Long marketId) {
       return new ShopRequests.CreateShop(null, null, null, null, null, Set.of(1L), null, null, null, null, place,
-            marketId);
+            marketId, null);
    }
 
    @Test
@@ -79,11 +79,11 @@ class ShopOffMarketTest {
    }
 
    private static ShopRequests.CreateShop create(String address, Double lat, Double lng, String name) {
-      return new ShopRequests.CreateShop(null, address, lat, lng, name, Set.of(1L), null, null, null, null, null, null);
+      return new ShopRequests.CreateShop(null, address, lat, lng, name, Set.of(1L), null, null, null, null, null, null, null);
    }
 
    private static ShopRequests.CreateShop manual(String place, String name) {
-      return new ShopRequests.CreateShop(null, null, null, null, name, Set.of(1L), null, null, null, null, place, null);
+      return new ShopRequests.CreateShop(null, null, null, null, name, Set.of(1L), null, null, null, null, place, null, null);
    }
 
    @Test
@@ -140,7 +140,7 @@ class ShopOffMarketTest {
    @Test
    void местоТекстомИАдресВместе400() {
       var request = new ShopRequests.CreateShop(null, "пр. Чуй 155", 42.87, 74.6, null, Set.of(1L), null, null, null,
-            null, "Ряд К, конт. 5", null);
+            null, "Ряд К, конт. 5", null, null);
       assertThatThrownBy(() -> service.newShop(7L, request))
             .isInstanceOf(BadRequestException.class).extracting("code").isEqualTo("PLACE_CONFLICT");
       assertThatThrownBy(() -> service.newShop(7L, manual("К", null)))

@@ -30,6 +30,8 @@ import kg.kudaibergen.user.UserRepository;
 import kg.kudaibergen.user.UserService;
 import kg.kudaibergen.user.entity.Lang;
 import kg.kudaibergen.user.entity.User;
+import kg.kudaibergen.shop.stock.ShopStockService;
+import kg.kudaibergen.shop.stock.StockKey;
 import kg.kudaibergen.user.entity.UserRole;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageRequest;
@@ -62,11 +64,13 @@ public class ShopService {
 
    private final ApprovalSettings approvals;
 
+   private final ShopStockService stock;
+
    public ShopService(ShopRepository shops, ShopMemberRepository members, FavoriteShopRepository favorites,
                       ShopAccess access, ShopMapper mapper, ShopVerificationService verification,
                       MarketMapService market, VehicleDirectory directory, CategoryService categories,
                       UserService userService, UserRepository users, SmsProvider sms,
-                      ApprovalSettings approvals, MarketRepository markets) {
+                      ApprovalSettings approvals, MarketRepository markets, ShopStockService stock) {
       this.shops = shops;
       this.members = members;
       this.favorites = favorites;
@@ -81,6 +85,7 @@ public class ShopService {
       this.sms = sms;
       this.markets = markets;
       this.approvals = approvals;
+      this.stock = stock;
    }
 
    // ─────────────────────── регистрация и профиль ───────────────────────
@@ -97,6 +102,8 @@ public class ShopService {
       Set<Long> brandIds = requireBrands(request.brandIds());
       Set<Long> categoryIds = request.categoryIds() == null || request.categoryIds().isEmpty() ? Set.of()
             : categories.requireExisting(request.categoryIds());
+      // «Что у вас всегда есть» — проверяем до сохранения: ошибка в списке не оставит полузаписанный магазин
+      List<StockKey> stockKeys = stock.normalize(request.stock(), brandIds);
       Shop shop = newShop(userId, request);
       // «Позвонить» — главная кнопка у покупателя (05, 06): сразу номер владельца, скрыть можно в профиле
       users.findById(userId).ifPresent(owner -> {
@@ -116,6 +123,7 @@ public class ShopService {
       } catch (DataIntegrityViolationException race) {
          throw containerTaken();
       }
+      stock.store(shop.getId(), stockKeys);
       members.save(new ShopMember(shop.getId(), userId, MemberRole.OWNER));
       userService.changeRole(userId, UserRole.SELLER);
       return mine(access.requireMember(userId), lang);

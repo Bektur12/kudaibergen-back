@@ -5,6 +5,7 @@ import java.time.LocalTime;
 import java.util.List;
 import java.util.Set;
 
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
@@ -13,6 +14,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import kg.kudaibergen.auth.dto.PhoneFormat;
+import kg.kudaibergen.shop.stock.dto.StockDtos;
 
 /** Запросы кабинета продавца. */
 public final class ShopRequests {
@@ -27,6 +29,7 @@ public final class ShopRequests {
     * Контейнера нет в списке — manualPlace («Ряд К, конт. 5», 2–60 символов) без containerId, address, lat, lng:
     * магазин на рынке без контейнера, название по умолчанию — manualPlace. marketId — на каком рынке это место
     * (GET /market/markets): Дордой, Дордой Моторс, Геология — без схемы, только так; не передан — Кудайберген.
+    * stock — «Что у вас всегда есть» (по желанию, можно пропустить): как в PUT /my/shop/stock.
     */
    public record CreateShop(
          Long containerId,
@@ -40,7 +43,9 @@ public final class ShopRequests {
          LocalTime openTo,
          Set<DayOfWeek> workDays,
          @Size(min = 2, max = 60, message = "Место — от 2 до 60 символов") String manualPlace,
-         Long marketId) {
+         Long marketId,
+         @Size(max = StockDtos.MAX_ITEMS, message = "Не больше " + StockDtos.MAX_ITEMS + " позиций")
+         List<StockDtos.@Valid StockItemInput> stock) {
    }
 
    /**

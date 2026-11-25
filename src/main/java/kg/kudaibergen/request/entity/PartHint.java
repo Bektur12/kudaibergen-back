@@ -26,6 +26,10 @@ public class PartHint {
    @Column(nullable = false)
    private int popularity;
 
+   /** Скрыта в админке: нет в списках приложения. */
+   @Column(name = "is_active", nullable = false)
+   private boolean active = true;
+
    protected PartHint() {
    }
 
@@ -43,5 +47,9 @@ public class PartHint {
 
    public int getPopularity() {
       return popularity;
+   }
+
+   public boolean isActive() {
+      return active;
    }
 }
