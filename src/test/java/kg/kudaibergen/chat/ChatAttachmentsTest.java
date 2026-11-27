@@ -32,6 +32,11 @@ class ChatAttachmentsTest {
       }
 
       @Override
+      public InputStream get(String key) {
+         throw new UnsupportedOperationException();
+      }
+
+      @Override
       public void delete(String key) {
          saved.remove(key);
       }

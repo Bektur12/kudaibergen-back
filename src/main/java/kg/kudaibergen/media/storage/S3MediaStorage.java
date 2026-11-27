@@ -5,6 +5,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
+import io.minio.GetObjectArgs;
 import io.minio.GetPresignedObjectUrlArgs;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
@@ -123,6 +124,15 @@ public class S3MediaStorage implements MediaStorage {
          urlCache.remove(key);
       } catch (Exception e) {
          throw new IllegalStateException("Не удалось удалить объект " + key, e);
+      }
+   }
+
+   @Override
+   public InputStream get(String key) {
+      try {
+         return client.getObject(GetObjectArgs.builder().bucket(s3.bucket()).object(key).build());
+      } catch (Exception e) {
+         throw new IllegalStateException("Не удалось прочитать объект " + key, e);
       }
    }
 

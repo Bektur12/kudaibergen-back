@@ -72,6 +72,14 @@ public class Media {
    @Column(name = "size_bytes", nullable = false, updatable = false)
    private long sizeBytes;
 
+   /** Видео: исходник, как загрузили (file_key после пережатия — лёгкий MP4); null — не пережималось. */
+   @Column(name = "original_key", length = 300, insertable = false, updatable = false)
+   private String originalKey;
+
+   /** Видео: PENDING — ждёт пережатия, DONE, FAILED (см. VideoTranscodeJob); у фото и голосовых null. */
+   @Column(name = "transcode_state", length = 8, updatable = false)
+   private String transcodeState;
+
    @Column(name = "created_at", nullable = false, updatable = false)
    private Instant createdAt = Instant.now();
 
@@ -105,6 +113,7 @@ public class Media {
       media.key320 = posterKey320;
       media.width = posterWidth;
       media.height = posterHeight;
+      media.transcodeState = "PENDING";
       return media;
    }
 
@@ -186,6 +195,14 @@ public class Media {
 
    public Integer getHeight() {
       return height;
+   }
+
+   public String getOriginalKey() {
+      return originalKey;
+   }
+
+   public String getTranscodeState() {
+      return transcodeState;
    }
 
    public long getSizeBytes() {

@@ -49,8 +49,9 @@ public class MediaCleanupJob {
          int removedInBatch = 0;
          for (Media item : orphans) {
             try {
-               // у видео без обложки и у голосовых ключей фото нет
-               for (String key : new String[]{item.getKey1080(), item.getKey320(), item.getFileKey()}) {
+               // у видео без обложки и у голосовых ключей фото нет; у пережатого видео ещё и исходник
+               for (String key : new String[]{item.getKey1080(), item.getKey320(), item.getFileKey(),
+                     item.getOriginalKey()}) {
                   if (key != null) {
                      storage.delete(key);
                   }

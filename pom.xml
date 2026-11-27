@@ -24,6 +24,8 @@
         <springdoc.version>2.6.0</springdoc.version>
         <firebase.version>9.3.0</firebase.version>
         <zxing.version>3.5.3</zxing.version>
+        <ffmpeg.version>7.1.1-1.5.12</ffmpeg.version>
+        <javacpp.version>1.5.12</javacpp.version>
     </properties>
 
     <dependencies>
@@ -106,6 +108,39 @@
             <groupId>io.minio</groupId>
             <artifactId>minio</artifactId>
             <version>8.6.0</version>
+        </dependency>
+        <!-- ffmpeg для пережатия видео (VideoTranscoder): сборка с libx264 (-gpl), бинарник для Linux сервера Railway.
+             Локально на Mac — ffmpeg из PATH (brew install ffmpeg) или jar для macosx-arm64 в тестах. -->
+        <dependency>
+            <groupId>org.bytedeco</groupId>
+            <artifactId>ffmpeg</artifactId>
+            <version>${ffmpeg.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.bytedeco</groupId>
+            <artifactId>ffmpeg</artifactId>
+            <version>${ffmpeg.version}</version>
+            <classifier>linux-x86_64-gpl</classifier>
+        </dependency>
+        <dependency>
+            <groupId>org.bytedeco</groupId>
+            <artifactId>javacpp</artifactId>
+            <version>${javacpp.version}</version>
+            <classifier>linux-x86_64</classifier>
+        </dependency>
+        <dependency>
+            <groupId>org.bytedeco</groupId>
+            <artifactId>ffmpeg</artifactId>
+            <version>${ffmpeg.version}</version>
+            <classifier>macosx-arm64-gpl</classifier>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.bytedeco</groupId>
+            <artifactId>javacpp</artifactId>
+            <version>${javacpp.version}</version>
+            <classifier>macosx-arm64</classifier>
+            <scope>test</scope>
         </dependency>
         <!-- импорт каталога продавца из Excel (.xlsx) -->
         <dependency>

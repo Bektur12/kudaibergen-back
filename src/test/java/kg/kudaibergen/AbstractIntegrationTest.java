@@ -69,6 +69,8 @@ public abstract class AbstractIntegrationTest {
       // тесты проверяют и проверку места (QR, SMS, админ), и то, что непроверенный магазин не получает запросы
       registry.add("app.shops.verification-required", () -> "true");
       registry.add("app.releases.app-store-lookup", () -> "false");
+      // пережатие видео — отдельный тест (VideoTranscoderTest), в общем прогоне ffmpeg не запускается
+      registry.add("app.media.transcode.enabled", () -> "false");
    }
 
    // ─────────────────────── хелперы ───────────────────────
